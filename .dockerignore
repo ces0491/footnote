@@ -1,0 +1,11 @@
+# An allowlist: the Python services' build context is the repository root, which also holds the
+# answer key, the virtual environment and the web app. Only what the Dockerfile copies goes in.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!data/league.json
+!data/matches/fl-2627-showcase-sal-kin/meta.json
+!data/matches/fl-2627-showcase-sal-kin/feed.jsonl
+**/__pycache__

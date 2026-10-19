@@ -25,3 +25,32 @@ jobs:
       # Includes the showcase replay, which checks that the committed showcase files are what the
       # recipe produces on this machine's hardware.
       - run: uv run pytest -m "not slow"
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: az bicep install --version v0.48.1
+      - name: Build and lint the Bicep
+        run: |
+          for file in infra/*.bicep infra/modules/*.bicep; do
+            az bicep build --file "$file" --stdout > /dev/null
+            az bicep lint --file "$file"
+          done

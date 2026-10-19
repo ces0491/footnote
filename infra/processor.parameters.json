@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "${AZURE_ENV_NAME}" },
+    "location": { "value": "${AZURE_LOCATION}" },
+    "name": { "value": "${SERVICE_PROCESSOR_NAME}" },
+    "imageName": { "value": "${SERVICE_PROCESSOR_IMAGE_NAME}" },
+    "containerAppsEnvironmentName": { "value": "${AZURE_CONTAINER_ENVIRONMENT_NAME}" },
+    "containerRegistryName": { "value": "${AZURE_CONTAINER_REGISTRY_NAME}" },
+    "identityName": { "value": "${SERVICE_PROCESSOR_IDENTITY_NAME}" },
+    "webIdentityName": { "value": "${SERVICE_WEB_IDENTITY_NAME}" },
+    "eventHubNamespace": { "value": "${EVENTHUB_NAMESPACE}" },
+    "eventHubName": { "value": "${EVENTHUB_NAME}" },
+    "checkpointBlobUrl": { "value": "${CHECKPOINT_BLOB_URL}" },
+    "checkpointContainer": { "value": "${CHECKPOINT_CONTAINER}" },
+    "webPubSubEndpoint": { "value": "${WEBPUBSUB_ENDPOINT}" },
+    "webPubSubHub": { "value": "${WEBPUBSUB_HUB}" },
+    "postgresHost": { "value": "${POSTGRES_HOST}" },
+    "postgresDatabase": { "value": "${POSTGRES_DATABASE}" }
+  }
+}

@@ -14,21 +14,31 @@ sees: [docs/experience.md](docs/experience.md). Scope and done-list:
 
 ## Status
 
-Built so far: the synthetic data generator. It simulates a fictional league's
-matches from a hidden match-state model, produces an event feed with offside,
-handball and VAR decisions and provider-style corrections, 10 Hz player and ball
-tracking, and an answer key held apart from the feed. Two generated seasons are
-compared with published Premier League figures in
-[docs/calibration.md](docs/calibration.md). How it works and the feed's format:
-[docs/data.md](docs/data.md).
+Built so far:
 
-Still to come, in the order SCOPE.md lists them: the live pipeline on Azure, the
-match-state model and stats, the agents, the overlay renderer and fan app, and
-the evaluations and judge quick-start.
+- **The synthetic data generator.** It simulates a fictional league's matches
+  from a hidden match-state model, produces an event feed with offside,
+  handball and VAR decisions and provider-style corrections, 10 Hz player and
+  ball tracking, and an answer key held apart from the feed. Two generated
+  seasons are compared with published Premier League figures in
+  [docs/calibration.md](docs/calibration.md). How it works and the feed's
+  format: [docs/data.md](docs/data.md).
+- **The live pipeline.** A replayer plays the showcase match into Azure Event
+  Hubs, a stream processor on Azure Container Apps keeps each replay's match
+  state in Azure Database for PostgreSQL and pushes every event through Azure
+  Web PubSub, and a Next.js web app shows the score, clock, stats and key
+  moments as they arrive. Managed identities throughout; no keys or passwords.
+  How it fits together and what it costs:
+  [docs/architecture.md](docs/architecture.md).
+
+Still to come, in the order SCOPE.md lists them: the match-state model and the
+derived stats, the agents, the overlay renderer and fan app, and the
+evaluations and judge quick-start.
 
 ## Quick start
 
-Needs Python 3.11 and [uv](https://docs.astral.sh/uv/).
+Needs Python 3.11 and [uv](https://docs.astral.sh/uv/); Node.js 24 for the web
+app.
 
 ```sh
 uv sync
@@ -39,14 +49,75 @@ uv run python -m footnote.generator showcase     # rebuild the committed showcas
 `uv run python -m footnote.generator --help` lists the other commands: the
 league, any single match, the full season and the feed's JSON Schema.
 
+## Deploying to Azure
+
+Needs the [Azure Developer CLI](https://aka.ms/azd) and the Azure CLI, signed
+in to the subscription. Register the resource providers once per subscription:
+
+```sh
+for p in Microsoft.App Microsoft.ContainerRegistry Microsoft.EventHub Microsoft.DBforPostgreSQL \
+         Microsoft.SignalRService Microsoft.Storage Microsoft.OperationalInsights Microsoft.Insights; do
+  az provider register --namespace "$p"
+done
+```
+
+Then:
+
+```sh
+azd env new footnote
+azd env set AZURE_LOCATION westus3
+azd up
+```
+
+`azd up` provisions [infra/main.bicep](infra/main.bicep), builds the three
+images in the container registry (no local Docker needed) and deploys each
+container app from `infra/<service>.bicep`. It prints the web app's URL. To
+check the deployed pipeline end to end, as a browser would follow it:
+
+```sh
+uv run python scripts/smoke_live.py <web app URL> --minute 81 --speed 4
+```
+
+Two
+optional settings give your own account access for local development:
+`azd env set AZURE_PRINCIPAL_NAME <your sign-in name>` makes you a Postgres
+administrator, and `azd env set CLIENT_IP_ADDRESS <your public IP>` lets your
+machine through the Postgres firewall. Run `azd provision` after changing them.
+
+## Local development
+
+The services run locally against the resources `azd up` created, signed in as
+you through the Azure CLI. The replayer is reachable only inside Azure, so run
+it locally too. Settings come from `azd env get-values`.
+
+```sh
+# The replayer: EVENTHUB_NAMESPACE and EVENTHUB_NAME
+uv run python -m footnote.replayer               # http://localhost:8000
+
+# The web app: frontend/.env.local with REPLAYER_URL=http://localhost:8000,
+# WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB, POSTGRES_HOST, POSTGRES_DATABASE, and
+# POSTGRES_USER set to your sign-in name (needs AZURE_PRINCIPAL_NAME above)
+cd frontend && npm ci && npm run dev             # http://localhost:3000
+```
+
+The deployed processor picks up runs started locally. Checks for the web app:
+`npm run lint`, `npm run typecheck`, `npm run build`.
+
 ## Layout
 
 ```text
 src/footnote/generator/   league, match simulation, officials, feed, tracking, showcase search
 src/footnote/calibration/ published targets and the calibration report
+src/footnote/live/        shared by the services: the match files, replay time, stats, state, contracts
+src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
+src/footnote/processor/   Event Hubs to match state, Postgres and Web PubSub
+src/footnote/db/          Entra-authenticated Postgres connections and migrations
+frontend/                 the Next.js web app
+infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
-tests/                    contract, consistency, physics, story and calibration checks
+scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, latency
+tests/                    contract, consistency, physics, story, calibration, replay and processing checks
 data/                     generated output; git keeps the league, the showcase match, its recipe and the name check
-docs/                     audience, experience, data and calibration
-.github/workflows/        CI: lint, type checks and tests on every push and pull request
+docs/                     audience, experience, data, calibration and architecture
+.github/workflows/        CI: lint, type checks, tests, the web build and the Bicep on every push and pull request
 ```

@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+# `azd up` provisions infra/main.bicep, then builds each service's image in the container registry
+# and deploys it with its container app from infra/<service>.bicep.
+name: footnote
+infra:
+  provider: bicep
+  path: infra
+services:
+  replayer:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true
+      buildArgs:
+        - SERVICE=replayer
+  processor:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true
+      buildArgs:
+        - SERVICE=processor
+  web:
+    project: frontend
+    language: ts
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true

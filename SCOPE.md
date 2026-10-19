@@ -11,6 +11,7 @@ delivered when that viewer's stream reaches it. Who it serves and why is in
 ## Done
 
 Data
+
 - [x] Seeded generator for a fictional league: clubs, players, team styles, and
       matches driven by hidden match states. Events include offside, handball,
       VAR checks and an amended event, plus player and ball positions
@@ -19,7 +20,8 @@ Data
       published figures, sources cited ([docs/calibration.md](docs/calibration.md))
 
 Pipeline (deployed on Azure)
-- [ ] Replayer → Event Hubs → processor on Container Apps → Postgres → Web PubSub → browser
+
+- [x] Replayer → Event Hubs → processor on Container Apps → Postgres → Web PubSub → browser
 - [ ] Live stats: pass distance, accuracy and difficulty rating; ball and shot
       speed; player speed and distance tags when thresholds are crossed
 - [ ] Match-state timeline updated live, and the state model scored against the
@@ -28,6 +30,7 @@ Pipeline (deployed on Azure)
       the deployed stack
 
 Explain
+
 - [ ] Moments ranked by the state model; the producer sees a shortlist, each
       item with its reason
 - [ ] Agents (Agent Framework, Foundry models) read the numbers through our MCP
@@ -37,6 +40,7 @@ Explain
 - [ ] Half-time and full-time recaps, and a "what did I miss" catch-up
 
 Render and personalise
+
 - [ ] Timed overlay data contract documented, with a reference renderer on our
       own 2D pitch view
 - [ ] Producer console: approve, edit or kill a graphic before it airs
@@ -55,6 +59,7 @@ Render and personalise
       browser; ready-made fan profiles for judges to switch between
 
 Quality and submission
+
 - [ ] `azd up` deploys from scratch; no secrets in code; Azure budget alert set
 - [ ] CI runs lint, type checks, tests and agent-output evaluations
 - [ ] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
