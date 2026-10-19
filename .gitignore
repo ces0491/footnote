@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Generated match data: rebuilt from seeds with `python -m footnote.generator`.
+# Committed: the league, the showcase match (the files the services deploy), its recipe and the
+# name check. Everything else under data/ is rebuilt on demand.
+/data/*
+!/data/showcase_recipe.json
+!/data/name_check.json
+!/data/league.json
+!/data/matches/
+/data/matches/*
+!/data/matches/fl-2627-showcase-sal-kin/
+!/data/answer_key/
+/data/answer_key/*
+!/data/answer_key/league.json
+!/data/answer_key/fl-2627-showcase-sal-kin.json
+
+# Node (frontend, from Day 2)
+node_modules/
+.next/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.azure/
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

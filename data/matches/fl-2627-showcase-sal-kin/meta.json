@@ -1,0 +1,332 @@
+{
+ "feed_version": "1.0",
+ "match_id": "fl-2627-showcase-sal-kin",
+ "competition": "Footnote League",
+ "season": "2026/27",
+ "matchday": 30,
+ "kickoff": "2027-03-07T13:00:00Z",
+ "venue": "The Saltings",
+ "referee": {
+  "id": "ref-06",
+  "name": "Louie Whinard"
+ },
+ "home": {
+  "id": "sal",
+  "code": "SAL",
+  "name": "Saltmarsh Rovers",
+  "short_name": "Saltmarsh",
+  "ground": "The Saltings",
+  "colours": [
+   "#1F7A6D",
+   "#F4F1E8"
+  ],
+  "formation": "4-2-3-1"
+ },
+ "away": {
+  "id": "kin",
+  "code": "KIN",
+  "name": "Kingsferry Athletic",
+  "short_name": "Kingsferry",
+  "ground": "Ferryside Road",
+  "colours": [
+   "#1B2A4A",
+   "#E8A33D"
+  ],
+  "formation": "4-4-2"
+ },
+ "lineups": [
+  {
+   "club_id": "sal",
+   "formation": "4-2-3-1",
+   "starters": [
+    {
+     "player_id": "sal-01",
+     "slot": "GK",
+     "position": "GK",
+     "shirt": 1,
+     "name": "Ryan Rookby"
+    },
+    {
+     "player_id": "sal-02",
+     "slot": "RB",
+     "position": "RB",
+     "shirt": 2,
+     "name": "Kit Polmere"
+    },
+    {
+     "player_id": "sal-04",
+     "slot": "RCB",
+     "position": "CB",
+     "shirt": 4,
+     "name": "Jory Penhallow"
+    },
+    {
+     "player_id": "sal-05",
+     "slot": "LCB",
+     "position": "CB",
+     "shirt": 5,
+     "name": "Sander Sundstrup"
+    },
+    {
+     "player_id": "sal-03",
+     "slot": "LB",
+     "position": "LB",
+     "shirt": 3,
+     "name": "Rory McNair"
+    },
+    {
+     "player_id": "sal-06",
+     "slot": "RDM",
+     "position": "DM",
+     "shirt": 6,
+     "name": "Sergio Gallino"
+    },
+    {
+     "player_id": "sal-08",
+     "slot": "LDM",
+     "position": "CM",
+     "shirt": 8,
+     "name": "Rory MacDowell"
+    },
+    {
+     "player_id": "sal-07",
+     "slot": "RW",
+     "position": "RW",
+     "shirt": 7,
+     "name": "Ryan Cobbmere"
+    },
+    {
+     "player_id": "sal-10",
+     "slot": "AM",
+     "position": "AM",
+     "shirt": 10,
+     "name": "Teo Varlan"
+    },
+    {
+     "player_id": "sal-11",
+     "slot": "LW",
+     "position": "LW",
+     "shirt": 11,
+     "name": "Kieran O'Fadyen"
+    },
+    {
+     "player_id": "sal-09",
+     "slot": "ST",
+     "position": "ST",
+     "shirt": 9,
+     "name": "Marco Dellow"
+    }
+   ],
+   "bench": [
+    {
+     "player_id": "sal-24",
+     "position": "GK",
+     "shirt": 24,
+     "name": "Archie Marrwick"
+    },
+    {
+     "player_id": "sal-23",
+     "position": "CB",
+     "shirt": 23,
+     "name": "Yanis Montais"
+    },
+    {
+     "player_id": "sal-14",
+     "position": "CB",
+     "shirt": 14,
+     "name": "Declan McGarrow"
+    },
+    {
+     "player_id": "sal-19",
+     "position": "ST",
+     "shirt": 19,
+     "name": "Kunle Asakanmi"
+    },
+    {
+     "player_id": "sal-12",
+     "position": "ST",
+     "shirt": 12,
+     "name": "Enzo Girier"
+    },
+    {
+     "player_id": "sal-27",
+     "position": "AM",
+     "shirt": 27,
+     "name": "Nathan Trebrook"
+    },
+    {
+     "player_id": "sal-17",
+     "position": "RB",
+     "shirt": 17,
+     "name": "Ryan Selington"
+    },
+    {
+     "player_id": "sal-39",
+     "position": "CM",
+     "shirt": 39,
+     "name": "Nico Carvena"
+    },
+    {
+     "player_id": "sal-38",
+     "position": "DM",
+     "shirt": 38,
+     "name": "Moussa Breveau"
+    }
+   ],
+   "attacking_direction": {
+    "first_half": "+x",
+    "second_half": "-x"
+   }
+  },
+  {
+   "club_id": "kin",
+   "formation": "4-4-2",
+   "starters": [
+    {
+     "player_id": "kin-01",
+     "slot": "GK",
+     "position": "GK",
+     "shirt": 1,
+     "name": "Isaac Brennholt"
+    },
+    {
+     "player_id": "kin-02",
+     "slot": "RB",
+     "position": "RB",
+     "shirt": 2,
+     "name": "Archie Whinett"
+    },
+    {
+     "player_id": "kin-04",
+     "slot": "RCB",
+     "position": "CB",
+     "shirt": 4,
+     "name": "Dan Raden"
+    },
+    {
+     "player_id": "kin-05",
+     "slot": "LCB",
+     "position": "CB",
+     "shirt": 5,
+     "name": "Cormac McKinnell"
+    },
+    {
+     "player_id": "kin-03",
+     "slot": "LB",
+     "position": "LB",
+     "shirt": 3,
+     "name": "Joost Vosund"
+    },
+    {
+     "player_id": "kin-07",
+     "slot": "RM",
+     "position": "RW",
+     "shirt": 7,
+     "name": "Femi Adeyani"
+    },
+    {
+     "player_id": "kin-08",
+     "slot": "RCM",
+     "position": "CM",
+     "shirt": 8,
+     "name": "Javi Ferrano"
+    },
+    {
+     "player_id": "kin-06",
+     "slot": "LCM",
+     "position": "DM",
+     "shirt": 6,
+     "name": "Ilyes Belais"
+    },
+    {
+     "player_id": "kin-11",
+     "slot": "LM",
+     "position": "LW",
+     "shirt": 11,
+     "name": "Harvey Pellbrook"
+    },
+    {
+     "player_id": "kin-09",
+     "slot": "RS",
+     "position": "ST",
+     "shirt": 9,
+     "name": "Ebuka Amabode"
+    },
+    {
+     "player_id": "kin-38",
+     "slot": "LS",
+     "position": "ST",
+     "shirt": 38,
+     "name": "Emil Dahlstrup"
+    }
+   ],
+   "bench": [
+    {
+     "player_id": "kin-35",
+     "position": "GK",
+     "shirt": 35,
+     "name": "Ben Trewick"
+    },
+    {
+     "player_id": "kin-10",
+     "position": "AM",
+     "shirt": 10,
+     "name": "Caio Torrano"
+    },
+    {
+     "player_id": "kin-26",
+     "position": "ST",
+     "shirt": 26,
+     "name": "Mikkel Westersen"
+    },
+    {
+     "player_id": "kin-17",
+     "position": "CB",
+     "shirt": 17,
+     "name": "Kai Nantwell"
+    },
+    {
+     "player_id": "kin-15",
+     "position": "AM",
+     "shirt": 15,
+     "name": "Javi Mendondo"
+    },
+    {
+     "player_id": "kin-25",
+     "position": "RW",
+     "shirt": 25,
+     "name": "Leo Kellfield"
+    },
+    {
+     "player_id": "kin-21",
+     "position": "CB",
+     "shirt": 21,
+     "name": "Uche Asatoye"
+    },
+    {
+     "player_id": "kin-28",
+     "position": "CM",
+     "shirt": 28,
+     "name": "Ren Haseta"
+    },
+    {
+     "player_id": "kin-19",
+     "position": "DM",
+     "shirt": 19,
+     "name": "Leo Tallridge"
+    }
+   ],
+   "attacking_direction": {
+    "first_half": "-x",
+    "second_half": "+x"
+   }
+  }
+ ],
+ "pitch": {
+  "length": 105.0,
+  "width": 68.0,
+  "units": "m",
+  "origin": "corner"
+ },
+ "synthetic": true
+}
