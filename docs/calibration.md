@@ -22,23 +22,23 @@ the published figure is a single real season and is noisy too.
 | Goalless matches | 9.5% ± 2.9 | 7.1% ± 2.6 | 7.1% | +33% / +0% | [football-data.co.uk results](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | counted from full-time scores: 27 of 380 |
 | Shots per match | 25.0 ± 0.66 | 25.5 ± 0.65 | 25.0 | +0% / +2% | [Opta Analyst](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 9,503 shots including blocked shots |
 | Shots on target per match | 7.16 ± 0.31 | 7.31 ± 0.33 | 8.37 | -15% / -13% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed shots on target (HST, AST): 3,182 |
-| Blocked shots per match | 5.93 ± 0.27 | 5.92 ± 0.27 | 7.36 | -20% / -20% | [Opta Analyst; Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | 9,503 shots (Opta Analyst) less 6,705 unblocked (summed totalShots) |
+| Blocked shots per match | 5.93 ± 0.27 | 5.92 ± 0.27 | 7.36 | -20% / -20% | [Opta Analyst; premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | 9,503 shots (Opta Analyst) less the 6,705 that weren't blocked (club totals summed) |
 | Goals per shot | 10.9% ± 0.6 | 11.1% ± 0.6 | 11.0% | -1% / +1% | [Opta Analyst](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 1,045 goals / 9,503 shots, own goals included |
-| Passes per team per match | 443.4 ± 10.3 | 448.1 ± 10.8 | 437.0 | +1% / +3% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed totalPasses 332,121 over 760 team-matches |
-| Pass completion | 80.6% ± 0.1 | 80.6% ± 0.1 | 82.5% | -2% / -2% | [Opta Analyst; Premier League stats API](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 273,956 successful passes (Opta Analyst) / 332,121 passes (summed) |
-| Lowest club possession (season) | 31.7% | 29.9% | 42.5% | -25% / -30% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | possessionPercentage: West Ham 42.5% |
-| Highest club possession (season) | 65.3% | 63.8% | 60.4% | +8% / +6% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | possessionPercentage: Manchester City 60.4% |
+| Passes per team per match | 443.4 ± 10.3 | 448.1 ± 10.8 | 437.0 | +1% / +3% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 332,121 passes over 760 team-matches |
+| Pass completion | 80.6% ± 0.1 | 80.6% ± 0.1 | 82.5% | -2% / -2% | [Opta Analyst; premierleague.com club stats](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 273,956 successful passes (Opta Analyst) / 332,121 passes (club totals summed) |
+| Lowest club possession (season) | 31.7% | 29.9% | 42.5% | -25% / -30% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | lowest club's season possession: West Ham, 42.5% |
+| Highest club possession (season) | 65.3% | 63.8% | 60.4% | +8% / +6% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | highest club's season possession: Manchester City, 60.4% |
 | Corners per match | 10.5 ± 0.37 | 10.5 ± 0.35 | 10.00 | +5% / +5% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed corners (HC, AC): 3,799 |
 | Throw-ins per match | 35.0 ± 0.80 | 34.9 ± 0.79 | 35.8 | -2% / -3% | [Opta Analyst](https://theanalyst.com/articles/premier-league-rules-throw-ins-goal-kicks-ball-in-play) | 13,615 throw-ins |
 | Goal kicks per match | 14.3 ± 0.41 | 14.5 ± 0.40 | 15.5 | -8% / -7% | [Opta Analyst](https://theanalyst.com/articles/premier-league-rules-throw-ins-goal-kicks-ball-in-play) | 5,901 goal kicks |
 | Fouls per match | 21.9 ± 0.65 | 20.9 ± 0.57 | 21.6 | +1% / -3% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed fouls committed (HF, AF): 8,224 |
-| Offsides per match | 3.27 ± 0.23 | 3.49 ± 0.26 | 3.09 | +6% / +13% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed offsides: 1,175 |
+| Offsides per match | 3.27 ± 0.23 | 3.49 ± 0.26 | 3.09 | +6% / +13% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 1,175 offsides |
 | Yellow cards per match | 4.20 ± 0.20 | 4.07 ± 0.19 | 3.75 | +12% / +9% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed yellow cards (HY, AY): 1,424; a first yellow that a second turns into a red isn't counted |
 | Red cards per match | 0.17 ± 0.04 | 0.14 ± 0.04 | 0.12 | +45% / +18% | [Opta Analyst](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 44 red cards |
-| Penalties per match | 0.27 ± 0.05 | 0.30 ± 0.06 | 0.24 | +11% / +23% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed foulWonPenalty: 92 |
-| Penalty conversion | 89.2% ± 6.0 | 77.0% ± 7.8 | 83.7% | +7% / -8% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed penaltyGoals 77 of 92 penalties |
-| Own goals per match | 0.13 ± 0.04 | 0.10 ± 0.03 | 0.11 | +25% / -7% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed ownGoalsConceded: 40 |
-| Headed share of goals | 16.9% ± 2.3 | 13.2% ± 2.0 | 17.6% | -4% / -25% | [Premier League stats API](https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats) | summed headedGoals 184 / 1,045 goals |
+| Penalties per match | 0.27 ± 0.05 | 0.30 ± 0.06 | 0.24 | +11% / +23% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 92 penalties won |
+| Penalty conversion | 89.2% ± 6.0 | 77.0% ± 7.8 | 83.7% | +7% / -8% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 77 penalty goals from 92 penalties |
+| Own goals per match | 0.13 ± 0.04 | 0.10 ± 0.03 | 0.11 | +25% / -7% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 40 own goals conceded |
+| Headed share of goals | 16.9% ± 2.3 | 13.2% ± 2.0 | 17.6% | -4% / -25% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 184 headed goals of 1,045 |
 | Non-penalty set-piece share of goals | 27.6% ± 2.7 | 28.8% ± 2.7 | 27.4% | +1% / +5% | [Opta Analyst](https://theanalyst.com/articles/fpl-set-piece-stats-projections-tips-premier-league-2026-27) | "27.4% of all goals came from non-penalty set-pieces" |
 | VAR overturns per match | 0.28 ± 0.05 | 0.29 ± 0.05 | 0.28 | +1% / +5% | [BBC Sport (republished)](https://www.modernghana.com/sports/1497747/every-var-error-in-2025-26-premier-league-how.html) | 105 overturns; read from ModernGhana's republication of the BBC Sport article |
 | Ball in play | 53:20 ± 41 s | 53:45 ± 42 s | 55:23 | -4% / -3% | [Opta Analyst](https://theanalyst.com/articles/premier-league-rules-throw-ins-goal-kicks-ball-in-play) | "just 55 mins, 23 seconds last season" |
@@ -84,8 +84,9 @@ targets.
 ## Sources
 
 Results, shots on target, fouls, corners and yellow cards are counted from football-data.co.uk's
-2025/26 match file. Figures sourced to the Premier League's stats API were summed across the 20
-clubs for 2025/26; the sums match Opta Analyst's published season totals where both exist (1,045
-goals, 9,503 shots, 273,956 successful passes, 44 red cards, 13,615 throw-ins, 5,901 goal kicks).
+2025/26 match file. Figures sourced to premierleague.com's club stats are the 20 clubs' 2025/26
+season totals, summed, read from the data behind the site's club stats pages; the sums match Opta
+Analyst's published season totals where both exist (1,045 goals, 9,503 shots, 273,956 successful
+passes, 44 red cards, 13,615 throw-ins, 5,901 goal kicks).
 The VAR count was read from a republication of the BBC Sport article, because bbc.co.uk could not
 be fetched. Quotes and sums were checked against the sources on 2026-10-19.

@@ -2,20 +2,20 @@
 
 Season 2025/26 (380 matches) unless stated. Results, shots on target, fouls,
 corners and yellow cards are counted from football-data.co.uk's match file.
-Figures sourced to the Premier League's club statistics API (Opta data) were
-summed across the 20 clubs; those sums agree with Opta Analyst's published
-season totals where both exist (goals, shots, successful passes, red cards,
-throw-ins, goal kicks). Quotes were checked against the source pages on
-2026-10-19.
+Figures sourced to premierleague.com's club stats (Opta data) are the 20 clubs'
+season totals, summed, read from the data behind the site's club stats pages;
+those sums agree with Opta Analyst's published season totals where both exist
+(goals, shots, successful passes, red cards, throw-ins, goal kicks). Quotes
+were checked against the source pages on 2026-10-19.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-PL_API = (
-    "https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/competitions/8/seasons/2025/teams/{teamId}/stats"
-)
+# The site's club stats pages choose the statistic and season on the page itself, so this links
+# their starting point rather than a page per figure.
+PL_CLUB_STATS = "https://www.premierleague.com/en/stats/top/clubs"
 OPTA_TOTALS = "https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta"
 OPTA_BIP = "https://theanalyst.com/articles/premier-league-rules-throw-ins-goal-kicks-ball-in-play"
 OPTA_BIP_2425 = "https://theanalyst.com/articles/premier-league-ball-in-play-are-we-seeing-less-football-2025-26"
@@ -118,9 +118,9 @@ TARGETS: tuple[Target, ...] = (
         "Blocked shots per match",
         (9503 - 6705) / 380,
         "shots",
-        "Opta Analyst; Premier League stats API",
-        PL_API,
-        "9,503 shots (Opta Analyst) less 6,705 unblocked (summed totalShots)",
+        "Opta Analyst; premierleague.com club stats",
+        PL_CLUB_STATS,
+        "9,503 shots (Opta Analyst) less the 6,705 that weren't blocked (club totals summed)",
     ),
     Target(
         "conversion",
@@ -136,36 +136,36 @@ TARGETS: tuple[Target, ...] = (
         "Passes per team per match",
         332121 / 760,
         "passes",
-        "Premier League stats API",
-        PL_API,
-        "summed totalPasses 332,121 over 760 team-matches",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 332,121 passes over 760 team-matches",
     ),
     Target(
         "pass_completion",
         "Pass completion",
         273956 / 332121,
         "share",
-        "Opta Analyst; Premier League stats API",
+        "Opta Analyst; premierleague.com club stats",
         OPTA_TOTALS,
-        "273,956 successful passes (Opta Analyst) / 332,121 passes (summed)",
+        "273,956 successful passes (Opta Analyst) / 332,121 passes (club totals summed)",
     ),
     Target(
         "possession_low",
         "Lowest club possession (season)",
         0.425,
         "share",
-        "Premier League stats API",
-        PL_API,
-        "possessionPercentage: West Ham 42.5%",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "lowest club's season possession: West Ham, 42.5%",
     ),
     Target(
         "possession_high",
         "Highest club possession (season)",
         0.604,
         "share",
-        "Premier League stats API",
-        PL_API,
-        "possessionPercentage: Manchester City 60.4%",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "highest club's season possession: Manchester City, 60.4%",
     ),
     Target(
         "corners",
@@ -194,9 +194,9 @@ TARGETS: tuple[Target, ...] = (
         "Offsides per match",
         1175 / 380,
         "offsides",
-        "Premier League stats API",
-        PL_API,
-        "summed offsides: 1,175",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 1,175 offsides",
     ),
     Target(
         "yellow_cards",
@@ -213,36 +213,36 @@ TARGETS: tuple[Target, ...] = (
         "Penalties per match",
         92 / 380,
         "penalties",
-        "Premier League stats API",
-        PL_API,
-        "summed foulWonPenalty: 92",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 92 penalties won",
     ),
     Target(
         "penalty_conversion",
         "Penalty conversion",
         77 / 92,
         "share",
-        "Premier League stats API",
-        PL_API,
-        "summed penaltyGoals 77 of 92 penalties",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 77 penalty goals from 92 penalties",
     ),
     Target(
         "own_goals",
         "Own goals per match",
         40 / 380,
         "goals",
-        "Premier League stats API",
-        PL_API,
-        "summed ownGoalsConceded: 40",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 40 own goals conceded",
     ),
     Target(
         "headed_share",
         "Headed share of goals",
         184 / 1045,
         "share",
-        "Premier League stats API",
-        PL_API,
-        "summed headedGoals 184 / 1,045 goals",
+        "premierleague.com club stats",
+        PL_CLUB_STATS,
+        "club totals summed: 184 headed goals of 1,045",
     ),
     Target(
         "set_piece_share",
