@@ -93,6 +93,12 @@ SHELF_SECONDS = {
 PLACEMENT = {"moment": "lower_third", "rule_call": "lower_third", "correction": "lower_third", "recap": "full_card"}
 # Kinds that wait for the next stoppage, so live play stays uncluttered (docs/audience.md, P5).
 HOLD_FOR_STOPPAGE = frozenset({"segment", "stat"})
+# Seconds of match time a graphic stays on screen once shown, by placement. A side-panel card stays
+# in the viewer's panel instead (docs/overlay.md).
+DURATION = {"lower_third": 12.0, "full_card": 20.0}
+# Graphics that may animate on and off screen; the rest appear and leave without motion, and calm
+# mode keeps every graphic still (docs/audience.md, P8).
+ANIMATED_KINDS = frozenset({"moment"})
 
 # Run of play: who was on top over the ten minutes before a goal, leaving out the half-minute of
 # the move itself, from the state shown each second. Against the run of play means the scorers held

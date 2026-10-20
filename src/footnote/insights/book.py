@@ -22,7 +22,15 @@ from typing import TYPE_CHECKING, Literal
 
 from footnote.insights.draft import Card, Draft, render
 from footnote.insights.facts import Facts, facts_to_json
-from footnote.insights.moments import AGENT_TOPICS, HOLD_FOR_STOPPAGE, PLACEMENT, Found, MomentFinder
+from footnote.insights.moments import (
+    AGENT_TOPICS,
+    ANIMATED_KINDS,
+    DURATION,
+    HOLD_FOR_STOPPAGE,
+    PLACEMENT,
+    Found,
+    MomentFinder,
+)
 from footnote.insights.templates import template
 
 if TYPE_CHECKING:
@@ -80,6 +88,14 @@ class Insight:
         return "stoppage" if self.kind in HOLD_FOR_STOPPAGE else None
 
     @property
+    def duration(self) -> float | None:
+        return DURATION.get(self.placement)
+
+    @property
+    def motion(self) -> str:
+        return "animated" if self.kind in ANIMATED_KINDS else "still"
+
+    @property
     def template(self) -> Draft:
         return template(self.topic, self.facts)
 
@@ -100,6 +116,8 @@ class Insight:
             "evidence": self.evidence,
             "placement": self.placement,
             "hold": self.hold,
+            "duration": self.duration,
+            "motion": self.motion,
             "corrects": self.corrects,
             "live": self.live,
             "flag": self.flag,

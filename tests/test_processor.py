@@ -26,13 +26,16 @@ class MemoryStore:
         self.view_seqs: list[int] = []
         self.insights: dict[str, dict[str, dict]] = {}
         self.insight_rev: dict[str, int] = {}
+        self.started: dict[str, tuple[str | None, str]] = {}  # who started each run, and its producer mode
+        self.pushes: dict[str, dict[int, dict]] = {}  # each row's stored push, by run and seq
         self.fail_saves = 0
 
-    async def start_run(self, descriptor: dict) -> bool:
+    async def start_run(self, descriptor: dict, viewer: str | None = None, producer: str = "auto") -> bool:
         if descriptor["run_id"] in self.runs:
             return False
         self.runs[descriptor["run_id"]] = descriptor
         self.status[descriptor["run_id"]] = "running"
+        self.started[descriptor["run_id"]] = (viewer, producer)
         return True
 
     async def end_run(self, run_id: str, reason: str) -> None:
@@ -51,6 +54,8 @@ class MemoryStore:
             raise ConnectionError("store unavailable")
         for row in rows:
             self.feed.setdefault(row.run_id, {}).setdefault(row.message["seq"], row.message)
+            if row.push is not None:
+                self.pushes.setdefault(row.run_id, {}).setdefault(row.message["seq"], row.push)
         if view is not None:
             self.views[run_id] = view
             self.view_seqs.append(view["seq"])
@@ -343,3 +348,45 @@ async def test_insights_are_stored_with_their_feed_and_pushed_in_revision_order(
     # A push goes out after the store holds the event behind it.
     first = next(m for m in push.sent if m["type"] == "insight")
     assert push.sent.index(first) > next(i for i, m in enumerate(push.sent) if m["type"] == "snapshot")
+
+
+async def test_each_pushed_event_is_stored_with_its_row_and_says_when_it_was_published(showcase: Match) -> None:
+    """A viewer whose stream runs behind live rebuilds the match from the stored pushes: the snapshot
+    at the end of the backfill, then each event as it was sent, timing aside."""
+    descriptor, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push, now_ms=lambda: 9)
+    for i in range(0, len(items), 50):
+        await processor.handle(items[i : i + 50])
+
+    stored = store.pushes[RUN_ID]
+    backfill = descriptor["backfill_seq"]
+    assert sorted(stored) == list(range(backfill, len(showcase.feed) + 1))
+    assert stored[backfill]["type"] == "snapshot" and stored[backfill]["seq"] == backfill
+    events = [m for m in push.sent if m["type"] == "event"]
+    for sent in events:
+        kept = stored[sent["seq"]]
+        assert "timing" not in kept and kept == {k: v for k, v in sent.items() if k != "timing"}
+
+    timeline = Timeline.from_feed(showcase.feed)
+    by_seq = {m["seq"]: m for m in showcase.feed}
+    assert all(m["replay"] == round(timeline.replay_seconds(by_seq[m["seq"]]["ts"]), 2) for m in events)
+    assert all(m["replay"] >= descriptor["start_replay"] for m in events)
+    stops = {m["event"]["type"] for m in events if m["stoppage"]}
+    assert {"goal", "ball_out", "period_end"} <= stops and "pass" not in stops
+
+
+async def test_a_run_start_records_who_started_it_and_how_graphics_are_approved(showcase: Match) -> None:
+    descriptor, items = _run_messages(showcase, 81)
+    viewer = "0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b"
+    start = {**items[0].body, "viewer": viewer, "producer": "manual"}
+    store = MemoryStore()
+    processor = Processor(showcase, store, MemoryPush())
+    await processor.handle([Incoming(RUN_ID, KIND_CONTROL, start, 1, 2)])
+    assert store.started[RUN_ID] == (viewer, "manual")
+
+    # Anything else is taken as no producer, approving automatically.
+    other = MemoryStore()
+    odd = {**items[0].body, "viewer": "not-an-id", "producer": "sometimes"}
+    await Processor(showcase, other, MemoryPush()).handle([Incoming(RUN_ID, KIND_CONTROL, odd, 1, 2)])
+    assert other.started[RUN_ID] == (None, "auto")

@@ -1,0 +1,574 @@
+{
+  "$defs": {
+    "Card": {
+      "additionalProperties": false,
+      "description": "The item's wording, with code's figures filled in.",
+      "properties": {
+        "headline": {
+          "description": "For a lower third: 60 characters at most",
+          "title": "Headline",
+          "type": "string"
+        },
+        "casual": {
+          "description": "For a casual fan: why it matters, in one or two sentences",
+          "title": "Casual",
+          "type": "string"
+        },
+        "analyst": {
+          "description": "For an analyst: the numbers behind it, in one to three sentences",
+          "title": "Analyst",
+          "type": "string"
+        },
+        "plain": {
+          "description": "The headline and the casual line as one text, for screen readers",
+          "title": "Plain",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Event IDs the wording rests on: those cited, then those behind its facts",
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "facts": {
+          "description": "The fact keys the wording used",
+          "items": {
+            "type": "string"
+          },
+          "title": "Facts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "headline",
+        "casual",
+        "analyst",
+        "plain",
+        "evidence",
+        "facts"
+      ],
+      "title": "Card",
+      "type": "object"
+    },
+    "Flag": {
+      "additionalProperties": false,
+      "description": "Set when VAR or the provider's correction undid what the item cites.",
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "The VAR decision or the correction",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        },
+        "seq": {
+          "description": "The feed message that flagged it",
+          "title": "Seq",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reason",
+        "event_id",
+        "version",
+        "seq"
+      ],
+      "title": "Flag",
+      "type": "object"
+    },
+    "MatchTime": {
+      "additionalProperties": false,
+      "description": "A moment in the match: `t` seconds into `period`, and the minute a broadcast shows for it.",
+      "properties": {
+        "period": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Period",
+          "type": "integer"
+        },
+        "t": {
+          "description": "Seconds since the period kicked off",
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "As a broadcast shows it: the 23rd minute runs from 22:00",
+          "title": "Minute"
+        },
+        "added_minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minute of added time, or null in normal time",
+          "title": "Added Minute"
+        }
+      },
+      "required": [
+        "period",
+        "t"
+      ],
+      "title": "MatchTime",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where the wording came from and what was checked.",
+      "properties": {
+        "source": {
+          "enum": [
+            "template",
+            "agent",
+            "producer"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The template that worded it",
+          "title": "Template"
+        },
+        "agent_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The agent run that wrote it",
+          "title": "Agent Run Id"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of the agent's instructions",
+          "title": "Prompt"
+        },
+        "attempts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempts"
+        },
+        "tools": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The match tools the agent called",
+          "title": "Tools"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "const": "passed",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Every version a viewer sees passed the checks",
+          "title": "Checks"
+        },
+        "cached": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Written for an earlier replay and checked again",
+          "title": "Cached"
+        },
+        "edited_from": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version the producer edited",
+          "title": "Edited From"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One insight as it stands: what it is, when to show it, where, for how long, and its record.",
+  "properties": {
+    "match_id": {
+      "title": "Match Id",
+      "type": "string"
+    },
+    "insight_id": {
+      "description": "Stable for the insight: a later state of it replaces the earlier",
+      "title": "Insight Id",
+      "type": "string"
+    },
+    "corrects": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The item a correction is about",
+      "title": "Corrects"
+    },
+    "evidence": {
+      "description": "The events the moment rests on",
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "flag": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Flag"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kind": {
+      "enum": [
+        "moment",
+        "rule_call",
+        "segment",
+        "stat",
+        "player_tag",
+        "recap",
+        "correction"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "topic": {
+      "description": "What happened, and the graphics template that shows it",
+      "title": "Topic",
+      "type": "string"
+    },
+    "rank": {
+      "description": "From the match-state model and the moment's figures",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Rank",
+      "type": "number"
+    },
+    "reason": {
+      "description": "Why it ranks where it does",
+      "title": "Reason",
+      "type": "string"
+    },
+    "live": {
+      "description": "False for a moment the replay's start passed: history, for catch-up only",
+      "title": "Live",
+      "type": "boolean"
+    },
+    "seq": {
+      "description": "The feed message its facts are as of",
+      "title": "Seq",
+      "type": "integer"
+    },
+    "at": {
+      "$ref": "#/$defs/MatchTime",
+      "description": "When it happened"
+    },
+    "until": {
+      "$ref": "#/$defs/MatchTime",
+      "description": "When it leaves the producer's shortlist"
+    },
+    "shown_seq": {
+      "description": "The feed message behind its current state",
+      "title": "Shown Seq",
+      "type": "integer"
+    },
+    "shown_at": {
+      "$ref": "#/$defs/MatchTime",
+      "description": "That message's match time: show the item once playback reaches it"
+    },
+    "ts": {
+      "description": "That message's timestamp from the provider",
+      "title": "Ts",
+      "type": "string"
+    },
+    "hold": {
+      "anyOf": [
+        {
+          "const": "stoppage",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Wait for the next stoppage after shown_at",
+      "title": "Hold"
+    },
+    "duration": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Seconds of match time on screen; null for a side-panel card",
+      "title": "Duration"
+    },
+    "placement": {
+      "enum": [
+        "lower_third",
+        "side_panel",
+        "full_card"
+      ],
+      "title": "Placement",
+      "type": "string"
+    },
+    "motion": {
+      "description": "Whether it may animate; calm mode keeps it still",
+      "enum": [
+        "still",
+        "animated"
+      ],
+      "title": "Motion",
+      "type": "string"
+    },
+    "version": {
+      "description": "The version of the wording viewers see",
+      "title": "Version",
+      "type": "integer"
+    },
+    "source": {
+      "enum": [
+        "template",
+        "agent",
+        "producer"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "card": {
+      "$ref": "#/$defs/Card"
+    },
+    "fields": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Each fact's text by key, for graphics systems filling a template",
+      "title": "Fields",
+      "type": "object"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "status": {
+      "description": "Only an approved item airs",
+      "enum": [
+        "drafted",
+        "approved",
+        "withdrawn",
+        "killed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "status_by": {
+      "anyOf": [
+        {
+          "enum": [
+            "auto",
+            "producer",
+            "correction"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Who set the status: automatic approval, the producer, or a correction that needs approval again",
+      "title": "Status By"
+    },
+    "status_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Status At"
+    },
+    "agent_state": {
+      "enum": [
+        "off",
+        "pending",
+        "drafting",
+        "done",
+        "fallback"
+      ],
+      "title": "Agent State",
+      "type": "string"
+    },
+    "agent_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Why the template stands, when it does",
+      "title": "Agent Note"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "match_id",
+    "insight_id",
+    "corrects",
+    "evidence",
+    "flag",
+    "kind",
+    "topic",
+    "rank",
+    "reason",
+    "live",
+    "seq",
+    "at",
+    "until",
+    "shown_seq",
+    "shown_at",
+    "ts",
+    "hold",
+    "duration",
+    "placement",
+    "motion",
+    "version",
+    "source",
+    "card",
+    "fields",
+    "provenance",
+    "status",
+    "status_by",
+    "status_at",
+    "agent_state",
+    "agent_note",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "OverlayItem",
+  "type": "object"
+}

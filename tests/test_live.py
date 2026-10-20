@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import numpy as np
 import pytest
 
-from footnote.live.contract import client_event, wire
-from footnote.live.match import Match, load_match
+from footnote.live import overlay, pitch
+from footnote.live.contract import client_event, stoppage, wire
+from footnote.live.match import Match, data_dir, load_match
 from footnote.live.state import RunState
 from footnote.live.timeline import Timeline
 
@@ -134,6 +139,41 @@ def test_every_pushed_event_fits_one_web_pubsub_message(showcase: Match) -> None
     for m in showcase.feed:
         state.apply(m)
         message = {"type": "event", "run_id": "0" * 16, "event": client_event(m), "key": True}
-        message |= state.live_fields() | {"timing": timing}
+        message |= {"replay": 5432.17, "stoppage": False} | state.live_fields() | {"timing": timing}
         largest = max(largest, len(wire(message).encode()))
     assert largest <= 1800
+
+
+def test_play_stops_at_whistles_and_restarts_but_not_for_a_foul_played_on() -> None:
+    assert stoppage({"type": "ball_out"}) and stoppage({"type": "goal"}) and stoppage({"type": "var_check"})
+    assert stoppage({"type": "foul", "advantage": False})
+    assert not stoppage({"type": "foul", "advantage": True})
+    assert not stoppage({"type": "pass"}) and not stoppage({"type": "carry"}) and not stoppage({"type": "shot"})
+
+
+def test_the_pitch_chunks_hold_every_frame_of_the_tracking(showcase: Match) -> None:
+    path = data_dir() / "matches" / showcase.match_id / "tracking.npz"
+    cut = pitch.load(path)
+    layout = cut.layout
+    assert layout["frame_rate"] == 10 and layout["values_per_frame"] == pitch.VALUES_PER_FRAME == 48
+    with np.load(path) as z:
+        period, players, ball, occupancy = z["period"], z["players_cm"], z["ball_cm"], z["occupancy"]
+        slot_players = z["slot_players"]
+    assert layout["slot_players"] == [[str(p) for p in row] for row in slot_players]
+    for p in (1, 2):
+        own = [chunk for per, _, chunk in cut.chunks if per == p]
+        numbers = [n for per, n, _ in cut.chunks if per == p]
+        assert numbers == list(range(len(own)))
+        frames = np.array([frame for chunk in own for frame in pitch.frames_of(chunk)])
+        assert len(frames) == layout["frames"][str(p)] == int((period == p).sum())
+        assert all(len(chunk) <= pitch.FRAMES_PER_CHUNK * pitch.VALUES_PER_FRAME * 2 for chunk in own)
+        mask = period == p
+        assert np.array_equal(frames[:, :44].reshape(-1, 22, 2), players[mask])
+        assert np.array_equal(frames[:, 44:47], ball[mask])
+        assert np.array_equal(frames[:, 47], occupancy[mask])
+
+
+def test_the_overlay_schema_in_docs_is_current() -> None:
+    """docs/overlay.schema.json is what `python -m footnote.live.overlay` writes."""
+    committed = json.loads((Path(__file__).resolve().parents[1] / "docs" / "overlay.schema.json").read_text("utf-8"))
+    assert committed == overlay.schema()

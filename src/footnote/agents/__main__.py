@@ -2,7 +2,8 @@
 
 One process serves the match tools over MCP on localhost (footnote.tools) and runs the worker that
 drafts cards with them (worker.py). It wakes on the processor's notifications on the
-`footnote_agents` channel and also looks for jobs every few seconds, in case one was missed.
+`footnote_agents` channel and also looks for jobs every few seconds, in case one was missed. It
+also serves the producer's desk (desk.py) to the web app, inside the Container Apps environment.
 
 Settings come from the environment (set by infra/agents.bicep in Azure):
 
@@ -12,6 +13,7 @@ Settings come from the environment (set by infra/agents.bicep in Azure):
     AZURE_CLIENT_ID                           the service's managed identity
     AGENT_DEADLINE_SECONDS, AGENT_DAILY_RUNS, AGENT_CONCURRENCY, AGENT_REASONING_EFFORT   optional
     MCP_PORT                                  the match tools' local port, 8100 unless set
+    DESK_PORT                                 the producer's desk, 8080 unless set
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from azure.core.credentials_async import AsyncTokenCredential
 from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 
 from footnote import cloud
+from footnote.agents.desk import Desk, create_app
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.agents.worker import Settings, Worker
 from footnote.db.connect import TOKEN_SCOPE, conninfo, entra_pool
@@ -90,8 +93,13 @@ async def main() -> None:
     webpubsub = WebPubSubServiceClient(
         endpoint=cloud.require("WEBPUBSUB_ENDPOINT"), hub=cloud.require("WEBPUBSUB_HUB"), credential=credential
     )
-    worker = Worker(AgentStore(pool), WebPubSubPush(webpubsub), client, f"http://127.0.0.1:{port}/mcp", settings())
+    push = WebPubSubPush(webpubsub)
+    worker = Worker(AgentStore(pool), push, client, f"http://127.0.0.1:{port}/mcp", settings())
     wake = asyncio.Event()
+    desk_port = int(os.environ.get("DESK_PORT", "8080"))
+    desk = uvicorn.Server(
+        uvicorn.Config(create_app(Desk(pool, push)), host="0.0.0.0", port=desk_port, log_level="warning")
+    )
 
     stop = asyncio.Event()
     if sys.platform != "win32":
@@ -99,10 +107,11 @@ async def main() -> None:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, stop.set)
 
-    log.info("drafting with %s; match tools on port %d", worker.settings.model, port)
+    log.info("drafting with %s; match tools on port %d, the desk on %d", worker.settings.model, port, desk_port)
     async with webpubsub:
         tasks = [
             asyncio.create_task(mcp.serve(), name="mcp"),
+            asyncio.create_task(desk.serve(), name="desk"),
             asyncio.create_task(listen(credential, wake), name="listen"),
             asyncio.create_task(worker.run(wake), name="worker"),
             asyncio.create_task(stop.wait(), name="stop"),
@@ -115,6 +124,7 @@ async def main() -> None:
                     raise failure
         finally:
             mcp.should_exit = True
+            desk.should_exit = True
             for task in tasks:
                 task.cancel()
             for task in tasks:

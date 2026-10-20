@@ -132,6 +132,17 @@ async def test_a_viewers_new_run_replaces_their_last(showcase: Match, timeline: 
     await manager.close()
 
 
+async def test_run_start_says_who_started_it_beside_the_descriptor(showcase: Match, timeline: Timeline) -> None:
+    publisher = RecordingPublisher()
+    manager = RunManager(showcase, timeline, publisher, start_delay=60.0)
+    run = await manager.start(viewer=VIEWER, producer="manual")
+    await asyncio.sleep(0.05)
+    start = publisher.sent[0][2].body
+    assert start == {"type": "run_start", "run": run, "viewer": VIEWER, "producer": "manual"}
+    assert "viewer" not in run and "producer" not in run
+    await manager.close()
+
+
 async def test_one_viewer_trying_every_jump_point_crowds_out_no_one(showcase: Match, timeline: Timeline) -> None:
     publisher = RecordingPublisher()
     manager = RunManager(showcase, timeline, publisher, max_runs=2, start_delay=60.0)
@@ -169,7 +180,8 @@ def test_api_starts_lists_and_stops_runs(showcase: Match) -> None:
 
 
 @pytest.mark.parametrize(
-    "body", [{"start_minute": 0}, {"start_minute": 91}, {"speed": 3}, {"seek": 5}, {"viewer": "someone"}]
+    "body",
+    [{"start_minute": 0}, {"start_minute": 91}, {"speed": 3}, {"seek": 5}, {"viewer": "someone"}, {"producer": "x"}],
 )
 def test_api_rejects_bad_requests(showcase: Match, body: dict) -> None:
     with TestClient(create_app(showcase, RecordingPublisher())) as client:

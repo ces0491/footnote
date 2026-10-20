@@ -1,4 +1,5 @@
-"""The processor's Postgres store: runs, their feed, their state view and their insights."""
+"""The processor's Postgres store: runs, their feed, their state view and their insights, and the
+tracking the pitch view draws."""
 
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ from psycopg.types.json import Jsonb
 from footnote.db.connect import Pool
 from footnote.db.insights import AGENT_CHANNEL, Connection, cards, insight_push, next_rev
 from footnote.insights.book import Change, Insight
+from footnote.live.contract import ProducerMode
+from footnote.live.pitch import PitchTracking
 from footnote.processor.core import FeedRow
 
 log = logging.getLogger(__name__)
@@ -35,10 +38,31 @@ class PostgresStore:
             (meta["match_id"], Jsonb(meta)),
         )
 
-    async def start_run(self, descriptor: dict) -> bool:
+    async def put_tracking(self, match_id: str, tracking: PitchTracking) -> bool:
+        """Store the match's tracking for the pitch view, unless this file is stored already;
+        returns whether it wrote anything."""
+        async with self.pool.connection() as conn, conn.transaction():
+            cur = await conn.execute(
+                "select tracking ->> 'digest' as digest from matches where match_id = %s for update", (match_id,)
+            )
+            row = await cur.fetchone()
+            if row is not None and row["digest"] == tracking.layout["digest"]:
+                return False
+            await conn.execute("delete from tracking_chunks where match_id = %s", (match_id,))
+            async with conn.cursor() as copier:
+                async with copier.copy("copy tracking_chunks (match_id, period, chunk, frames) from stdin") as copy:
+                    for period, chunk, frames in tracking.chunks:
+                        await copy.write_row((match_id, period, chunk, frames))
+            await conn.execute(
+                "update matches set tracking = %s where match_id = %s", (Jsonb(tracking.layout), match_id)
+            )
+        return True
+
+    async def start_run(self, descriptor: dict, viewer: str | None = None, producer: ProducerMode = "auto") -> bool:
         inserted = await self._retry(
-            "insert into runs (run_id, match_id, descriptor) values (%s, %s, %s) on conflict (run_id) do nothing",
-            (descriptor["run_id"], descriptor["match_id"], Jsonb(descriptor)),
+            "insert into runs (run_id, match_id, descriptor, viewer, producer) values (%s, %s, %s, %s, %s)"
+            " on conflict (run_id) do nothing",
+            (descriptor["run_id"], descriptor["match_id"], Jsonb(descriptor), viewer, producer),
         )
         return inserted == 1
 
@@ -76,6 +100,7 @@ class PostgresStore:
                 Jsonb(r.message),
                 _ts(r.published_at),
                 _ts(r.enqueued_at),
+                None if r.push is None else Jsonb(r.push),
             )
             for r in rows
         ]
@@ -86,7 +111,7 @@ class PostgresStore:
                     async with conn.cursor() as cur:
                         await cur.executemany(
                             "insert into feed_events (run_id, seq, event_id, version, type, period, clock, body,"
-                            " published_at, enqueued_at) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                            " published_at, enqueued_at, push) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
                             " on conflict (run_id, seq) do nothing",
                             params,
                         )
@@ -134,13 +159,21 @@ class PostgresStore:
 # a flag carries the shelf life as well.
 _PRECEDENCE = {"new": 0, "restated": 1, "flagged": 2, "ended": 3}
 
-# Inserts and versions skip what is already stored: a batch the store took before a restart.
+# Inserts and versions skip what is already stored: a batch the store took before a restart. A run
+# whose graphics are approved automatically has each live insight approved as it is found; history
+# (moments its backfill passed) is never offered for air.
 _INSERT_INSIGHT = """
 insert into insights (run_id, insight_id, seq, kind, topic, at, until_at, rank, reason, evidence, placement,
-                      hold, corrects, live, flag, facts, facts_version, template, agent_state)
-values (%(run_id)s, %(insight_id)s, %(seq)s, %(kind)s, %(topic)s, %(at)s, %(until)s, %(rank)s, %(reason)s,
-        %(evidence)s, %(placement)s, %(hold)s, %(corrects)s, %(live)s, %(flag)s, %(facts)s, %(facts_version)s,
-        %(template)s, %(agent_state)s)
+                      hold, duration, motion, corrects, live, flag, facts, facts_version, template, agent_state,
+                      status, status_by, status_at)
+select %(run_id)s, %(insight_id)s, %(seq)s, %(kind)s, %(topic)s, %(at)s, %(until)s, %(rank)s, %(reason)s,
+       %(evidence)s, %(placement)s, %(hold)s, %(duration)s, %(motion)s, %(corrects)s, %(live)s, %(flag)s,
+       %(facts)s, %(facts_version)s, %(template)s, %(agent_state)s,
+       case when run.auto then 'approved' else 'drafted' end,
+       case when run.auto then 'auto' end,
+       case when run.auto then now() end
+  -- One row whatever happens: an insight for a run not on record fails on its foreign key.
+  from (select %(live)s and (select producer from runs where run_id = %(run_id)s) is not distinct from 'auto' as auto) run
 on conflict (run_id, insight_id) do nothing
 """
 
@@ -183,12 +216,18 @@ async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
     version = int((await cur.fetchone() or {"next": 1})["next"])
     await conn.execute(_INSERT_VERSION, _template_version(run_id, insight, version))
     record = insight.record()
-    # A fresh job for the agents: it joins the queue now, with no claims against it yet.
+    # A fresh job for the agents: it joins the queue now, with no claims against it yet. A producer
+    # approving by hand approved what the card said before, so the corrected card waits for them again.
     await conn.execute(
-        "update insights set topic = %s, seq = %s, evidence = %s, flag = %s, facts = %s, facts_version = %s,"
+        "update insights i set topic = %s, seq = %s, evidence = %s, flag = %s, facts = %s, facts_version = %s,"
         " template = %s, version = %s, agent_state = %s, agent_note = null, agent_attempts = 0,"
-        " agent_lease = null, queued_at = now(), updated_at = now()"
-        " where run_id = %s and insight_id = %s",
+        " agent_lease = null, queued_at = now(), updated_at = now(),"
+        " status = case when was.hand then 'drafted' else i.status end,"
+        " status_by = case when was.hand then 'correction' else i.status_by end,"
+        " status_at = case when was.hand then now() else i.status_at end"
+        " from (select i2.status = 'approved' and r.producer = 'manual' as hand from insights i2"
+        " join runs r on r.run_id = i2.run_id where i2.run_id = %s and i2.insight_id = %s) was"
+        " where i.run_id = %s and i.insight_id = %s",
         (
             insight.topic,
             insight.seq,
@@ -199,6 +238,7 @@ async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
             Jsonb(record["template"]),
             version,
             "pending" if insight.agent else "off",
+            *key,
             *key,
         ),
     )

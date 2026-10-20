@@ -13,6 +13,9 @@ it. Its run keeps what came before it and is ended as failed, and its later mess
 control message that can't be used is logged and skipped.
 
 A push that fails is logged and skipped. Viewers notice the gap in `seq` and fetch the snapshot.
+Each event push is stored with its feed row, and the snapshot with the backfill's last row, so a
+viewer whose stream runs behind live can fetch the pushes it needs to see the match as of its own
+playback.
 
 Insights (footnote.insights) are found as each message is folded. Their changes are stored in the
 same transaction as the feed rows that caused them, and the store returns the pushes for them: each
@@ -27,6 +30,7 @@ so its viewers aren't left waiting for messages that will never come.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -35,7 +39,15 @@ from typing import Protocol, cast, get_args
 
 from footnote.insights.book import Change
 from footnote.live.analysis import Analysis
-from footnote.live.contract import KIND_CONTROL, RunEndReason, client_event
+from footnote.live.contract import (
+    KIND_CONTROL,
+    PRODUCER_MODES,
+    VIEWER_PATTERN,
+    ProducerMode,
+    RunEndReason,
+    client_event,
+    stoppage,
+)
 from footnote.live.match import Match
 from footnote.live.state import KEY_EVENT_TYPES, RunState
 from footnote.live.timeline import Timeline
@@ -69,11 +81,13 @@ class FeedRow:
     message: dict
     published_at: int
     enqueued_at: int | None
+    push: dict | None = None  # what viewers were sent for it, timing aside: an event, or the snapshot
 
 
 class Store(Protocol):
-    async def start_run(self, descriptor: dict) -> bool:
-        """Record a new run; False if it was already on record."""
+    async def start_run(self, descriptor: dict, viewer: str | None = None, producer: ProducerMode = "auto") -> bool:
+        """Record a new run, who started it and how its graphics are approved; False if it was
+        already on record."""
         ...
 
     async def end_run(self, run_id: str, reason: str) -> None: ...
@@ -111,6 +125,11 @@ class _Pending:
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _stored(push: dict) -> dict:
+    """A push as it is kept with its feed row: the timing is the live delivery's own."""
+    return {k: v for k, v in push.items() if k != "timing"}
 
 
 class Processor:
@@ -185,12 +204,15 @@ class Processor:
                 "run_id": run.descriptor["run_id"],
                 "event": client_event(m),
                 "key": m["type"] in KEY_EVENT_TYPES,
+                "replay": round(self._replay[m["seq"] - 1], 2),
+                "stoppage": stoppage(m),
                 **run.state.push_fields(),
                 "timing": {"published_at": item.published_at, "enqueued_at": item.enqueued_at},
             }
         elif m["seq"] == run.descriptor["backfill_seq"]:
             outgoing = self._snapshot(run)
-        pending.rows.append(FeedRow(run.descriptor["run_id"], m, item.published_at, item.enqueued_at))
+        stored = None if outgoing is None else _stored(outgoing)
+        pending.rows.append(FeedRow(run.descriptor["run_id"], m, item.published_at, item.enqueued_at, stored))
         pending.changes += changes
         if outgoing is not None:
             pending.outgoing.append(outgoing)
@@ -225,7 +247,15 @@ class Processor:
                 log.error("run %s: skipping a run_start without a usable descriptor", run_id)
                 return
             self._unknown.discard(run_id)
-            if not await self.store.start_run(descriptor):
+            viewer = item.body.get("viewer")
+            if viewer is not None and (not isinstance(viewer, str) or not re.fullmatch(VIEWER_PATTERN, viewer)):
+                log.warning("run %s: run_start names no usable viewer; nobody can produce it", run_id)
+                viewer = None
+            producer = item.body.get("producer", "auto")
+            if producer not in PRODUCER_MODES:
+                log.warning("run %s: run_start with producer %r; approving automatically", run_id, producer)
+                producer = "auto"
+            if not await self.store.start_run(descriptor, viewer, cast(ProducerMode, producer)):
                 # Seen before: a redelivery, or the hub read again after a restart. Carry on from the
                 # stored feed rather than from an empty state.
                 if run_id not in self.runs:

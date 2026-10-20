@@ -22,25 +22,31 @@ log = logging.getLogger(__name__)
 MIGRATIONS = files("footnote.db") / "migrations"
 _LOCK_KEY = 7_340_001  # fixed key for pg_advisory_xact_lock while migrating
 
-# What the web app's identity may do, table by table. It serves viewers; it never writes the feed or
-# a run's state.
+# What the web app's identity may do, table by table. It serves viewers and writes nothing. It may not
+# read who started a run: the producer's desk checks that, in the agents service.
 WEB_GRANTS: dict[str, str] = {
     "matches": "select",
-    "runs": "select",
+    "runs": "select (run_id, match_id, descriptor, status, created_at, ended_at, insight_rev, producer)",
     "feed_events": "select",
     "run_state": "select",
     "insights": "select",
     "insight_versions": "select",
     "insight_cards": "select",
+    "agent_runs": "select",
+    "tracking_chunks": "select",
 }
 
-# What the agents service's identity may do. It reads the match and writes only its own work: agent
-# versions, the agent columns of an insight, the run's insight revision, its run log and its cache.
+# What the agents service's identity may do. It reads the match and writes only its own work and the
+# producer's: agent and producer versions, an insight's agent and status columns, the run's insight
+# revision and how its graphics are approved, its run log and its cache.
 AGENT_GRANTS: dict[str, str] = {
     "matches": "select",
-    "runs": "select, update (insight_rev)",
+    "runs": "select, update (insight_rev, producer)",
     "feed_events": "select",
-    "insights": "select, update (agent_state, agent_note, agent_attempts, agent_lease, redraft, version, updated_at)",
+    "insights": (
+        "select, update (agent_state, agent_note, agent_attempts, agent_lease, redraft, queued_at, version,"
+        " status, status_by, status_at, updated_at)"
+    ),
     "insight_versions": "select, insert",
     "insight_cards": "select",
     "agent_runs": "select, insert, update",
@@ -72,7 +78,8 @@ async def migrate(pool: Pool) -> list[str]:
 async def ensure_role(
     credential: AsyncTokenCredential, pool: Pool, role: str, object_id: str, grants: dict[str, str]
 ) -> None:
-    """Create a service's Entra role if it's missing, then grant it `grants`."""
+    """Create a service's Entra role if it's missing, then give it `grants` and nothing more on those
+    tables: what an earlier version granted is revoked first, in the same transaction."""
     token = await credential.get_token(TOKEN_SCOPE)
     # Entra principals are created from the server's `postgres` database.
     async with await psycopg.AsyncConnection.connect(
@@ -87,6 +94,9 @@ async def ensure_role(
     async with pool.connection() as conn, conn.transaction():
         await conn.execute(sql.SQL("grant usage on schema public to {}").format(sql.Identifier(role)))
         for table, privileges in grants.items():
+            await conn.execute(
+                sql.SQL("revoke all on table {} from {}").format(sql.Identifier(table), sql.Identifier(role))
+            )
             await conn.execute(
                 sql.SQL("grant {} on table {} to {}").format(
                     sql.SQL(privileges), sql.Identifier(table), sql.Identifier(role)

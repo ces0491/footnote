@@ -1,5 +1,6 @@
-"""The SQL, against a real Postgres: migrations, the processor's store with insights, and the agents'
-claims, versions and fallbacks. Each test gets a fresh database.
+"""The SQL, against a real Postgres: migrations, the processor's store with insights and the
+tracking, the agents' claims, versions and fallbacks, and the producer's desk. Each test gets a
+fresh database.
 
 Needs FOOTNOTE_TEST_DATABASE_URL, a connection string for a role that may create databases (CI runs
 a Postgres service; locally any Postgres 17 will do). Skipped without it.
@@ -18,14 +19,17 @@ from psycopg.conninfo import make_conninfo
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
+from footnote.agents.desk import Desk, Refused
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.db.connect import Pool
 from footnote.db.migrate import migrate
 from footnote.insights.draft import Draft, Sentence
 from footnote.insights.facts import Fact
+from footnote.live import pitch
 from footnote.live.analysis import Analysis
-from footnote.live.contract import KIND_CONTROL, KIND_FEED
-from footnote.live.match import Match, load_match
+from footnote.live.contract import KIND_CONTROL, KIND_FEED, wire
+from footnote.live.match import Match, data_dir, load_match
+from footnote.live.overlay import OverlayItem
 from footnote.live.timeline import Timeline
 from footnote.processor.core import Incoming, Processor
 from footnote.processor.store import PostgresStore
@@ -35,6 +39,7 @@ DATABASE_URL = os.environ.get("FOOTNOTE_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="FOOTNOTE_TEST_DATABASE_URL is not set")
 
 RUN_ID = "fedcba9876543210"
+VIEWER = "0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b"
 
 
 class Pushed:
@@ -79,7 +84,9 @@ def analysis(showcase: Match) -> Analysis:
     return Analysis.load(showcase)
 
 
-def _replay(showcase: Match, start_minute: int, *, end: bool) -> list[Incoming]:
+def _replay(
+    showcase: Match, start_minute: int, *, end: bool, viewer: str | None = None, producer: str = "auto"
+) -> list[Incoming]:
     timeline = Timeline.from_feed(showcase.feed)
     start = timeline.jump_point(start_minute)
     p = plan(showcase.feed, timeline, start, 4.0)
@@ -93,7 +100,8 @@ def _replay(showcase: Match, start_minute: int, *, end: bool) -> list[Incoming]:
         "backfill_seq": p.backfill_seq,
         "timeline": timeline.describe(),
     }
-    items = [Incoming(RUN_ID, KIND_CONTROL, {"type": "run_start", "run": descriptor}, 1, 2)]
+    start = {"type": "run_start", "run": descriptor, "viewer": viewer, "producer": producer}
+    items = [Incoming(RUN_ID, KIND_CONTROL, start, 1, 2)]
     items += [Incoming(RUN_ID, KIND_FEED, m, 3, 4, backfill=True) for m in p.backfill]
     items += [Incoming(RUN_ID, KIND_FEED, m, 5, 6) for step in p.steps for m in step.messages]
     if end:
@@ -101,11 +109,19 @@ def _replay(showcase: Match, start_minute: int, *, end: bool) -> list[Incoming]:
     return items
 
 
-async def _play(pool: Pool, showcase: Match, analysis: Analysis, *, end: bool) -> tuple[PostgresStore, Pushed]:
+async def _play(
+    pool: Pool,
+    showcase: Match,
+    analysis: Analysis,
+    *,
+    end: bool,
+    viewer: str | None = None,
+    producer: str = "auto",
+) -> tuple[PostgresStore, Pushed]:
     store, push = PostgresStore(pool), Pushed()
     await store.put_match(showcase.meta)
     processor = Processor(showcase, store, push, analysis=analysis)
-    items = _replay(showcase, 81, end=end)
+    items = _replay(showcase, 81, end=end, viewer=viewer, producer=producer)
     for i in range(0, len(items), 100):
         await processor.handle(items[i : i + 100])
     return store, push
@@ -121,7 +137,7 @@ async def _one(pool: Pool, query: str, *params: object) -> dict:
 async def test_migrations_apply_once(pool: Pool) -> None:
     assert await migrate(pool) == []
     row = await _one(pool, "select array_agg(version order by version) as v from schema_migrations")
-    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at"]
+    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at", "0004_overlay"]
 
 
 async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcase: Match, analysis: Analysis) -> None:
@@ -288,3 +304,185 @@ async def test_the_match_tools_read_the_stored_feed(pool: Pool, showcase: Match,
     feed = await source.feed(RUN_ID, row["seq"])
     assert [m["seq"] for m in feed] == list(range(1, 1621))
     assert await source.insight(RUN_ID, "no-such-insight") is None
+
+
+async def test_each_insight_is_an_overlay_item_held_to_the_moment_behind_it(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    """Every pushed insight is an item of the overlay contract; shown_seq names the feed message
+    behind its current state, so a delayed viewer holds it until their playback reaches that."""
+    _, push = await _play(pool, showcase, analysis, end=True)
+    pushed = [m["insight"] for m in push.sent if m["type"] == "insight"]
+    assert pushed
+    for item in pushed:
+        OverlayItem.model_validate(item)
+        assert item["match_id"] == showcase.match_id and item["shown_seq"] >= item["seq"]
+
+    feed = {m["seq"]: m for m in showcase.feed}
+    goal = await _one(pool, "select to_jsonb(c) as doc from insight_cards c where insight_id = 'goal-e1586'")
+    doc = goal["doc"]
+    amendment = next(m for m in showcase.feed if m["type"] == "amendment")
+    assert doc["shown_seq"] == amendment["seq"]  # restated by the correction
+    assert doc["shown_at"] == {
+        "period": amendment["period"],
+        "t": amendment["t"],
+        "minute": amendment["minute"],
+        "added_minute": amendment["added_minute"],
+    }
+    assert doc["ts"] == feed[doc["shown_seq"]]["ts"]
+    assert doc["placement"] == "lower_third" and doc["duration"] == 12.0 and doc["motion"] == "animated"
+    assert doc["fields"]["moment.scorer"] == "Femi Adeyani"
+    assert doc["status"] == "approved" and doc["status_by"] == "auto"
+
+    # History, from the backfill, is never offered for air; segments and stats wait for a stoppage.
+    early = await _one(pool, "select status, status_by from insight_cards where insight_id = 'goal-e0391'")
+    assert early == {"status": "drafted", "status_by": None}
+    held = [i for i in pushed if i["kind"] in ("segment", "stat")]
+    assert held and all(i["hold"] == "stoppage" and i["duration"] is None for i in held)
+
+    # Web PubSub bills in 2 KB units. An item with its fields can take two: a run sends a few dozen
+    # of them against well over a thousand events, which each fit in one (tests/test_analysis.py).
+    assert max(len(wire(m).encode()) for m in push.sent if m["type"] == "insight") <= 3800
+
+
+async def test_the_live_pushes_are_kept_with_their_rows(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    await _play(pool, showcase, analysis, end=False)
+    async with pool.connection() as conn:
+        cur = await conn.execute("select seq, push from feed_events where run_id = %s order by seq", (RUN_ID,))
+        rows = await cur.fetchall()
+    kept = [r for r in rows if r["push"] is not None]
+    backfill_seq = kept[0]["seq"]
+    assert kept[0]["push"]["type"] == "snapshot" and kept[0]["push"]["seq"] == backfill_seq
+    assert all(r["push"] is None for r in rows if r["seq"] < backfill_seq)
+    assert [r["seq"] for r in kept] == list(range(backfill_seq, rows[-1]["seq"] + 1))
+    assert all(r["push"]["type"] == "event" and "timing" not in r["push"] for r in kept[1:])
+
+
+async def test_graphics_wait_for_a_producer_who_approves_by_hand(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    row = await _one(pool, "select viewer, producer from runs where run_id = %s", RUN_ID)
+    assert row == {"viewer": VIEWER, "producer": "manual"}
+    statuses = await _one(
+        pool, "select array_agg(distinct status) as s from insights where run_id = %s and live", RUN_ID
+    )
+    assert statuses["s"] == ["drafted"]
+
+
+async def test_a_correction_sends_an_approved_card_back_to_the_producer(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    """Approved by hand before the 84' correction, the 81' goal's card is drafted again once the
+    correction restates it: the producer approved what it said before."""
+    store, push = PostgresStore(pool), Pushed()
+    await store.put_match(showcase.meta)
+    processor = Processor(showcase, store, push, analysis=analysis)
+    items = _replay(showcase, 81, end=False, viewer=VIEWER, producer="manual")
+    amendment = next(i for i, item in enumerate(items) if item.body.get("type") == "amendment")
+    await processor.handle(items[:amendment])
+    desk = Desk(pool, Pushed())
+    await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    await processor.handle(items[amendment:])
+    row = await _one(pool, "select status, status_by, facts_version from insights where insight_id = 'goal-e1586'")
+    assert row == {"status": "drafted", "status_by": "correction", "facts_version": 2}
+
+
+async def test_the_desk_acts_only_for_the_viewer_who_started_the_replay(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    sent = Pushed()
+    desk = Desk(pool, sent)
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", "11111111-2222-4333-8444-555555555555", "approve")
+    assert refused.value.status == 403
+    with pytest.raises(Refused) as refused:
+        await desk.act("0000000000000000", "goal-e1586", VIEWER, "approve")
+    assert refused.value.status == 404
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e0391", VIEWER, "approve")  # history, from the backfill
+    assert refused.value.status == 409
+
+    rev = (await _one(pool, "select insight_rev from runs where run_id = %s", RUN_ID))["insight_rev"]
+    approved = await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    assert approved["rev"] == rev + 1 and approved["insight"]["status"] == "approved"
+    assert approved["insight"]["status_by"] == "producer" and sent.sent == [approved]
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "kill")  # approved: withdraw it instead
+    assert refused.value.status == 409
+    withdrawn = await desk.act(RUN_ID, "goal-e1586", VIEWER, "withdraw")
+    assert withdrawn["insight"]["status"] == "withdrawn" and withdrawn["rev"] == rev + 2
+
+    assert await desk.set_mode(RUN_ID, VIEWER, "auto") == "auto"
+    assert (await _one(pool, "select producer from runs where run_id = %s", RUN_ID))["producer"] == "auto"
+
+    async with pool.connection() as conn:
+        await conn.execute("update runs set status = 'stopped' where run_id = %s", (RUN_ID,))
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    assert refused.value.status == 409
+
+
+async def test_a_redraft_queues_a_fresh_job_past_the_cache(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    desk = Desk(pool, Pushed())
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "redraft")  # its job is still waiting
+    assert refused.value.status == 409
+    agents = AgentStore(pool)
+    claim = next(c for c in await agents.claim(10, 60) if c.insight_id == "goal-e1586")
+    await agents.fall_back(claim, "No agent draft within 45 s; the template stands.")
+    async with pool.connection() as conn:
+        await conn.execute(
+            "update insights set queued_at = now() - interval '5 minutes' where insight_id = 'goal-e1586'"
+        )
+    redrafted = await desk.act(RUN_ID, "goal-e1586", VIEWER, "redraft")
+    assert redrafted["insight"]["agent_state"] == "pending" and redrafted["insight"]["agent_note"] is None
+    again = next(c for c in await agents.claim(10, 60) if c.insight_id == "goal-e1586")
+    assert again.redraft and again.claims == 1 and again.waited < 10
+
+
+async def test_an_edit_passes_the_same_checks_as_an_agents_draft(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    agents = AgentStore(pool)
+    for claim in await agents.claim(10, 60):
+        await agents.fall_back(claim, "No agent draft within 45 s; the template stands.")
+    desk = Desk(pool, Pushed())
+    typed = Draft(
+        headline="{moment.scorer} makes it 2-1",
+        casual=[Sentence(text="A late winner for {moment.club}.", events=["e1586"])],
+        analyst=[Sentence(text="The shot came at {moment.shot_speed}.", events=["e1585"])],
+    )
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "edit", typed)
+    assert refused.value.status == 422
+    assert any("figure typed as digits" in p for p in refused.value.problems)
+
+    edit = typed.model_copy(update={"headline": "{moment.scorer} strikes late"})
+    edited = await desk.act(RUN_ID, "goal-e1586", VIEWER, "edit", edit)
+    card = edited["insight"]
+    assert card["source"] == "producer" and card["card"]["headline"] == "Femi Adeyani strikes late"
+    assert card["provenance"] == {"source": "producer", "edited_from": 2, "checks": "passed"}
+    assert card["status"] == "drafted"  # an edit is not an approval
+    cached = await _one(pool, "select count(*) as n from agent_cache")
+    assert cached["n"] == 0
+
+
+async def test_the_tracking_is_stored_once_per_file(pool: Pool, showcase: Match) -> None:
+    store = PostgresStore(pool)
+    await store.put_match(showcase.meta)
+    cut = pitch.load(data_dir() / "matches" / showcase.match_id / "tracking.npz")
+    assert await store.put_tracking(showcase.match_id, cut)
+    assert not await store.put_tracking(showcase.match_id, cut)
+    row = await _one(
+        pool,
+        "select m.tracking, (select count(*) from tracking_chunks c where c.match_id = m.match_id) as chunks"
+        " from matches m where m.match_id = %s",
+        showcase.match_id,
+    )
+    assert row["chunks"] == len(cut.chunks) and row["tracking"] == cut.layout
+    first = await _one(pool, "select frames from tracking_chunks where period = 1 and chunk = 0")
+    assert bytes(first["frames"]) == cut.chunks[0][2]

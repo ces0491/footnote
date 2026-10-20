@@ -27,8 +27,9 @@ from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 from footnote import cloud
 from footnote.db.connect import entra_pool
 from footnote.db.migrate import AGENT_GRANTS, WEB_GRANTS, ensure_role, migrate
+from footnote.live import pitch
 from footnote.live.analysis import Analysis
-from footnote.live.match import SHOWCASE_MATCH_ID, load_match
+from footnote.live.match import SHOWCASE_MATCH_ID, data_dir, load_match
 from footnote.processor.consumer import consume
 from footnote.processor.core import OVERDUE_MS, Processor
 from footnote.processor.push import WebPubSubPush
@@ -69,6 +70,9 @@ async def main() -> None:
             await ensure_role(credential, pool, role, object_id, grants)
     store = PostgresStore(pool)
     await store.put_match(match.meta)
+    # The tracking the viewers' pitch view draws; skipped when this file is stored already.
+    if await store.put_tracking(match.match_id, pitch.load(data_dir() / "matches" / match.match_id / "tracking.npz")):
+        log.info("stored the tracking for the pitch view")
 
     webpubsub = WebPubSubServiceClient(
         endpoint=cloud.require("WEBPUBSUB_ENDPOINT"), hub=cloud.require("WEBPUBSUB_HUB"), credential=credential

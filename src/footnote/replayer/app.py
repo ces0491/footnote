@@ -1,7 +1,8 @@
 """The replayer's HTTP API. Reachable only inside the Container Apps environment; the web app calls it.
 
-POST   /runs            start a replay: {"start_minute": 1-90, "speed": 1, 2 or 4, "viewer": optional ID};
-                        returns the run descriptor. A viewer's new replay replaces their previous one
+POST   /runs            start a replay: {"start_minute": 1-90, "speed": 1, 2 or 4, "viewer": optional ID,
+                        "producer": "auto" or "manual"}; returns the run descriptor. A viewer's new
+                        replay replaces their previous one
 GET    /runs            the runs in progress
 GET    /runs/{run_id}   one run's descriptor
 DELETE /runs/{run_id}   stop a run
@@ -22,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from footnote import cloud
 from footnote.generator.schema import validate_message
+from footnote.live.contract import VIEWER_PATTERN
 from footnote.live.match import SHOWCASE_MATCH_ID, Match, load_match
 from footnote.live.timeline import Timeline
 from footnote.replayer.publish import EventHubPublisher, Publisher
@@ -36,8 +38,11 @@ class StartRun(BaseModel):
     speed: Literal[1, 2, 4] = Field(default=1, description="Replay speed")
     viewer: str | None = Field(
         default=None,
-        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        pattern=VIEWER_PATTERN,
         description="The anonymous ID of the browser starting it; its previous replay is stopped",
+    )
+    producer: Literal["auto", "manual"] = Field(
+        default="auto", description="Approve each graphic as it is found, or leave it for the producer"
     )
 
 
@@ -76,7 +81,9 @@ def create_app(match: Match | None = None, publisher: Publisher | None = None) -
 
     @app.post("/runs", status_code=201)
     async def start_run(body: StartRun, request: Request) -> dict:
-        return await manager(request).start(body.start_minute, float(body.speed), viewer=body.viewer)
+        return await manager(request).start(
+            body.start_minute, float(body.speed), viewer=body.viewer, producer=body.producer
+        )
 
     @app.get("/runs")
     async def list_runs(request: Request) -> list[dict]:

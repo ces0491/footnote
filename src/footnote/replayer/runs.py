@@ -10,7 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from footnote.live.contract import KIND_CONTROL, RunEndReason
+from footnote.live.contract import KIND_CONTROL, ProducerMode, RunEndReason
 from footnote.live.match import Match
 from footnote.live.timeline import Timeline
 from footnote.replayer.publish import Envelope, Publisher
@@ -28,6 +28,7 @@ class ActiveRun:
     descriptor: dict
     plan: Plan
     viewer: str | None = None  # who started it; kept here, never in the descriptor everyone can read
+    producer: ProducerMode = "auto"  # how its graphics are approved at first
     task: asyncio.Task | None = None
     stop_reason: RunEndReason | None = None
     created: float = field(default_factory=time.monotonic)
@@ -56,7 +57,9 @@ class RunManager:
         self.sleep = sleep
         self.runs: dict[str, ActiveRun] = {}
 
-    async def start(self, start_minute: int = 1, speed: float = 1.0, viewer: str | None = None) -> dict:
+    async def start(
+        self, start_minute: int = 1, speed: float = 1.0, viewer: str | None = None, producer: ProducerMode = "auto"
+    ) -> dict:
         # A viewer follows one replay at a time: their new one replaces the last, so trying the jump
         # points in turn never pushes anyone else's replay out. Only then is the oldest evicted.
         if viewer is not None:
@@ -81,7 +84,7 @@ class RunManager:
             "last_seq": self.match.feed[-1]["seq"],
             "timeline": self.timeline.describe(),
         }
-        run = ActiveRun(descriptor, run_plan, viewer)
+        run = ActiveRun(descriptor, run_plan, viewer, producer)
         self.runs[descriptor["run_id"]] = run
         run.task = asyncio.create_task(self._play(run), name=f"run-{descriptor['run_id']}")
         return descriptor
@@ -117,7 +120,8 @@ class RunManager:
         started_at = run.descriptor["started_at"] / 1000
         reason: RunEndReason = "finished"
         try:
-            await self.publisher.send(run_id, [Envelope({"type": "run_start", "run": run.descriptor}, KIND_CONTROL)])
+            start = {"type": "run_start", "run": run.descriptor, "viewer": run.viewer, "producer": run.producer}
+            await self.publisher.send(run_id, [Envelope(start, KIND_CONTROL)])
             if run.plan.backfill:
                 await self.publisher.send(run_id, [Envelope(m, backfill=True) for m in run.plan.backfill])
             for step in run.plan.steps:

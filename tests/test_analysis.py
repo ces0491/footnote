@@ -99,6 +99,6 @@ def test_every_push_with_the_analysis_fits_one_web_pubsub_message(showcase: Matc
     for m in showcase.feed:
         state.apply(m)
         message = {"type": "event", "run_id": "0" * 16, "event": client_event(m), "key": True}
-        message |= state.push_fields() | {"timing": timing}
+        message |= {"replay": 5432.17, "stoppage": False} | state.push_fields() | {"timing": timing}
         largest = max(largest, len(wire(message).encode()))
     assert largest <= 1800

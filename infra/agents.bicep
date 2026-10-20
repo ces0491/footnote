@@ -1,6 +1,7 @@
-// The agents service's container app, deployed with its image by `azd deploy`. No ingress: it claims
-// jobs from Postgres, serves the match tools to its own writers on localhost, calls the Foundry
-// model and pushes the versions it writes to Web PubSub.
+// The agents service's container app, deployed with its image by `azd deploy`. It claims jobs from
+// Postgres, serves the match tools to its own writers on localhost, calls the Foundry model and
+// pushes the versions it writes to Web PubSub. Its only ingress is internal: the producer's desk,
+// which the web app's console calls from inside the Container Apps environment.
 
 param environmentName string
 param location string = resourceGroup().location
@@ -47,6 +48,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
+      ingress: { external: false, targetPort: 8080, transport: 'http' }
       registries: [{ server: registry.properties.loginServer, identity: identity.id }]
     }
     template: {
@@ -69,6 +71,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             { name: 'POSTGRES_USER', value: identity.name }
             { name: 'AGENT_DAILY_RUNS', value: string(agentDailyRuns) }
             { name: 'AGENT_DEADLINE_SECONDS', value: string(agentDeadlineSeconds) }
+            { name: 'DESK_PORT', value: '8080' }
           ]
         }
       ]
