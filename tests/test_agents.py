@@ -154,6 +154,39 @@ async def test_a_draft_that_fails_twice_is_rejected(showcase: Match, analysis: A
     assert any("'Riverton' isn't a name" in p for p in drafted.outcome.problems)
 
 
+MINUTE_ONLY = {
+    "headline": "{moment.minute}",
+    "casual": [{"text": "At {moment.minute}.", "events": []}],
+    "analyst": [{"text": "At {moment.minute}.", "events": []}],
+}
+
+
+class ReadsThenDrafts(FunctionInvocationLayer, ChatMiddlewareLayer, ChatTelemetryLayer, BaseChatClient):
+    """Reads the moment, then drafts, keeping no state of its own, so two jobs can share it."""
+
+    async def _inner_get_response(self, *, messages: Any, stream: bool, options: Any, **kwargs: Any) -> ChatResponse:
+        await asyncio.sleep(0.2)
+        if str(messages[-1].text).startswith("Write the card"):
+            call = Content.from_function_call(call_id="c1", name="get_moment", arguments="{}")
+            return ChatResponse(messages=[Message("assistant", [call])])
+        return ChatResponse(messages=[Message("assistant", [json.dumps(MINUTE_ONLY)])])
+
+
+async def test_concurrent_drafts_on_one_client_keep_their_own_tool_logs(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
+    """The service shares one Foundry client between up to three jobs at once."""
+    client = ReadsThenDrafts()
+    async with match_tools(showcase, analysis, rows) as url:
+        goal, var = await asyncio.gather(
+            draft(Job(RUN, GOAL, "moment", 1), client, url, {}),
+            draft(Job(RUN, "var-e0534", "rule_call", 1), client, url, {}),
+        )
+    for drafted, minute in ((goal, "23'"), (var, "33'")):
+        assert drafted.outcome.accepted and [c["name"] for c in drafted.log.calls] == ["get_moment"]
+        assert drafted.log.facts["moment.minute"].display == minute
+
+
 class Store:
     """The worker's store, in memory."""
 

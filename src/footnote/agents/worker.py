@@ -3,7 +3,7 @@
 For each job, in order:
 
 1. The cache. Every replay is the same match, so the same moment gives the same job. A job's key is
-   the match, the insight and its facts, the model, the prompt version and the tools version
+   the match, the insight and its facts, the model, and the prompt, tools and writer versions
    (`cache_key`). An accepted draft is reused when the key matches, checked again against the facts
    its writer was shown, unless the producer asked for a fresh draft.
 2. The limits. A job that waited too long for a worker, or that would take today's agent runs past
@@ -35,7 +35,7 @@ from agent_framework import SupportsChatGetResponse
 
 from footnote.agents.prompts import PROMPT_VERSION
 from footnote.agents.store import MAX_CLAIMS, Cached, Claim
-from footnote.agents.writer import Drafted, Job, draft
+from footnote.agents.writer import WRITER_VERSION, Drafted, Job, draft
 from footnote.insights.draft import Draft, check
 from footnote.insights.facts import Facts
 from footnote.tools.server import TOOLS_VERSION
@@ -87,6 +87,7 @@ def cache_key(claim: Claim, model: str) -> str:
         "model": model,
         "prompt": PROMPT_VERSION,
         "tools": TOOLS_VERSION,
+        "writer": WRITER_VERSION,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 

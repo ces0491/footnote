@@ -135,7 +135,7 @@ checker lets the draft use, and the log is kept with the run.
 - today's 150 agent runs (UTC) are used up, a ceiling on what the model can cost.
 
 **Reuse.** Every replay is the same match, so the same moment makes the same job. A job's key is
-the match, the insight, its facts, the model, the prompt version and the tools version. An
+the match, the insight, its facts, the model, and the prompt, tools and writer versions. An
 accepted draft is stored under its key and reused by later replays, after the same checks run
 again on the facts its writer was shown; its provenance says it was reused and names the agent
 run that wrote it.

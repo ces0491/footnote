@@ -39,6 +39,11 @@ from footnote.tools.scope import INSIGHT_HEADER, RUN_HEADER
 
 MAX_ATTEMPTS = 2
 
+# Part of the agents' cache key (worker.py): change it when the drafting around the model changes in
+# a way that could change a draft or the facts it is checked against. 2026-10-20.2: tool logs no
+# longer mix between concurrent jobs (ToolLog).
+WRITER_VERSION = "2026-10-20.2"
+
 
 @dataclass(frozen=True)
 class Job:
@@ -48,7 +53,10 @@ class Job:
     facts_version: int
 
 
-@dataclass
+# Compared by identity: Agent Framework reuses a client's cached function-middleware pipeline when
+# a run's middleware compares equal to the last one's, and two empty logs compare equal by value, so
+# concurrent jobs on one client would otherwise share the first job's log.
+@dataclass(eq=False)
 class ToolLog(FunctionMiddleware):
     """Every match-tool call in one job, and the facts and events the calls returned."""
 
