@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { insightFixture } from "./test-fixtures";
-import { corrections, provenanceLabel, shortlist } from "./shortlist";
+import { corrections, evidenceSource, provenanceLabel, shortlist } from "./shortlist";
 
 describe("shortlist", () => {
   const goal = insightFixture("goal-e0391", { rank: 0.95 });
@@ -20,6 +20,13 @@ describe("shortlist", () => {
   it("keeps corrections and what they undid apart", () => {
     const notice = insightFixture("correction-e1586-v2", { kind: "correction", seq: 1620 });
     expect(corrections([...all, notice]).map((i) => i.insight_id)).toEqual(["correction-e1586-v2", "goal-e0532"]);
+  });
+
+  it("says what a card rests on", () => {
+    const noEvents = { headline: "", casual: "", analyst: "", plain: "", evidence: [], facts: [] };
+    expect(evidenceSource(goal)).toBe("events");
+    expect(evidenceSource({ ...sprint, card: noEvents })).toBe("tracking");
+    expect(evidenceSource({ ...goal, card: noEvents })).toBeNull();
   });
 
   it("says where the wording came from", () => {

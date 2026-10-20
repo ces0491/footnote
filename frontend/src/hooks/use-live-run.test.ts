@@ -11,6 +11,7 @@ const { FakeClient, clients } = vi.hoisted(() => {
   type Handler = (e: unknown) => void;
   const clients: InstanceType<typeof FakeClient>[] = [];
   class FakeClient {
+    static refuse = false; // start() fails, as when the service turns a connection away
     started = 0;
     stopped = 0;
     private handlers = new Map<string, Handler[]>();
@@ -29,6 +30,7 @@ const { FakeClient, clients } = vi.hoisted(() => {
     async start() {
       this.started += 1;
       await this.credential.getClientAccessUrl();
+      if (FakeClient.refuse) throw new Error("Failed to start WebSocket: 1006");
     }
     stop() {
       this.stopped += 1;
@@ -73,10 +75,12 @@ function event(seq: number, key = false): EventMessage {
 
 const runEnd = (reason: "finished"): PushMessage => ({ type: "run_end", run_id: RUN_ID, reason, timing: {} });
 
-async function respond(index: number, response: Response) {
-  await waitFor(() => expect(snapshotRequests.length).toBeGreaterThan(index), { timeout: 3_000 });
+async function respond(index: number, response: Response, timeout = 3_000) {
+  await waitFor(() => expect(snapshotRequests.length).toBeGreaterThan(index), { timeout });
   await act(async () => snapshotRequests[index](response));
 }
+
+const unavailable = () => Response.json({ error: "unavailable" }, { status: 503 });
 
 const answer = (index: number, value: RunSnapshot) => respond(index, Response.json(value));
 
@@ -97,6 +101,7 @@ const keys = (hook: { result: { current: ReturnType<typeof useLiveRun> } }) =>
 beforeEach(() => {
   snapshotRequests = [];
   clients.length = 0;
+  FakeClient.refuse = false;
   vi.stubGlobal("fetch", vi.fn(fetchStub));
 });
 
@@ -118,7 +123,15 @@ describe("useLiveRun", () => {
     const hook = renderHook(() => useLiveRun(RUN_ID));
     await respond(0, Response.json({ error: "no such run" }, { status: 404 }));
     await waitFor(() => expect(hook.result.current.error).toBe("There's no such replay."));
-    expect(clients[0].started).toBe(0);
+    expect(clients).toHaveLength(0);
+  });
+
+  it("tries the first load again when it fails", async () => {
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await respond(0, unavailable());
+    await answer(1, snapshot(10));
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(10));
+    expect(hook.result.current.error).toBeNull();
   });
 
   it("shows an ended run's final state without connecting", async () => {
@@ -127,7 +140,7 @@ describe("useLiveRun", () => {
     await waitFor(() => expect(hook.result.current.ended).toBe("finished"));
     expect(hook.result.current.view?.seq).toBe(1819);
     expect(hook.result.current.connection).toBe("closed");
-    expect(clients[0].started).toBe(0);
+    expect(clients).toHaveLength(0);
   });
 
   it("catches up when it connects, keeping the pushes that arrive meanwhile", async () => {
@@ -178,5 +191,38 @@ describe("useLiveRun", () => {
     act(() => clients[0].receive(runEnd("finished")));
     await waitFor(() => expect(hook.result.current.ended).toBe("finished"));
     expect(clients[0].stopped).toBeGreaterThan(0);
+  });
+
+  it("keeps the page and tries again when a refetch fails", async () => {
+    const hook = await connectedAt(10);
+    act(() => clients[0].receive(event(12))); // 11 was missed
+    await respond(2, unavailable());
+    await waitFor(() => expect(hook.result.current.trouble).toMatch(/HTTP 503/));
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.view?.seq).toBe(10); // the page keeps what it has
+    await answer(3, snapshot(12));
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(12));
+    expect(hook.result.current.trouble).toBeNull();
+  });
+
+  it("follows by polling when the push connection is refused", { timeout: 10_000 }, async () => {
+    FakeClient.refuse = true; // the free tier's 21st connection, say
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await answer(0, snapshot(10));
+    await waitFor(() => expect(hook.result.current.connection).toBe("polling"));
+    expect(hook.result.current.error).toBeNull();
+    await respond(1, Response.json(snapshot(20)), 5_000); // the next poll
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(20));
+  });
+
+  it("stops a client that connects after the page has let it go", async () => {
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await answer(0, snapshot(10));
+    await waitFor(() => expect(clients[0].started).toBe(1));
+    hook.unmount();
+    const stopped = clients[0].stopped;
+    act(() => clients[0].emit("connected")); // the SDK ignores stop() while it connects
+    expect(clients[0].stopped).toBe(stopped + 1);
+    expect(snapshotRequests).toHaveLength(1);
   });
 });

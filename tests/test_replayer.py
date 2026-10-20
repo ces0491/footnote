@@ -115,6 +115,33 @@ async def test_a_new_run_evicts_the_oldest_at_capacity(showcase: Match, timeline
     await manager.close()
 
 
+VIEWER = "1f0e9d8c-7b6a-4594-8382-716253443526"
+JUDGE = "a0b1c2d3-e4f5-4a6b-8c7d-8e9fa0b1c2d3"
+
+
+async def test_a_viewers_new_run_replaces_their_last(showcase: Match, timeline: Timeline) -> None:
+    publisher = RecordingPublisher()
+    manager = RunManager(showcase, timeline, publisher, max_runs=3, start_delay=60.0)
+    first = await manager.start(viewer=VIEWER)
+    other = await manager.start(viewer=JUDGE)
+    again = await manager.start(start_minute=81, viewer=VIEWER)
+    assert set(manager.runs) == {other["run_id"], again["run_id"]}
+    ends = [e.body for _, _, e in publisher.sent if e.body.get("type") == "run_end"]
+    assert ends == [{"type": "run_end", "run_id": first["run_id"], "reason": "stopped"}]
+    assert "viewer" not in again  # the descriptor reaches everyone following the run
+    await manager.close()
+
+
+async def test_one_viewer_trying_every_jump_point_crowds_out_no_one(showcase: Match, timeline: Timeline) -> None:
+    publisher = RecordingPublisher()
+    manager = RunManager(showcase, timeline, publisher, max_runs=2, start_delay=60.0)
+    judge = await manager.start(viewer=JUDGE)
+    for minute in (1, 23, 31, 60, 81):
+        await manager.start(start_minute=minute, viewer=VIEWER)
+    assert judge["run_id"] in manager.runs and len(manager.runs) == 2
+    await manager.close()
+
+
 async def test_a_run_past_its_time_limit_expires(showcase: Match, timeline: Timeline) -> None:
     fake = FakeTime()
     publisher = RecordingPublisher()
@@ -129,7 +156,7 @@ async def test_a_run_past_its_time_limit_expires(showcase: Match, timeline: Time
 def test_api_starts_lists_and_stops_runs(showcase: Match) -> None:
     publisher = RecordingPublisher()
     with TestClient(create_app(showcase, publisher)) as client:
-        created = client.post("/runs", json={"start_minute": 23, "speed": 2})
+        created = client.post("/runs", json={"start_minute": 23, "speed": 2, "viewer": VIEWER})
         assert created.status_code == 201
         run = created.json()
         assert run["speed"] == 2.0 and run["start_minute"] == 23 and run["match_id"] == showcase.match_id
@@ -141,7 +168,9 @@ def test_api_starts_lists_and_stops_runs(showcase: Match) -> None:
         assert client.get("/healthz").json() == {"status": "ok", "runs": 0}
 
 
-@pytest.mark.parametrize("body", [{"start_minute": 0}, {"start_minute": 91}, {"speed": 3}, {"seek": 5}])
+@pytest.mark.parametrize(
+    "body", [{"start_minute": 0}, {"start_minute": 91}, {"speed": 3}, {"seek": 5}, {"viewer": "someone"}]
+)
 def test_api_rejects_bad_requests(showcase: Match, body: dict) -> None:
     with TestClient(create_app(showcase, RecordingPublisher())) as client:
         assert client.post("/runs", json=body).status_code == 422

@@ -2,8 +2,12 @@ import { startRunRequest } from "@/lib/live/contract";
 import { allowStart, clientAddress } from "@/lib/server/rate-limit";
 import { ReplayerError, startRun } from "@/lib/server/replayer";
 
-// Start a replay of the showcase match: { start_minute, speed } -> the run descriptor.
+// Start a replay of the showcase match: { start_minute, speed, viewer? } -> the run descriptor.
 export async function POST(request: Request) {
+  // JSON only: a form or plain-text post, which another site can send without asking, starts nothing.
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return Response.json({ error: "send the request as application/json" }, { status: 415 });
+  }
   const parsed = startRunRequest.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json({ error: "start_minute must be 1-90 and speed 1, 2 or 4" }, { status: 422 });

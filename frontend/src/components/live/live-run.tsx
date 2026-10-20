@@ -41,13 +41,21 @@ function lastClock(clock: Clock): string {
   return clockLabel({ period: clock.period === 1 ? 1 : 2, t: clock.t });
 }
 
+const CONNECTION: Record<Connection, { label: string; dot: string }> = {
+  connecting: { label: "Connecting…", dot: "bg-amber-500" },
+  connected: { label: "Live", dot: "bg-emerald-500" },
+  reconnecting: { label: "Reconnecting…", dot: "bg-amber-500" },
+  polling: { label: "Refreshing every few seconds", dot: "bg-amber-500" },
+  closed: { label: "Closed", dot: "bg-zinc-400" },
+};
+
 function ConnectionBadge({ connection, latency }: { connection: Connection; latency: Latency | null }) {
-  const dot = { connecting: "bg-amber-500", connected: "bg-emerald-500", reconnecting: "bg-amber-500", closed: "bg-zinc-400" }[connection];
+  const { label, dot } = CONNECTION[connection];
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Badge variant="outline" className="gap-1.5">
         <span aria-hidden className={`size-2 rounded-full ${dot}`} />
-        {connection === "connected" ? "Live" : connection === "closed" ? "Closed" : `${connection[0].toUpperCase()}${connection.slice(1)}…`}
+        {label}
       </Badge>
       {latency && (
         <span className="text-muted-foreground" title="From the replayer publishing an event to this browser receiving it">
@@ -119,6 +127,12 @@ export function LiveRun({ runId }: { runId: string }) {
   return (
     <div className="space-y-4">
       {header}
+      {live.trouble && (
+        <Alert>
+          <AlertTitle>Connection trouble</AlertTitle>
+          <AlertDescription>{live.trouble} What is shown here is the latest the page has.</AlertDescription>
+        </Alert>
+      )}
       <Scoreboard
         home={match.home}
         away={match.away}

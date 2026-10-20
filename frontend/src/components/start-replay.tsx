@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type RunDescriptor, SPEEDS } from "@/lib/live/contract";
+import { viewerId } from "@/lib/live/viewer";
 
 // The judges' jump points from docs/experience.md; each replay starts 30 s before its minute.
 const JUMPS = [
@@ -32,7 +33,7 @@ export function StartReplay() {
       const response = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed) }),
+        body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed), viewer: viewerId() }),
       });
       const body = (await response.json()) as RunDescriptor | { error: string };
       if (!response.ok || "error" in body) throw new Error("error" in body ? body.error : `HTTP ${response.status}`);

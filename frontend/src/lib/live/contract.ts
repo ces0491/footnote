@@ -5,9 +5,13 @@ import { z } from "zod";
 
 export const SPEEDS = [1, 2, 4] as const;
 
+/** The anonymous ID a browser goes by (lib/live/viewer.ts): a random UUID. */
+export const viewerIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export const startRunRequest = z.object({
   start_minute: z.number().int().min(1).max(90),
   speed: z.union(SPEEDS.map((s) => z.literal(s))),
+  viewer: z.string().regex(viewerIdPattern).optional(), // a new start replaces this viewer's last
 });
 export type StartRunRequest = z.infer<typeof startRunRequest>;
 

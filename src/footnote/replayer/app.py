@@ -1,6 +1,7 @@
 """The replayer's HTTP API. Reachable only inside the Container Apps environment; the web app calls it.
 
-POST   /runs            start a replay: {"start_minute": 1-90, "speed": 1-4}; returns the run descriptor
+POST   /runs            start a replay: {"start_minute": 1-90, "speed": 1, 2 or 4, "viewer": optional ID};
+                        returns the run descriptor. A viewer's new replay replaces their previous one
 GET    /runs            the runs in progress
 GET    /runs/{run_id}   one run's descriptor
 DELETE /runs/{run_id}   stop a run
@@ -33,6 +34,11 @@ class StartRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start_minute: int = Field(default=1, ge=1, le=90, description="Broadcast minute to jump to")
     speed: Literal[1, 2, 4] = Field(default=1, description="Replay speed")
+    viewer: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        description="The anonymous ID of the browser starting it; its previous replay is stopped",
+    )
 
 
 def create_app(match: Match | None = None, publisher: Publisher | None = None) -> FastAPI:
@@ -70,7 +76,7 @@ def create_app(match: Match | None = None, publisher: Publisher | None = None) -
 
     @app.post("/runs", status_code=201)
     async def start_run(body: StartRun, request: Request) -> dict:
-        return await manager(request).start(body.start_minute, float(body.speed))
+        return await manager(request).start(body.start_minute, float(body.speed), viewer=body.viewer)
 
     @app.get("/runs")
     async def list_runs(request: Request) -> list[dict]:

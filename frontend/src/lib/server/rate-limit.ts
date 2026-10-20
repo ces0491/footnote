@@ -1,7 +1,8 @@
 import "server-only";
 
 // A fixed-window limit on replay starts per client address, held in this replica's memory (the web
-// app runs one replica). It keeps one visitor from cycling through the replayer's run slots.
+// app runs one replica). A viewer's own restarts don't fill the replayer's run slots, since each
+// replaces their last run (lib/live/viewer.ts); this slows a script that starts runs regardless.
 const WINDOW_MS = 5 * 60_000;
 const MAX_STARTS = 8;
 

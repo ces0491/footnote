@@ -26,6 +26,15 @@ export function corrections(insights: Insight[]): Insight[] {
   return insights.filter((i) => i.live && (i.kind === "correction" || i.flag !== null)).sort((a, b) => b.seq - a.seq);
 }
 
+/**
+ * What a card's claims rest on: the events it links to, or for a player tag, the tracking (sprints
+ * and distances come from player positions, not from any event). Null for a card with neither.
+ */
+export function evidenceSource(insight: Insight): "events" | "tracking" | null {
+  if (insight.card.evidence.length > 0) return "events";
+  return insight.kind === "player_tag" ? "tracking" : null;
+}
+
 /** Where an insight's wording came from, in a few words; `agent_note` says why a template stands. */
 export function provenanceLabel(insight: Insight): string {
   if (insight.source === "agent") return insight.provenance.cached ? "Agent, reused" : "Agent";

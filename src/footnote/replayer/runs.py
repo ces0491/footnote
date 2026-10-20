@@ -27,6 +27,7 @@ START_DELAY = 2.0  # wall seconds between the request and the first live message
 class ActiveRun:
     descriptor: dict
     plan: Plan
+    viewer: str | None = None  # who started it; kept here, never in the descriptor everyone can read
     task: asyncio.Task | None = None
     stop_reason: RunEndReason | None = None
     created: float = field(default_factory=time.monotonic)
@@ -55,7 +56,12 @@ class RunManager:
         self.sleep = sleep
         self.runs: dict[str, ActiveRun] = {}
 
-    async def start(self, start_minute: int = 1, speed: float = 1.0) -> dict:
+    async def start(self, start_minute: int = 1, speed: float = 1.0, viewer: str | None = None) -> dict:
+        # A viewer follows one replay at a time: their new one replaces the last, so trying the jump
+        # points in turn never pushes anyone else's replay out. Only then is the oldest evicted.
+        if viewer is not None:
+            for previous in [r for r in self.runs.values() if r.viewer == viewer]:
+                await self.stop(previous.descriptor["run_id"], reason="stopped")
         while len(self.runs) >= self.max_runs:
             oldest = min(self.runs.values(), key=lambda r: r.created)
             log.info("at %d runs; evicting %s", self.max_runs, oldest.descriptor["run_id"])
@@ -75,7 +81,7 @@ class RunManager:
             "last_seq": self.match.feed[-1]["seq"],
             "timeline": self.timeline.describe(),
         }
-        run = ActiveRun(descriptor, run_plan)
+        run = ActiveRun(descriptor, run_plan, viewer)
         self.runs[descriptor["run_id"]] = run
         run.task = asyncio.create_task(self._play(run), name=f"run-{descriptor['run_id']}")
         return descriptor

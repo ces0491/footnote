@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Clock, EvidenceResponse, FeedEvent, Insight } from "@/lib/live/contract";
 import { describe, type Roster } from "@/lib/live/describe";
-import { corrections, provenanceLabel, shortlist } from "@/lib/live/shortlist";
+import { corrections, evidenceSource, provenanceLabel, shortlist } from "@/lib/live/shortlist";
 import { minuteLabel } from "@/lib/live/timeline";
 
 function Evidence({ runId, insight, roster }: { runId: string; insight: Insight; roster: Roster }) {
@@ -17,7 +17,9 @@ function Evidence({ runId, insight, roster }: { runId: string; insight: Insight;
   const [events, setEvents] = useState<FeedEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ids = insight.card.evidence.slice(0, 24);
-  if (ids.length === 0) return null;
+  const source = evidenceSource(insight);
+  if (source === "tracking") return <p className="text-xs text-muted-foreground">From the player tracking: no event behind it.</p>;
+  if (source === null) return null;
 
   async function toggle() {
     setOpen(!open);
