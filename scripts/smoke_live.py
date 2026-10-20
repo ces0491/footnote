@@ -10,6 +10,11 @@ that the match-state timeline a browser builds from the pushes is the stored one
 largest push against Web PubSub's 2 KB billing unit and the time from the replayer publishing
 each event to this machine receiving it. Latency is measured against the web app's clock (offset
 from the quickest of a few round trips), so it includes the network path to wherever this runs.
+
+For insights it checks that folding the insight pushes into the joined snapshot gives the versions
+the store ends with, and reports how many cards the agents drafted, how long their drafts took to
+replace the template's as this machine received them, and which fell back and why. It waits
+`--settle` seconds after the run ends before the final snapshot, so drafts still in flight land.
 """
 
 from __future__ import annotations
@@ -76,6 +81,47 @@ def summary(label: str, values: list[float]) -> str:
     return f"{label}: median {statistics.median(ordered):.0f} ms, p95 {p95:.0f} ms, max {ordered[-1]:.0f} ms ({len(ordered)})"
 
 
+def report_insights(joined: dict, final: dict, timed: list[tuple[dict, float]], failures: list[str]) -> None:
+    """Insight pushes against the store: versions, agent drafts and their timing, fallbacks."""
+    pushes = [(m, arrived) for m, arrived in timed if m["type"] == "insight"]
+    stored = {i["insight_id"]: i for i in final.get("insights", []) if i["live"]}
+    held = {i["insight_id"]: i for i in joined.get("insights", [])}
+    rev = joined.get("insight_rev", 0)
+    # Timed from the template version a draft replaced: a restated insight's clock starts again.
+    template_at: dict[str, float] = {}
+    to_agent: list[float] = []
+    for m, arrived in pushes:
+        insight = m["insight"]
+        if insight["source"] == "template":
+            template_at[insight["insight_id"]] = arrived
+        elif not insight["provenance"].get("cached") and insight["insight_id"] in template_at:
+            to_agent.append(arrived - template_at[insight["insight_id"]])
+    for m, _ in sorted(pushes, key=lambda p: p[0]["rev"]):
+        if m["rev"] > rev:
+            held[m["insight"]["insight_id"]] = m["insight"]
+            rev = m["rev"]
+    revs = [m["rev"] for m, _ in pushes]
+    out_of_order = sum(b < a for a, b in zip(revs, revs[1:], strict=False))
+    behind = [k for k, v in stored.items() if held.get(k, {}).get("version") != v["version"]]
+    if behind:
+        failures.append(f"insights folded from the pushes behind the store: {behind[:6]}")
+    states: dict[str, int] = {}
+    for insight in stored.values():
+        key = (
+            "agent, reused"
+            if insight["source"] == "agent" and insight["provenance"].get("cached")
+            else ("agent" if insight["source"] == "agent" else f"template ({insight['agent_state']})")
+        )
+        states[key] = states.get(key, 0) + 1
+    print(
+        f"insights: {len(pushes)} pushed ({out_of_order} out of revision order), {len(stored)} live in the store: {states}"
+    )
+    print(summary("  template to agent draft, as received here", to_agent))
+    for insight in stored.values():
+        if insight["agent_state"] == "fallback":
+            print(f"  fell back: {insight['insight_id']}: {insight['agent_note']}")
+
+
 def report_latency(received: list[tuple[dict, float]], started_at: float) -> None:
     """Publish to receipt, and each stage of it, from the timestamps every event push carries."""
     stages: dict[str, list[float]] = {"publish to enqueue": [], "enqueue to push": [], "push to receipt": []}
@@ -98,7 +144,7 @@ def report_latency(received: list[tuple[dict, float]], started_at: float) -> Non
         print(summary(f"  stage: {label}", values))
 
 
-async def main(base: str, minute: int, speed: int, timeout: float) -> int:
+async def main(base: str, minute: int, speed: int, timeout: float, settle: float) -> int:
     async with aiohttp.ClientSession() as session:
         offset = await clock_offset(session, base)
         async with session.post(f"{base}/api/runs", json={"start_minute": minute, "speed": speed}) as response:
@@ -127,6 +173,7 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
             except TimeoutError:
                 print(f"gave up waiting for the run to end after {timeout:.0f} s")
                 return 1
+        await asyncio.sleep(settle)
         final = await snapshot(session, base, run_id)
 
     received = [m for m, _ in timed]
@@ -179,6 +226,7 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
     print(f"largest push {max(sizes, default=0)} bytes; {sum(n > BILLING_UNIT for n in sizes)} over {BILLING_UNIT}")
     print(f"state timeline: {len(view.get('state_timeline') or [])} spells")
     report_latency(timed, run["started_at"])
+    report_insights(joined, final, timed, failures)
     for failure in failures:
         print(f"FAIL {failure}")
     return 1 if failures else 0
@@ -190,5 +238,6 @@ if __name__ == "__main__":
     parser.add_argument("--minute", type=int, default=81)
     parser.add_argument("--speed", type=int, default=4, choices=(1, 2, 4))
     parser.add_argument("--timeout", type=float, default=1800.0, help="seconds to wait for the run to end")
+    parser.add_argument("--settle", type=float, default=40.0, help="seconds to wait after the end for agent drafts")
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.url.rstrip("/"), args.minute, args.speed, args.timeout)))
+    sys.exit(asyncio.run(main(args.url.rstrip("/"), args.minute, args.speed, args.timeout, args.settle)))

@@ -31,11 +31,11 @@ Pipeline (deployed on Azure)
 
 Explain
 
-- [ ] Moments ranked by the state model; the producer sees a shortlist, each
+- [x] Moments ranked by the state model; the producer sees a shortlist, each
       item with its reason
-- [ ] Agents (Agent Framework, Foundry models) read the numbers through our MCP
+- [x] Agents (Agent Framework, Foundry models) read the numbers through our MCP
       tools; code checks every figure in their output; each claim links to event IDs
-- [ ] A failed or slow agent falls back to the template, and the fallback is visible
+- [x] A failed or slow agent falls back to the template, and the fallback is visible
 - [ ] An amended event flags every insight that cited it, and its overlay can be withdrawn
 - [ ] Half-time and full-time recaps, and a "what did I miss" catch-up
 
@@ -95,10 +95,16 @@ formal security review or on-call docs.
 Ces, at the Friday 23 October checkpoint: walk the judge quick-start against
 the deployed app end to end. Anything still unticked by then is either finished
 on Monday 26 October or dropped, with an entry in the revision history below.
-If cuts are needed, the rule explainers go first, then the amended-event demo.
+If cuts are needed, in this order: the rule explainers; server-side viewer
+profiles (the ready-made fan profiles stay, with settings kept in the browser);
+the described feed's detail and pace controls (one level and pause stay); and
+the amended-event demo last, as the clearest moment for the Enterprise
+category.
 
 ## Revision history
 
 - 2026-10-19: initial scope
 - 2026-10-20: checkpoint moved from Sunday 25 to Friday 23 October; Ces is away
   on 24 and 25 October
+- 2026-10-20: cut order revised: viewer profiles and the described feed's
+  controls go before the amended-event demo

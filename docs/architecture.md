@@ -2,25 +2,32 @@
 
 How the live pipeline runs on Azure: what each service does, how a replay flows through them, what
 the services promise each other, and what it costs. The synthetic data it carries is described in
-[data.md](data.md).
+[data.md](data.md); how moments become cards, and the agents that word them, in
+[insights.md](insights.md).
 
 ## The pipeline
 
 ```text
-replayer ──AMQP──▶ Event Hubs (feed) ──▶ processor ──▶ Postgres
-   ▲                                         │
-   │ start / stop                            └──▶ Web PubSub (group per run) ──▶ browser
-   │                                                                                │
-web app (Next.js) ◀───────── snapshot, match metadata, client token ────────────────┘
+replayer ──AMQP──▶ Event Hubs (feed) ──▶ processor ──▶ Postgres ◀──── jobs, versions ────┐
+   ▲                                         │            │ notify                     │
+   │ start / stop                            │            ▼                            │
+   │                                         │       agents service ── MCP ──▶ match tools
+   │                                         │            │  └──── Responses API ──▶ Foundry (gpt-5-mini)
+   │                                         ▼            ▼
+   │                               Web PubSub (group per run) ──▶ browser
+   │                                                                │
+web app (Next.js) ◀──────── snapshot, insights, evidence, client token ┘
 ```
 
 | Service | Runs as | Does |
 | --- | --- | --- |
 | replayer (`src/footnote/replayer`) | Container App, internal ingress, one replica | Stands in for the data provider: plays the committed showcase feed into Event Hubs, one run per replay |
-| processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, with pass difficulty, the estimated match state and figures from the tracking; stores the feed and the state in Postgres; pushes every event with the state after it to the run's viewers |
-| web (`frontend/`) | Container App, public ingress | Starts and stops replays, serves snapshots and match metadata from Postgres, issues Web PubSub client tokens, renders the live page |
+| processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, with pass difficulty, the estimated match state and figures from the tracking; finds and ranks the run's insights; stores the feed, the state and the insights in Postgres; pushes every event with the state after it, and every insight change, to the run's viewers |
+| agents (`src/footnote/agents`) | Container App, no ingress, one replica | Serves the match tools over MCP on localhost (`src/footnote/tools`), and drafts the cards insights want with an Agent Framework writer on Foundry; code checks each draft; stores and pushes the accepted ones, or says why the template stands |
+| web (`frontend/`) | Container App, public ingress | Starts and stops replays, serves snapshots (with insights), match metadata and the events behind an insight from Postgres, issues Web PubSub client tokens, renders the live page with the producer's shortlist |
 
-All three run in one Container Apps environment on the Consumption profile. Images are built in the
+All four run in one Container Apps environment on the Consumption profile. The model is a Global
+Standard deployment of gpt-5-mini in a Foundry project, created by the same Bicep. Images are built in the
 container registry by `azd deploy` (remote build), so deploying needs no local Docker.
 
 ## A replay
@@ -51,6 +58,13 @@ file ships in the processor's image and stands in for a tracking feed: the proce
 against each event's clock, so a run never sees positions from beyond the point its feed has
 reached. The fitted parameters ship with the code, and the answer key stays out of the image.
 
+**Insights.** As each message is folded, the moment finder looks at the run's state and starts an
+insight for a goal, a VAR check, a spell of the match state, a hard pass or a sprint, ranked and
+worded by its template; later messages can flag or restate one (a VAR decision, a correction from
+the provider). The processor stores each change with the feed rows that caused it and pushes it.
+An insight that wants an agent's draft is left pending, and the processor notifies the agents
+service on the `footnote_agents` Postgres channel. [insights.md](insights.md) has the rules.
+
 **Joining.** The browser fetches the run's snapshot from the web app's API first, and for a run that
 has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and fetches
 the snapshot again each time a connection opens, because pushes sent while it had none are lost.
@@ -75,9 +89,17 @@ the browser's types in `frontend/src/lib/live/contract.ts`.
   rule the processor uses, so the two agree (`tests/fixtures/state_timeline.json` is checked on both
   sides). Every event push fits one 2 KB billing unit: `tests/test_live.py` and
   `tests/test_analysis.py` check the largest in the showcase match.
-- **Postgres.** `matches` (metadata), `runs` (descriptor and status), `feed_events` (every message
-  each run processed) and `run_state` (the latest view). Migrations live in
-  `src/footnote/db/migrations` and the processor applies them at start-up.
+- **Web PubSub, insights.** `insight` carries one changed insight as a row of the `insight_cards`
+  view (its current version's card, rank, reason, evidence, provenance and agent state) and `rev`,
+  the run's insight revision the change made. The processor and the agents service both push them;
+  the browser applies revisions in order and fetches the snapshot after a gap. The largest
+  template's push in a replay from kick-off is 1,512 bytes.
+- **Postgres.** `matches` (metadata), `runs` (descriptor, status and insight revision),
+  `feed_events` (every message each run processed), `run_state` (the latest view), `insights` and
+  `insight_versions` (every version of each card, template or agent), `agent_runs` (every agent
+  run: outcome, tokens, latency, tool calls) and `agent_cache` (accepted drafts reused across
+  replays). Migrations live in `src/footnote/db/migrations` and the processor applies them at
+  start-up.
 
 ## Delivery and failure
 
@@ -104,6 +126,13 @@ Viewers can therefore receive a push twice, for example when a processor restart
 the old replica had already pushed. Every push carries its `seq`, and the browser drops one it has
 already applied.
 
+The agents service claims pending insights with `for update skip locked` under a lease, so a
+crashed worker's job is claimed again once the lease runs out, and a job that has been claimed
+three times falls back to its template. Writing a draft locks the insight and checks its facts are
+the ones the job started from: a correction that restated the insight in the meantime has queued a
+fresh job, so the stale draft is dropped. Jobs whose replay has ended are given up. A missed
+notification costs at most five seconds: the service also looks for jobs on a timer.
+
 The processor and replayer each run exactly one replica. Scaling the processor out would work with
 the checkpoint store's partition ownership, but each run's state would then move between replicas on
 rebalancing; one replica keeps that out of scope.
@@ -113,8 +142,8 @@ rebalancing; one replica keeps that out of scope.
 `scripts/smoke_live.py` follows a replay from outside the way a browser does and reports the time
 from the replayer publishing each event to the client receiving it, using the timestamps every push
 carries. Measured from a client in South Africa, so the times include the network path from westus3.
-The first three runs were on 19 October 2026, before the processor ran the models; the last was on
-20 October, with them:
+The first three runs were on 19 October 2026, before the processor ran the models; the last two
+were on 20 October, with them and then with the insights:
 
 | Replay | Events | Median | p95 | Max |
 | --- | --- | --- | --- | --- |
@@ -122,12 +151,20 @@ The first three runs were on 19 October 2026, before the processor ran the model
 | from 81' at 4× | 256 | 236 ms | 299 ms | 354 ms |
 | from 81' at 4×, started as the processor restarted | 258 | 244 ms | 314 ms | 1,308 ms |
 | from 81' at 4×, with the models | 236 | 278 ms | 359 ms | 427 ms |
+| from 81' at 4×, with the models and the insights | 256 | 284 ms | 390 ms | 5,704 ms |
 
 By stage, medians across the first three runs: publish to Event Hubs enqueue about 50 ms, enqueue
 to the processor's push about 55 ms, and push to receipt 115–125 ms, most of it the network. The
 slowest events came early in a replay: in the replay from 23', the 12 events in its first 10 seconds
 had a maximum of 1,345 ms, and the 1,446 after them a maximum of 669 ms. In the run with the models,
 the processor's stage kept its median (53 ms); push to receipt took longer that run (172 ms median).
+
+The client in that run joined after the first 20 events had gone out; the client in the last run
+joined at the end of the backfill and received every event. Its first 23 events, in the first 10
+seconds, waited while the processor took in the 1,563-message backfill: p95 4,871 ms, max 5,704 ms.
+No store write in that run took over a second, which leaves folding the backfill through the
+models, on the processor's quarter of a vCPU, as the likely cost. The 233 events after them had a
+p95 of 368 ms and a maximum of 429 ms.
 
 ## Identity and access
 
@@ -143,13 +180,21 @@ app runs as its own user-assigned managed identity with these roles:
 | processor | Web PubSub Service Owner | the Web PubSub resource |
 | processor | Postgres Entra administrator | the server; owns the schema |
 | web | Web PubSub Service Owner | the Web PubSub resource, to issue client tokens |
-| web | `select` on `matches`, `runs`, `feed_events`, `run_state` | granted by the processor at start-up |
-| all three | AcrPull | the container registry |
+| web | `select` on `matches`, `runs`, `feed_events`, `run_state`, `insights`, `insight_versions`, `insight_cards` | granted by the processor at start-up |
+| agents | Foundry User | the Foundry project, to call the model |
+| agents | Web PubSub Service Owner | the Web PubSub resource, to push the versions it writes |
+| agents | `select` on the match tables; `insert` on `insight_versions`, `agent_runs`, `agent_cache`; `update` of the agent columns of `insights` and of `runs.insight_rev` | granted by the processor at start-up |
+| all four | AcrPull | the container registry |
 
 The browser's Web PubSub token joins one run's group and carries no roles, so a viewer can't
 publish or join another group, and the web app issues one only for a run the processor has recorded.
-The deploying user gets data-plane roles on Event Hubs, the checkpoint container and Web PubSub for
-local development, and becomes a Postgres administrator when `AZURE_PRINCIPAL_NAME` is set.
+The deploying user gets data-plane roles on Event Hubs, the checkpoint container, Web PubSub and
+the Foundry project for local development, and becomes a Postgres administrator when
+`AZURE_PRINCIPAL_NAME` is set.
+
+The match tools listen on 127.0.0.1 inside the agents container, so nothing outside it can reach
+them. The run and insight a call is about travel in request headers the service sets from the job;
+the model chooses the tool and its arguments, never the scope.
 
 Postgres admits Azure services through its firewall because Consumption-profile Container Apps have
 no fixed outbound address; sign-in still needs a token for a role the server knows.
@@ -168,7 +213,15 @@ dollars, for 20 October to 10 November (22 days):
 | Log Analytics | pay as you go, capped at 0.2 GB/day | first 5 GB/month free, then $2.30/GB | $0–4 |
 | Storage | Standard LRS, checkpoints only | | under $0.10 |
 | Web PubSub | Free | $0 | $0 |
-| **Total** | | | **$33–41** |
+| Container Apps, the agents service from 21 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
+| Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–13 |
+| **Total** | | | **$42–63** |
+
+The model costs nothing until it is called. A card measured at under $0.004 (insights.md), and a
+full match has 13 cards to draft, so a replay from kick-off costs about $0.05 the first time and
+close to nothing after, because later replays reuse the accepted drafts. The ceiling is the daily
+cap on agent runs (`AGENT_DAILY_RUNS`, 150): under $0.60 a day, $13 over the 21 days if every day
+reached it.
 
 Web PubSub's Free tier allows 20 concurrent connections and 20,000 outbound messages a day. A viewer
 watching a whole match at any speed receives about 1,830 messages (one per event plus the snapshot),

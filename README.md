@@ -36,9 +36,19 @@ Built so far:
   The processor rates every pass, estimates the match state a few seconds
   behind play, and reads distance covered, top speeds and sprint and distance
   tags from the tracking; the live page shows them.
+- **The insights and the agents.** The processor finds the moments worth a
+  card (goals, VAR decisions, spells of pressure or chaos, hard passes,
+  sprints, corrections from the provider), ranks them with the match-state
+  model and words each with a template. An agents service built with Microsoft
+  Agent Framework on a Foundry model (gpt-5-mini) redrafts the ones where
+  wording adds something. Its writer reads the match only through our MCP
+  match tools, never types a figure (code fills each one in), and code checks
+  every draft; a draft that fails or comes late leaves the template on screen,
+  saying why. The live page shows the producer's shortlist with each card's
+  reason and evidence. How it works: [docs/insights.md](docs/insights.md).
 
-Still to come, in the order SCOPE.md lists them: the agents, the overlay
-renderer and fan app, and the evaluations and judge quick-start.
+Still to come, in the order SCOPE.md lists them: the overlay renderer and fan
+app, and the evaluations and judge quick-start.
 
 ## Quick start
 
@@ -50,6 +60,11 @@ uv sync
 uv run pytest -m "not slow"                      # tests, under a minute
 uv run python -m footnote.generator showcase     # rebuild the committed showcase match in data/
 ```
+
+`tests/test_store.py` runs the SQL against a real Postgres and is skipped
+unless `FOOTNOTE_TEST_DATABASE_URL` names one whose role may create databases,
+for example `postgresql://postgres@127.0.0.1:5432/postgres`. CI runs it against
+a Postgres 17 service.
 
 `uv run python -m footnote.generator --help` lists the other commands: the
 league, any single match, the full season and the feed's JSON Schema.
@@ -69,7 +84,8 @@ in to the subscription. Register the resource providers once per subscription:
 
 ```sh
 for p in Microsoft.App Microsoft.ContainerRegistry Microsoft.EventHub Microsoft.DBforPostgreSQL \
-         Microsoft.SignalRService Microsoft.Storage Microsoft.OperationalInsights Microsoft.Insights; do
+         Microsoft.SignalRService Microsoft.Storage Microsoft.OperationalInsights Microsoft.Insights \
+         Microsoft.CognitiveServices; do
   az provider register --namespace "$p"
 done
 ```
@@ -82,10 +98,12 @@ azd env set AZURE_LOCATION westus3
 azd up
 ```
 
-`azd up` provisions [infra/main.bicep](infra/main.bicep), builds the three
-images in the container registry (no local Docker needed) and deploys each
-container app from `infra/<service>.bicep`. It prints the web app's URL. To
-check the deployed pipeline end to end, as a browser would follow it:
+`azd up` provisions [infra/main.bicep](infra/main.bicep), including a Foundry
+project with a Global Standard deployment of gpt-5-mini (the subscription needs
+100K tokens a minute of that model's quota), builds the four images in the
+container registry (no local Docker needed) and deploys each container app from
+`infra/<service>.bicep`. It prints the web app's URL. To check the deployed
+pipeline end to end, as a browser would follow it:
 
 ```sh
 uv run python scripts/smoke_live.py <web app URL> --minute 81 --speed 4
@@ -107,6 +125,11 @@ it locally too. Settings come from `azd env get-values`.
 # The replayer: EVENTHUB_NAMESPACE and EVENTHUB_NAME
 uv run python -m footnote.replayer               # http://localhost:8000
 
+# The agents service: FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, WEBPUBSUB_ENDPOINT,
+# WEBPUBSUB_HUB, POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your
+# sign-in name. Stop the deployed one first, or the two share the jobs.
+uv run python -m footnote.agents
+
 # The web app: frontend/.env.local with REPLAYER_URL=http://localhost:8000,
 # WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB, POSTGRES_HOST, POSTGRES_DATABASE, and
 # POSTGRES_USER set to your sign-in name (needs AZURE_PRINCIPAL_NAME above)
@@ -124,14 +147,17 @@ src/footnote/calibration/ published targets and the calibration report
 src/footnote/interpret/   pass difficulty, the match-state model, distances and tags; their training and report
 src/footnote/live/        shared by the services: the match files, replay time, stats, analysis, state, contracts
 src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
-src/footnote/processor/   Event Hubs to match state, Postgres and Web PubSub
-src/footnote/db/          Entra-authenticated Postgres connections and migrations
+src/footnote/processor/   Event Hubs to match state, insights, Postgres and Web PubSub
+src/footnote/insights/    moments found and ranked, facts, templates, the checks every card passes
+src/footnote/tools/       the match tools: an MCP server answering as of one moment of one run
+src/footnote/agents/      the agents service: the Agent Framework writer, its checks, the job loop
+src/footnote/db/          Entra-authenticated Postgres connections, migrations and roles
 frontend/                 the Next.js web app, with its Vitest tests beside the code
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
 scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, latency
-tests/                    contract, consistency, physics, story, calibration, model, replay and processing checks
+tests/                    contract, consistency, physics, story, calibration, model, replay, processing, insight, agent and SQL checks
 data/                     generated output; git keeps the league, the showcase match, its recipe and the name check
-docs/                     audience, experience, data, calibration, models and architecture
-.github/workflows/        CI: lint, type checks, tests, the web build and the Bicep on every push and pull request
+docs/                     audience, experience, data, calibration, models, insights and architecture
+.github/workflows/        CI: lint, type checks, tests (with a Postgres), the web build and the Bicep on every push and pull request
 ```
