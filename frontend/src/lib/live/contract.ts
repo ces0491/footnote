@@ -174,7 +174,86 @@ export interface RunEndMessage {
   timing: Timing;
 }
 
-export type PushMessage = SnapshotMessage | EventMessage | RunEndMessage;
+// --- Insights (src/footnote/insights, and the insight_cards view in migration 0002) -------------
+
+export type InsightKind = "moment" | "rule_call" | "segment" | "stat" | "player_tag" | "recap" | "correction";
+export type AgentState = "off" | "pending" | "drafting" | "done" | "fallback";
+export type InsightStatus = "drafted" | "approved" | "aired" | "withdrawn" | "killed";
+
+/** When something happened, in match time: each client holds an insight against its own playback. */
+export interface MatchTime {
+  period: number;
+  t: number;
+  minute?: number;
+  added_minute?: number | null;
+}
+
+/** An insight's wording with its figures filled in by code. */
+export interface InsightCard {
+  headline: string;
+  casual: string;
+  analyst: string;
+  plain: string; // for screen readers
+  evidence: string[]; // event IDs: those cited, then those behind the facts used
+  facts: string[]; // the fact keys the wording used
+}
+
+export interface Provenance {
+  source: "template" | "agent";
+  template?: string;
+  agent_run_id?: string;
+  model?: string;
+  prompt?: string;
+  attempts?: number;
+  tools?: string[];
+  latency_ms?: number;
+  checks?: string;
+  cached?: boolean;
+}
+
+export interface InsightFlag {
+  reason: string;
+  event_id: string;
+  version: number;
+  seq: number;
+}
+
+export interface Insight {
+  insight_id: string;
+  seq: number;
+  kind: InsightKind;
+  topic: string;
+  at: MatchTime;
+  until: MatchTime; // leaves the shortlist after this
+  rank: number;
+  reason: string;
+  evidence: string[];
+  placement: "lower_third" | "side_panel" | "full_card";
+  hold: "stoppage" | null;
+  corrects: string | null;
+  live: boolean; // false for moments the run's backfill passed
+  flag: InsightFlag | null; // VAR or a correction undid what it cites
+  status: InsightStatus;
+  agent_state: AgentState;
+  agent_note: string | null; // why the template stands, when it does
+  version: number;
+  source: "template" | "agent";
+  card: InsightCard;
+  provenance: Provenance;
+  created_at: string;
+  updated_at: string;
+}
+
+/** An insight that changed, with the run's insight revision the change made. */
+export interface InsightMessage {
+  type: "insight";
+  run_id: string;
+  rev: number;
+  insight: Insight;
+  timing?: Timing;
+}
+
+export type PushMessage = SnapshotMessage | EventMessage | RunEndMessage | InsightMessage;
 
 export interface Player {
   player_id: string;
@@ -210,5 +289,12 @@ export interface RunSnapshot {
   status: RunStatus;
   view: StateView | null;
   match: MatchMeta;
+  insights: Insight[];
+  insight_rev: number; // the revision the insights are as of
   server_time: number;
+}
+
+/** GET /api/runs/[runId]/events?ids=... : the events an insight cites, as they stand. */
+export interface EvidenceResponse {
+  events: FeedEvent[];
 }

@@ -4,14 +4,17 @@ import { runIdPattern, type RunSnapshot } from "@/lib/live/contract";
 import { db } from "@/lib/server/db";
 import { runInProgress, stopRun } from "@/lib/server/replayer";
 
-// The run's descriptor, its latest state view and the match metadata, from Postgres. The processor
+// The run's descriptor, its latest state view, its insights and the match metadata, from Postgres.
+// One statement reads them all, so the insights and the revision they are as of agree. The processor
 // records a run within a second or two of its start; until then the answer is 202 for a run the
 // replayer is playing, and 404 for one it doesn't know.
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]">) {
   const { runId } = await ctx.params;
   if (!runIdPattern.test(runId)) return Response.json({ error: "not a run ID" }, { status: 400 });
   const { rows } = await db().query(
-    `select r.descriptor, r.status, s.view, m.meta
+    `select r.descriptor, r.status, r.insight_rev, s.view, m.meta,
+            coalesce((select jsonb_agg(to_jsonb(c) - 'run_id' order by c.seq, c.insight_id)
+                        from insight_cards c where c.run_id = r.run_id), '[]'::jsonb) as insights
        from runs r
        join matches m on m.match_id = r.match_id
        left join run_state s on s.run_id = r.run_id
@@ -30,6 +33,8 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[r
     status: row.status,
     view: row.view,
     match: row.meta,
+    insights: row.insights,
+    insight_rev: row.insight_rev,
     server_time: Date.now(),
   };
   return Response.json(body, { headers: { "cache-control": "no-store" } });

@@ -16,6 +16,7 @@ import { clockLabel, liveReplaySecond, moment } from "@/lib/live/timeline";
 
 import { MatchStatePanel } from "./match-state";
 import { Scoreboard } from "./scoreboard";
+import { Shortlist } from "./shortlist";
 import { StatsPanel } from "./stats-panel";
 import { Ticker } from "./ticker";
 
@@ -132,6 +133,7 @@ export function LiveRun({ runId }: { runId: string }) {
         </Alert>
       )}
       <MatchStatePanel home={match.home} away={match.away} state={view.match_state} timeline={view.state_timeline ?? []} />
+      <Shortlist runId={runId} insights={live.insights} clock={view.clock} roster={r} />
       <div className="grid gap-4 md:grid-cols-2">
         <StatsPanel home={match.home} away={match.away} stats={view.teams} />
         <Ticker events={view.key_events} tags={view.tags ?? []} roster={r} />

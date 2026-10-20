@@ -2,8 +2,20 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import type { EventMessage, MatchState, PlayerLine, PushMessage, RunEndReason, StateSpell, StateView, Tag } from "./contract";
+import type {
+  EventMessage,
+  Insight,
+  InsightMessage,
+  MatchState,
+  PlayerLine,
+  PushMessage,
+  RunEndReason,
+  StateSpell,
+  StateView,
+  Tag,
+} from "./contract";
 import { initialRunViewState, type RunAction, runReducer, type RunViewState, timelineAfter } from "./run-reducer";
+import { insightFixture } from "./test-fixtures";
 
 // Shared with the processor's tests, so both sides fold estimates into the same timeline.
 const FIXTURE = JSON.parse(readFileSync(new URL("../../../../tests/fixtures/state_timeline.json", import.meta.url), "utf-8")) as {
@@ -161,5 +173,41 @@ describe("runReducer", () => {
     const state = run([snapshot(start), push({ ...event(11), player: line(5) }), push({ ...event(12), tags: [tag] })]);
     expect(state.view?.players?.["sal-10"].passes).toBe(5);
     expect(state.view?.tags).toEqual([tag]);
+  });
+});
+
+const insightPush = (rev: number, insight: Insight): InsightMessage => ({ type: "insight", run_id: "0123456789abcdef", rev, insight });
+const snapshotWith = (rev: number, insights: Insight[]): RunAction => ({
+  kind: "snapshot",
+  view: view(10),
+  ended: null,
+  insights,
+  insightRev: rev,
+});
+
+describe("runReducer, insights", () => {
+  it("applies insight pushes in revision order on top of the snapshot", () => {
+    const template = insightFixture("goal-e0391");
+    const agent = insightFixture("goal-e0391", { version: 2, source: "agent", agent_state: "done" });
+    const state = run([snapshotWith(4, []), push(insightPush(5, template)), push(insightPush(6, agent))]);
+    expect(state.insightRev).toBe(6);
+    expect(state.insights["goal-e0391"].source).toBe("agent");
+  });
+
+  it("drops a revision it already has and asks for a snapshot after a gap", () => {
+    const first = run([snapshotWith(5, [insightFixture("a")]), push(insightPush(5, insightFixture("a", { rank: 0.1 })))]);
+    expect(first.insights.a.rank).toBe(0.95); // rev 5 was already in the snapshot
+    const gap = runReducer(first, push(insightPush(7, insightFixture("b"))));
+    expect(gap.snapshotRequests).toBe(first.snapshotRequests + 1);
+    expect(gap.insights.b).toBeUndefined();
+    const filled = runReducer(gap, snapshotWith(7, [insightFixture("a"), insightFixture("b")]));
+    expect(filled.insightRev).toBe(7);
+    expect(Object.keys(filled.insights).sort()).toEqual(["a", "b"]);
+  });
+
+  it("keeps the insights it has when a snapshot carries older ones", () => {
+    const state = run([snapshotWith(3, []), push(insightPush(4, insightFixture("a"))), snapshotWith(3, [])]);
+    expect(state.insightRev).toBe(4);
+    expect(state.insights.a).toBeDefined();
   });
 });

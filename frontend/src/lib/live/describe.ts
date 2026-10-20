@@ -86,8 +86,15 @@ export function describe(event: FeedEvent, r: Roster): EventLine {
       return { text: "Full time", tone: "period" };
     case "amendment":
       return { text: correction(event, r), tone: "correction" };
-    default:
-      return { text: event.type.replaceAll("_", " "), tone: "plain" };
+    case "pass": {
+      const to = event.recipient_id ? ` to ${name(r, event.recipient_id)}` : "";
+      return { text: `${name(r, event.player_id)} (${club}) passes${to}: ${String(event.outcome).replaceAll("_", " ")}`, tone: "plain" };
+    }
+    default: {
+      // Events the ticker doesn't list but an insight's evidence can: carries, duels, recoveries.
+      const kind = event.type.replaceAll("_", " ");
+      return { text: event.player_id ? `${name(r, event.player_id)} (${club}): ${kind}` : kind, tone: "plain" };
+    }
   }
 }
 

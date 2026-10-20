@@ -4,8 +4,22 @@
 // arrives, so nothing received in the meantime is lost or applied out of order. A gap in seq means a
 // push was missed and the histories (key events, the state timeline, player lines, tags) may be
 // missing an entry, so the reducer asks for a snapshot.
+//
+// Insights follow their own counter. Each change to one bumps the run's insight revision, and its
+// push carries the revision it made; the processor and the agents service both push them. A
+// revision already held is dropped, and a gap (a missed push, or two pushes crossing on the way)
+// asks for a snapshot, which carries every insight and the revision they are as of.
 
-import type { EventMessage, MatchState, PushMessage, RunEndReason, StateSpell, StateView } from "./contract";
+import type {
+  EventMessage,
+  Insight,
+  InsightMessage,
+  MatchState,
+  PushMessage,
+  RunEndReason,
+  StateSpell,
+  StateView,
+} from "./contract";
 
 /**
  * The state timeline once a pushed estimate is folded in: the last spell extends, or a new one
@@ -28,14 +42,30 @@ export interface RunViewState {
   held: PushMessage[] | null;
   /** Bumped each time a fresh snapshot is needed. The page fetches one whenever it changes. */
   snapshotRequests: number;
+  insights: Record<string, Insight>;
+  /** The insight revision `insights` is as of; null until the first snapshot. */
+  insightRev: number | null;
 }
 
 // The page fetches the first snapshot itself before it connects, so pushes start out held.
-export const initialRunViewState: RunViewState = { view: null, ended: null, held: [], snapshotRequests: 0 };
+export const initialRunViewState: RunViewState = {
+  view: null,
+  ended: null,
+  held: [],
+  snapshotRequests: 0,
+  insights: {},
+  insightRev: null,
+};
 
 export type RunAction =
   | { kind: "push"; message: PushMessage }
-  | { kind: "snapshot"; view: StateView | null; ended: RunEndReason | null }
+  | {
+      kind: "snapshot";
+      view: StateView | null;
+      ended: RunEndReason | null;
+      insights?: Insight[];
+      insightRev?: number;
+    }
   // The connection has (re)opened, and pushes sent while it was closed are lost.
   | { kind: "resync" };
 
@@ -68,6 +98,17 @@ function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
   return { ...state, view: next };
 }
 
+function applyInsight(state: RunViewState, message: InsightMessage): RunViewState {
+  const rev = state.insightRev;
+  if (rev !== null && message.rev <= rev) return state; // already applied, or in the snapshot
+  if (rev === null || message.rev !== rev + 1) return requestSnapshot(state, [message]);
+  return {
+    ...state,
+    insights: { ...state.insights, [message.insight.insight_id]: message.insight },
+    insightRev: message.rev,
+  };
+}
+
 function apply(state: RunViewState, message: PushMessage): RunViewState {
   switch (message.type) {
     case "snapshot": {
@@ -77,6 +118,8 @@ function apply(state: RunViewState, message: PushMessage): RunViewState {
     }
     case "event":
       return applyEvent(state, message);
+    case "insight":
+      return applyInsight(state, message);
     case "run_end":
       return { ...state, ended: message.reason };
   }
@@ -89,11 +132,18 @@ export function runReducer(state: RunViewState, action: RunAction): RunViewState
     case "resync":
       return requestSnapshot(state, state.held ?? []);
     case "snapshot": {
+      const fresher =
+        action.insights !== undefined &&
+        action.insightRev !== undefined &&
+        (state.insightRev === null || action.insightRev >= state.insightRev);
       let next: RunViewState = {
         ...state,
         view: newer(action.view, state.view),
         ended: action.ended ?? state.ended,
         held: null,
+        ...(fresher
+          ? { insights: Object.fromEntries(action.insights!.map((i) => [i.insight_id, i])), insightRev: action.insightRev! }
+          : {}),
       };
       // A held push can itself reveal a gap the snapshot doesn't cover; the rest are then held again.
       for (const message of state.held ?? []) next = runReducer(next, { kind: "push", message });

@@ -70,7 +70,13 @@ export function useLiveRun(runId: string) {
 
   const applySnapshot = useCallback((loaded: RunSnapshot) => {
     setSnapshot(loaded);
-    dispatch({ kind: "snapshot", view: loaded.view, ended: loaded.status === "running" ? null : loaded.status });
+    dispatch({
+      kind: "snapshot",
+      view: loaded.view,
+      ended: loaded.status === "running" ? null : loaded.status,
+      insights: loaded.insights,
+      insightRev: loaded.insight_rev,
+    });
   }, []);
 
   useEffect(() => {
@@ -147,5 +153,5 @@ export function useLiveRun(runId: string) {
     if (state.ended) client.current?.stop();
   }, [state.ended]);
 
-  return { view: state.view, ended: state.ended, snapshot, connection, error, latency, offset };
+  return { view: state.view, insights: state.insights, ended: state.ended, snapshot, connection, error, latency, offset };
 }

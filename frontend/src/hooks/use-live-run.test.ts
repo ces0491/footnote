@@ -60,6 +60,8 @@ function snapshot(seq: number, status: RunStatus = "running", keySeqs: number[] 
     status,
     view: { seq, phase: "first_half", clock: null, score: { home: 0, away: 0 }, teams: {}, key_events: keySeqs.map(shot) },
     match: {} as MatchMeta,
+    insights: [],
+    insight_rev: 0,
     server_time: Date.now(),
   };
 }
