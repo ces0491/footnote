@@ -1,10 +1,11 @@
 # Insights
 
 How a moment in the match becomes a card a producer can put on air: what is found and how it
-ranks, how figures stay code's own, the checks every card passes, the agents that word them, and
-what happens when VAR or the data provider changes something a card cited. The principles behind
-it (P1–P8) are in [audience.md](audience.md); the services it runs on are in
-[architecture.md](architecture.md).
+ranks, how figures stay code's own, the checks every card passes, the agents that word them, what
+the producer decides, and what happens when VAR or the data provider changes something a card
+cited. The principles behind it (P1–P8) are in [audience.md](audience.md); the services it runs on
+are in [architecture.md](architecture.md); what viewers get for each card, and when, is the overlay
+contract in [overlay.md](overlay.md).
 
 ## From an event to a card
 
@@ -20,6 +21,8 @@ it (P1–P8) are in [audience.md](audience.md); the services it runs on are in
    service. Its writer reads the moment through the match tools, drafts a card, and code checks
    it. A draft that passes becomes the version viewers see; otherwise the template stays, and the
    insight says why.
+5. **Approved, or not.** A card airs once it is approved, by the producer or automatically, and
+   reaches each fan when their stream shows the moment.
 
 ## Moments
 
@@ -162,6 +165,29 @@ goals, VAR decisions, pressure and chaos spells and the correction) were all acc
 attempt, in 6–17 seconds, using 2,200–5,600 input and 280–960 output tokens each. At the list
 prices (US$0.25 a million input tokens, US$2.00 a million output) that is under US$0.004 a card.
 
+## The producer's desk
+
+The producer console shows the shortlist with each card's status and lets the producer approve,
+edit, kill or withdraw it, or ask an agent for a fresh draft. The console's requests go through the
+web app to the producer's desk in the agents service (`src/footnote/agents/desk.py`), which applies
+each one to the insight, bumps the run's insight revision and pushes the changed card, as the
+processor and the agents do. The desk is reachable only inside the Container Apps environment.
+
+- **Who may produce.** The viewer who started the replay: the browser's anonymous ID travels with
+  the start request to the run's record, where no API serves it, and the desk compares it with the
+  ID each action carries. Anyone else with the link sees the console as it stands.
+- **Approval.** A replay approves each card automatically as it is found, or leaves every card to
+  the producer; it starts the second way when it is started from the producer's profile. The
+  producer can switch, from the cards found next on. The status lifecycle is in
+  [overlay.md](overlay.md#who-decides-what-airs).
+- **Edit.** The producer edits the wording as a draft, with placeholders where the figures go, and
+  the desk runs `check` on it as on an agent's draft: against the moment's own facts, and the events
+  the card already links to. An edit that fails comes back with the problems; one that passes is a
+  version of its own (`source: producer`), and is never cached for later replays. An agent's draft
+  that used figures from beyond the moment's facts is edited from the template's wording.
+- **Redraft.** The insight joins the agents' queue afresh, with no claims against it and past the
+  cache of earlier replays.
+
 ## VAR and corrections
 
 - **A check completes.** The card saying VAR is checking leaves the shortlist when the decision
@@ -173,7 +199,8 @@ prices (US$0.25 a million input tokens, US$2.00 a million output) that is under 
   from it is restated: a new template version with the corrected facts, which the agents draft
   again. A correction insight tells viewers what changed and names the insight it corrects. In the
   showcase match, the 81st-minute goal first recorded as a Penhallow own goal is restated at 84' as
-  Adeyani's, and its correction notice ranks 0.95.
+  Adeyani's, and its correction notice ranks 0.95. A restated card the producer had approved by
+  hand waits for their approval again; the console lists it under corrections, beside the notice.
 
 A restated insight is a fresh job: its wait for a worker and its claims count from the
 restatement. A draft still being written from the old facts is cancelled when a worker claims the
@@ -183,7 +210,11 @@ longer the insight's.
 ## Delivery
 
 Each change to an insight bumps the run's insight revision in the same transaction, and its push
-carries the revision it made. The processor and the agents service both push; a browser applies
-revisions in order and fetches the snapshot after a gap (`frontend/src/lib/live/run-reducer.ts`).
-The snapshot carries every insight with the revision they are as of. Insights the backfill passed
-reach viewers through the snapshot only.
+carries the revision it made. The processor, the agents service and the producer's desk all push; a
+browser applies revisions in order and fetches the snapshot after a gap
+(`frontend/src/lib/live/run-reducer.ts`). The snapshot carries every insight with the revision they
+are as of. Insights the backfill passed reach viewers through the snapshot only.
+
+Each change also names the feed message behind it (`shown_seq`), and a fan's browser shows a
+card's state only once their stream reaches that message: a goal VAR ruled out stays a goal on a
+delayed screen until the screen reaches the decision ([overlay.md](overlay.md#when-an-item-shows)).

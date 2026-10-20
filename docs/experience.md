@@ -225,6 +225,9 @@ From the walkthrough, each item in the overlay feed needs:
 - **Presentation hints:** placement (lower third, side panel, full card), motion
   level for calm mode
 
+The contract that carries them, and the rules for timing, approval and corrections,
+is [overlay.md](overlay.md).
+
 ## The video
 
 Under two minutes, recorded from the deployed app.
@@ -241,7 +244,11 @@ Under two minutes, recorded from the deployed app.
 
 ## The judges' path
 
-1. Open the live URL and pick one of the ready-made fans, or the producer.
+1. Open the live URL and pick who to watch as: Nadia the producer, or one of the
+   ready-made fans. Starting as Nadia means approving each graphic by hand; a
+   fan's replay approves them as they're found.
 2. Start the showcase match from a jump point: 23', 31', 60' or 81'.
-3. Switch fans mid-match to see the same moment change.
-4. Open any card's evidence to see the events behind it.
+3. Switch between Nadia and the fans mid-match to see the same moment change: Sam
+   gets it 40 seconds after Nadia's console does.
+4. Open any card's evidence to see the events behind it, and in the console the
+   agents' runs on it.

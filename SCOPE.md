@@ -36,23 +36,23 @@ Explain
 - [x] Agents (Agent Framework, Foundry models) read the numbers through our MCP
       tools; code checks every figure in their output; each claim links to event IDs
 - [x] A failed or slow agent falls back to the template, and the fallback is visible
-- [ ] An amended event flags every insight that cited it, and its overlay can be withdrawn
+- [x] An amended event flags every insight that cited it, and its overlay can be withdrawn
 - [ ] Half-time and full-time recaps, and a "what did I miss" catch-up
 
 Render and personalise
 
-- [ ] Timed overlay data contract documented, with a reference renderer on our
+- [x] Timed overlay data contract documented, with a reference renderer on our
       own 2D pitch view
-- [ ] Producer console: approve, edit or kill a graphic before it airs
-- [ ] Spoiler-safe delivery: the viewer sets their stream delay, and nothing
+- [x] Producer console: approve, edit or kill a graphic before it airs
+- [x] Spoiler-safe delivery: the viewer sets their stream delay, and nothing
       reaches them before their playback does
-- [ ] Casual and analyst modes, favourite club, player focus layered on the
+- [x] Casual and analyst modes, favourite club, player focus layered on the
       club, one chosen metric
-- [ ] Casual mode explains offside, handball and VAR calls when they happen,
+- [x] Casual mode explains offside, handball and VAR calls when they happen,
       using player positions at that moment
 - [ ] Described feed: text play-by-play of ball position, passes and build-up
       for screen readers, with detail and pace controls
-- [ ] Calm mode: reduced motion, no flashing, overlays the viewer can hide
+- [x] Calm mode: reduced motion, no flashing, overlays the viewer can hide
 - [ ] Agents write in English; Azure AI Translator renders Spanish and French;
       code checks that numbers, minutes and names survive translation
 - [ ] Viewer profiles stored server-side under an anonymous ID kept in the

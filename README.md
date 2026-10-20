@@ -44,11 +44,23 @@ Built so far:
   wording adds something. Its writer reads the match only through our MCP
   match tools, never types a figure (code fills each one in), and code checks
   every draft; a draft that fails or comes late leaves the template on screen,
-  saying why. The live page shows the producer's shortlist with each card's
-  reason and evidence. How it works: [docs/insights.md](docs/insights.md).
+  saying why. How it works: [docs/insights.md](docs/insights.md).
+- **The producer console and the fan view.** Watch the replay as Nadia, the
+  producer, or as one of the ready-made fans, and switch between them
+  mid-match. The producer approves, edits, kills or withdraws each card, or lets
+  them through automatically; an edit passes the same checks as an agent's
+  draft, and only the viewer who started a replay can produce it. A fan's
+  stream runs a set delay behind live, and the page shows the match, the cards
+  and the graphics as of that stream, so nothing arrives before the fan's
+  screen shows it. Fans choose casual or analyst mode, their club, a player to
+  follow and the figure to pin, and calm mode keeps every graphic still. On a
+  desktop the match is drawn from the tracking on our own 2D pitch, standing
+  in for the video; casual fans get a still of the pitch with each VAR
+  decision. What a card carries, and when it may show, is the overlay
+  contract: [docs/overlay.md](docs/overlay.md).
 
-Still to come, in the order SCOPE.md lists them: the overlay renderer and fan
-app, and the evaluations and judge quick-start.
+Still to come, in the order SCOPE.md lists them: recaps and catch-up, the
+described feed, translation, evaluations, tracing and the judge quick-start.
 
 ## Quick start
 
@@ -125,14 +137,16 @@ it locally too. Settings come from `azd env get-values`.
 # The replayer: EVENTHUB_NAMESPACE and EVENTHUB_NAME
 uv run python -m footnote.replayer               # http://localhost:8000
 
-# The agents service: FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, WEBPUBSUB_ENDPOINT,
-# WEBPUBSUB_HUB, POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your
-# sign-in name. Stop the deployed one first, or the two share the jobs.
+# The agents service, with the producer's desk on http://localhost:8080:
+# FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB,
+# POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your sign-in name.
+# Stop the deployed one first, or the two share the jobs.
 uv run python -m footnote.agents
 
 # The web app: frontend/.env.local with REPLAYER_URL=http://localhost:8000,
-# WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB, POSTGRES_HOST, POSTGRES_DATABASE, and
-# POSTGRES_USER set to your sign-in name (needs AZURE_PRINCIPAL_NAME above)
+# DESK_URL=http://localhost:8080, WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB,
+# POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your sign-in name
+# (needs AZURE_PRINCIPAL_NAME above); POSTGRES_PORT if it isn't 5432
 cd frontend && npm ci && npm run dev             # http://localhost:3000
 ```
 
@@ -145,19 +159,19 @@ The deployed processor picks up runs started locally. Checks for the web app:
 src/footnote/generator/   league, match simulation, officials, feed, tracking, showcase search
 src/footnote/calibration/ published targets and the calibration report
 src/footnote/interpret/   pass difficulty, the match-state model, distances and tags; their training and report
-src/footnote/live/        shared by the services: the match files, replay time, stats, analysis, state, contracts
+src/footnote/live/        shared by the services: the match files, replay time, stats, analysis, state, contracts, the overlay contract, the pitch view's tracking
 src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
 src/footnote/processor/   Event Hubs to match state, insights, Postgres and Web PubSub
 src/footnote/insights/    moments found and ranked, facts, templates, the checks every card passes
 src/footnote/tools/       the match tools: an MCP server answering as of one moment of one run
-src/footnote/agents/      the agents service: the Agent Framework writer, its checks, the job loop
+src/footnote/agents/      the agents service: the Agent Framework writer, its checks, the job loop, the producer's desk
 src/footnote/db/          Entra-authenticated Postgres connections, migrations and roles
-frontend/                 the Next.js web app, with its Vitest tests beside the code
+frontend/                 the Next.js web app (fan view, producer console, 2D pitch), with its Vitest tests beside the code
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
-scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, latency
+scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, stored pushes, tracking, latency
 tests/                    contract, consistency, physics, story, calibration, model, replay, processing, insight, agent and SQL checks
 data/                     generated output; git keeps the league, the showcase match, its recipe and the name check
-docs/                     audience, experience, data, calibration, models, insights and architecture
+docs/                     audience, experience, data, calibration, models, insights, the overlay contract and its schema, architecture
 .github/workflows/        CI: lint, type checks, tests (with a Postgres), the web build and the Bicep on every push and pull request
 ```
