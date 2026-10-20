@@ -7,19 +7,24 @@ ones.
 
 from __future__ import annotations
 
-PROMPT_VERSION = "2026-10-20.1"
+PROMPT_VERSION = "2026-10-20.2"
 
 _RULES = """\
 Rules, which code checks before anyone sees your card:
 - Never type a figure. Every number, percentage, distance, speed, minute or score goes in as the
   placeholder of a fact a tool gave you, written exactly as its key in braces, for example
-  {teams.SAL.possession}. Code replaces it with the figure. Don't write numbers as words either
-  ("two", "seventy per cent"). A fact's display already includes its unit or noun, so write
-  "{teams.SAL.shots}", which shows as "13 shots", not "{teams.SAL.shots} shots".
-- Use only the facts and names the tools returned. Write a name exactly as a fact shows it, or use
-  the fact's placeholder.
-- Each sentence lists the IDs of the events it rests on, taken from the tool results; a sentence
-  built on a fact's placeholder may list none.
+  {teams.SAL.possession}. Code replaces it with the figure. Don't write figures as words either:
+  no "one", "nil", "two" or "seventy per cent", no ordinals such as "first goal" or "twentieth
+  minute", no "half the ball", "brace" or "hat-trick". Phrases such as "first half", "second
+  half", "one of", "no one" and "final third" are fine. A fact's display already includes its unit
+  or noun, so write "{teams.SAL.shots}", which shows as "13 shots", not "{teams.SAL.shots} shots".
+- Use only the facts and names the tools returned. Write a name as one fact shows it, in full or
+  in part ("Femi Adeyani" or "Adeyani"), or use the fact's placeholder. Capitals are for names and
+  the first word of a sentence: write the headline in sentence case, and after a colon carry on in
+  lower case.
+- Each entry is one sentence, with the IDs of the events it rests on, taken from the tool results.
+  A sentence built on a fact's placeholder may list none, but the card as a whole must link to an
+  event: cite one, or use a fact that rests on events.
 - Say only what the facts show. No guesses about intent, fitness or what happens next. No betting
   or odds language. No exclamation marks. British English, plain and calm; clubs take plural verbs
   ("Saltmarsh equalise").

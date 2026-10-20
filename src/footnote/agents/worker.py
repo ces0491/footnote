@@ -13,8 +13,10 @@ For each job, in order:
    version and records why in the insight's `agent_note`, which viewers and the producer see
    (docs/audience.md, P2 and P3).
 
-A correction can restate an insight while its draft is being written; the insight is then pending
-again with new facts. Claiming it again cancels the draft still running for the old facts.
+A correction can restate an insight while its draft is being written; the insight is then a fresh
+job, pending with new facts, its wait and claims counted from the restatement. Claiming it cancels
+the draft still running for the old facts, which needs a free slot; until then that draft runs on,
+and its result is dropped when it tries to publish (store.py).
 
 Every model call is recorded in `agent_runs`: outcome, attempts, tokens, latency, the problems a
 rejected draft had and the tool calls the writer made.

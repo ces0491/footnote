@@ -14,6 +14,7 @@ figures live in BASE_RANK and the functions below.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -109,6 +110,9 @@ AGAINST_OTHERS_AT_LEAST = 0.45
 # five minutes of a period. The figures were set by hand; docs/insights.md says how.
 SEGMENT_RULES = {"pressure": (180, 0.60), "chaos": (180, 0.50), "control": (300, 0.70)}
 SEGMENT_GAP = 300
+# The most events a spell's figure cites: the latest of the kind it counts. A spell's share of a
+# state rests on its shots and changes of possession, the play the model's estimate turned on.
+SEGMENT_EVENTS = 12
 
 HARD_PASS_AT_LEAST = 0.80  # difficulty of a completed pass before it can be the hardest yet
 SHOT_SPEED_AT_LEAST = 100.0  # km/h, for the fastest-shot card
@@ -591,30 +595,36 @@ class MomentFinder:
         self, m: dict, topic: str, team_id: str | None, period: int, start: int, end: int, held: float
     ) -> Found:
         window = [e for e in self._onball if e["period"] == period and start <= e["t"] < end]
-        changes = sum(e["type"] == "possession_change" for e in window)
+        changes = [e for e in window if e["type"] == "possession_change"]
+        key = _ids(e for e in window if e["type"] in ("shot", "possession_change"))
+        move = _longest_move(window)
         stretch = F.duration(end - start, "the stretch of play the spell's figures cover")
         f: Facts = {
             "segment.window": stretch,
-            "segment.state_share": F.share(held, "share of that stretch the match-state model showed this state"),
+            "segment.state_share": F.share(held, "share of that stretch the match-state model showed this state", key),
             "segment.start_minute": F.minute(*_minute_of(period, start), "when the stretch began"),
-            "segment.changes": Fact(changes, _times(changes), "how often the ball changed hands in that stretch"),
+            "segment.changes": Fact(
+                len(changes), _times(len(changes)), "how often the ball changed hands in that stretch", _ids(changes)
+            ),
             "segment.longest_move": _count_of(
-                _longest_move(window), "pass", "longest run of completed passes by one side in that stretch"
+                len(move), "pass", "longest run of completed passes by one side in that stretch", _ids(move)
             ),
         }
         rank = BASE_RANK[topic] + 0.25 * (held - SEGMENT_RULES[topic][1])
         if team_id is not None:
             passes = [e for e in window if e["type"] == "pass" and e.get("pass_type") != "throw_in"]
-            shots = sum(e["type"] == "shot" and e["team_id"] == team_id for e in window)
+            shots = [e for e in window if e["type"] == "shot" and e["team_id"] == team_id]
             f["segment.club"] = F.text(self.club(team_id), "the club holding the state")
             f["segment.other"] = F.text(self.club(self.other(team_id)), "the other club")
-            f["segment.shots"] = _count_of(shots, "shot", f"shots by {self.club(team_id)} in that stretch")
+            f["segment.shots"] = _count_of(
+                len(shots), "shot", f"shots by {self.club(team_id)} in that stretch", _ids(shots)
+            )
             f["segment.pass_share"] = F.share(
                 sum(e["team_id"] == team_id for e in passes) / len(passes) if passes else 0.0,
                 f"{self.club(team_id)}'s share of the passes in that stretch",
             )
             if topic == "pressure":
-                rank += min(0.03 * shots, 0.15)
+                rank += min(0.03 * len(shots), 0.15)
         who = f"{self.club(team_id)} " if team_id else ""
         share_text = f"{round(held * 100)}% of the last {stretch.display}"
         reason = {
@@ -630,7 +640,7 @@ class MomentFinder:
             at=_at(m),
             rank=round(min(rank, 0.75), 2),
             reason=reason + ", from the match-state model",
-            evidence=[e["event_id"] for e in window if e["type"] in ("shot", "possession_change")][-12:],
+            evidence=list(dict.fromkeys(e for fact in f.values() for e in fact.events)),
             facts=f,
         )
 
@@ -707,22 +717,29 @@ def _times(n: int) -> str:
     return "once" if n == 1 else f"{n} times"
 
 
-def _count_of(n: int, noun: str, about: str) -> Fact:
+def _ids(events: Iterable[dict]) -> tuple[str, ...]:
+    """The IDs of the latest SEGMENT_EVENTS of `events`, in order."""
+    return tuple(e["event_id"] for e in events)[-SEGMENT_EVENTS:]
+
+
+def _count_of(n: int, noun: str, about: str, events: tuple[str, ...] = ()) -> Fact:
     """A count shown with its noun, so wording needn't agree with the number: "no shots", "1 pass"."""
     plural = f"{noun}es" if noun.endswith("s") else f"{noun}s"
-    return Fact(n, f"no {plural}" if n == 0 else f"1 {noun}" if n == 1 else f"{n} {plural}", about)
+    return Fact(n, f"no {plural}" if n == 0 else f"1 {noun}" if n == 1 else f"{n} {plural}", about, events)
 
 
-def _longest_move(window: list[dict]) -> int:
+def _longest_move(window: list[dict]) -> list[dict]:
     """The longest run of completed passes by one side, broken by any on-ball event of the other."""
-    best = run = 0
+    best: list[dict] = []
+    run: list[dict] = []
     team = None
     for e in window:
         if e["type"] in ("pressure", "possession_change"):
             continue
         if e["team_id"] != team:
-            team, run = e["team_id"], 0
+            team, run = e["team_id"], []
         if e["type"] == "pass":
-            run = run + 1 if e["outcome"] == "complete" else 0
-            best = max(best, run)
+            run = [*run, e] if e["outcome"] == "complete" else []
+            if len(run) > len(best):
+                best = run
     return best

@@ -130,8 +130,9 @@ class PostgresStore:
         raise AssertionError("unreachable")
 
 
-# What one batch did to each insight, strongest first: an insert carries all the insight now is.
-_PRECEDENCE = {"new": 0, "restated": 1, "flagged": 2}
+# What one batch did to each insight, strongest first: an insert carries all the insight now is, and
+# a flag carries the shelf life as well.
+_PRECEDENCE = {"new": 0, "restated": 1, "flagged": 2, "ended": 3}
 
 # Inserts and versions skip what is already stored: a batch the store took before a restart.
 _INSERT_INSIGHT = """
@@ -182,9 +183,11 @@ async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
     version = int((await cur.fetchone() or {"next": 1})["next"])
     await conn.execute(_INSERT_VERSION, _template_version(run_id, insight, version))
     record = insight.record()
+    # A fresh job for the agents: it joins the queue now, with no claims against it yet.
     await conn.execute(
         "update insights set topic = %s, seq = %s, evidence = %s, flag = %s, facts = %s, facts_version = %s,"
-        " template = %s, version = %s, agent_state = %s, agent_note = null, updated_at = now()"
+        " template = %s, version = %s, agent_state = %s, agent_note = null, agent_attempts = 0,"
+        " agent_lease = null, queued_at = now(), updated_at = now()"
         " where run_id = %s and insight_id = %s",
         (
             insight.topic,
@@ -214,7 +217,7 @@ async def write_insights(conn: Connection, run_id: str, changes: list[Change]) -
             latest[change.insight.insight_id] = change
     if not latest:
         return []
-    by_kind: dict[str, list[Insight]] = {"new": [], "restated": [], "flagged": []}
+    by_kind: dict[str, list[Insight]] = {"new": [], "restated": [], "flagged": [], "ended": []}
     for change in latest.values():
         by_kind[change.what].append(change.insight)
     async with conn.cursor() as cur:
@@ -226,12 +229,17 @@ async def write_insights(conn: Connection, run_id: str, changes: list[Change]) -
                 "update insights set flag = %s, until_at = %s, updated_at = now() where run_id = %s and insight_id = %s",
                 [(Jsonb(i.flag), Jsonb(i.until), run_id, i.insight_id) for i in by_kind["flagged"]],
             )
+        if by_kind["ended"]:
+            await cur.executemany(
+                "update insights set until_at = %s, updated_at = now() where run_id = %s and insight_id = %s",
+                [(Jsonb(i.until), run_id, i.insight_id) for i in by_kind["ended"]],
+            )
     for insight in by_kind["restated"]:
         await _restate(conn, run_id, insight)
     # One revision per changed insight, in the order the batch changed them.
     last = await next_rev(conn, run_id, len(latest))
     revs = {insight_id: last - len(latest) + 1 + n for n, insight_id in enumerate(latest)}
-    if any(c.insight.agent and c.what != "flagged" for c in latest.values()):
+    if any(c.insight.agent and c.what in ("new", "restated") for c in latest.values()):
         await conn.execute("select pg_notify(%s, %s)", (AGENT_CHANNEL, run_id))
     # History (insights the backfill passed) reaches viewers through the snapshot, not pushes.
     pushes = [

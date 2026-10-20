@@ -158,7 +158,7 @@ def sprint(f: Facts) -> Draft:
     return Draft(
         headline="{moment.player} hits {moment.speed}",
         casual=[_s("{moment.player} sprints at {moment.speed}, the fastest of the match so far.")],
-        analyst=[_s("Top speed from the tracking, averaged over a second, at {moment.minute}.")],
+        analyst=[_s("Top speed from the tracking at {moment.minute}, smoothed as tracking providers report it.")],
     )
 
 

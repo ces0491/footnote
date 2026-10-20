@@ -34,8 +34,8 @@ class Claim:
     facts: dict
     facts_version: int
     redraft: bool
-    claims: int
-    waited: float  # seconds since the insight was found
+    claims: int  # claims of this job so far, this one included; a restatement starts a fresh job
+    waited: float  # seconds since the insight joined the queue: found, or restated
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ with picked as (
       join runs r on r.run_id = i.run_id
      where r.status = 'running'
        and (i.agent_state = 'pending' or (i.agent_state = 'drafting' and i.agent_lease < now()))
-     order by i.created_at
+     order by i.queued_at, i.created_at  -- a restatement and its notice join the queue together
      limit %s
        for update of i skip locked
 )
@@ -65,7 +65,7 @@ update insights i
   from picked, runs r
  where i.run_id = picked.run_id and i.insight_id = picked.insight_id and r.run_id = i.run_id
 returning i.run_id, r.match_id, i.insight_id, i.kind, i.topic, i.seq, i.facts, i.facts_version, i.redraft,
-          i.agent_attempts as claims, extract(epoch from now() - i.created_at)::float as waited
+          i.agent_attempts as claims, extract(epoch from now() - i.queued_at)::float as waited
 """
 
 

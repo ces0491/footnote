@@ -121,7 +121,7 @@ async def _one(pool: Pool, query: str, *params: object) -> dict:
 async def test_migrations_apply_once(pool: Pool) -> None:
     assert await migrate(pool) == []
     row = await _one(pool, "select array_agg(version order by version) as v from schema_migrations")
-    assert row["v"] == ["0001_runs", "0002_insights"]
+    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at"]
 
 
 async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcase: Match, analysis: Analysis) -> None:
@@ -213,6 +213,37 @@ async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, a
         await conn.execute("update runs set status = 'finished' where run_id = %s", (RUN_ID,))
     assert await agents.drop_ended() == 1
     assert await agents.claim(10, 60) == []
+
+
+async def test_a_restated_insight_is_a_fresh_job(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    """At 1x the 84' correction comes over three minutes after the 81' goal. The restated goal's job
+    must wait from the restatement, with no claims against it, or it falls back without a draft."""
+    store, push = PostgresStore(pool), Pushed()
+    await store.put_match(showcase.meta)
+    processor = Processor(showcase, store, push, analysis=analysis)
+    items = _replay(showcase, 81, end=False)
+    amendment = next(i for i, item in enumerate(items) if item.body.get("type") == "amendment")
+    for i in range(0, amendment, 100):
+        await processor.handle(items[i : min(i + 100, amendment)])
+    agents = AgentStore(pool)
+    first = [c for c in await agents.claim(10, 60) if c.insight_id == "goal-e1586"]
+    assert first and first[0].claims == 1 and first[0].facts_version == 1
+    async with pool.connection() as conn:  # as if the goal had been found three minutes ago
+        await conn.execute(
+            "update insights set created_at = now() - interval '190 seconds', queued_at = now() - interval '190 seconds'"
+            " where run_id = %s and insight_id = 'goal-e1586'",
+            (RUN_ID,),
+        )
+    await processor.handle(items[amendment:])
+    again = [c for c in await agents.claim(10, 60) if c.insight_id == "goal-e1586"]
+    assert again and again[0].facts_version == 2
+    assert again[0].claims == 1 and again[0].waited < 10
+    row = await _one(
+        pool,
+        "select queued_at > created_at as fresh from insights where run_id = %s and insight_id = 'goal-e1586'",
+        RUN_ID,
+    )
+    assert row["fresh"]
 
 
 async def test_a_lapsed_lease_is_claimed_again(pool: Pool, showcase: Match, analysis: Analysis) -> None:

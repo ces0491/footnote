@@ -77,23 +77,35 @@ fact (`facts.py`): a key such as `teams.SAL.possession`, its value, the text a c
 figure goes, `{teams.SAL.possession}`, and code fills it in. Counts carry their noun ("3 shots",
 "no shots"), so wording needn't agree with the number.
 
+A fact also lists the events it rests on, so a card links to them through the facts it uses: a
+goal's scorer to the goal, a spell's share of a state to the spell's shots and changes of
+possession, its longest move to that move's passes. Sprint and distance tags come from the tracking
+and rest on no event; the shortlist says so where other cards offer their evidence.
+
 ## Checks
 
 Every draft, template or agent, passes `check` in `draft.py` before anyone sees it:
 
 - every placeholder names a fact the writer was given, and the writer typed no figure: no digits,
-  no numbers spelled out, no "per cent";
-- every capitalised word inside a sentence is a name from the facts, so no player, club or place
-  outside the match appears. A capitalised word that starts a sentence can't be told from an
-  ordinary word without a dictionary, so that one place is not checked;
-- every sentence cites an event the writer was shown or uses a fact, so each claim links to the
-  events behind it (the card's evidence is the cited events plus those behind each fact used);
+  no numbers or ordinals spelled out ("one", "nil", "first goal", "twentieth minute"), no shares in
+  words ("half the ball", "per cent"), no "brace" or "hat-trick". Phrases that use those words
+  without stating a figure, such as "first half", "one of" and "final third", are allowed;
+- each entry of a draft is one sentence, so the limits on sentences hold;
+- capitals are for names. Every capitalised word other than a sentence's first is a name from the
+  facts, and names written side by side must be one name as a fact gives it ("Femi Adeyani", or
+  "Adeyani" alone), so words from two names can't make a third. A sentence's first word is held to
+  this only when it is part of a name: an ordinary word in capitals can't be told from an unknown
+  name without a dictionary;
+- every sentence cites an event the writer was shown or uses a fact, and when the facts rest on
+  events the card links to at least one (the card's evidence is the cited events plus those behind
+  each fact used);
 - the headline fits in 60 characters, the casual line in two sentences and 240, the analyst line
   in three and 360, filled in; no betting language, exclamation marks, links or emoji.
 
-The checks catch invented figures and names. Whether a sentence describes the facts fairly (that a
-goal really was against the run of play) is left to the facts themselves and to evaluations of the
-agents' output (Day 6).
+The checks catch figures and names a writer made up. A name from the match given to the wrong
+player, or a sentence that describes the facts unfairly (that a goal really was against the run of
+play), passes them: that is left to the facts themselves and to evaluations of the agents' output
+(Day 6).
 
 ## The agents
 
@@ -131,7 +143,8 @@ checker lets the draft use, and the log is kept with the run.
 - no draft arrives within 45 seconds of the job being claimed, enough for one revision;
 - the draft fails the checks twice;
 - the model or the tools fail;
-- the job waited more than 90 seconds for a worker, or the replay ended first;
+- the job waited more than 90 seconds for a worker, counted from when it joined the queue (a
+  restated insight joins it afresh), or the replay ended first;
 - today's 150 agent runs (UTC) are used up, a ceiling on what the model can cost.
 
 **Reuse.** Every replay is the same match, so the same moment makes the same job. A job's key is
@@ -151,18 +164,21 @@ prices (US$0.25 a million input tokens, US$2.00 a million output) that is under 
 
 ## VAR and corrections
 
-- **VAR rules a goal out.** The goal's insight is flagged ("Ruled out by VAR") and leaves the
-  shortlist at the decision; the decision's own card explains it, citing the goal and the pass the
-  offside was judged on.
+- **A check completes.** The card saying VAR is checking leaves the shortlist when the decision
+  arrives, whatever the decision. It isn't flagged: it was true while the check lasted.
+- **VAR rules a goal out.** Every insight citing the goal is flagged and leaves the shortlist at the
+  decision: the goal's own card ("Ruled out by VAR") and the card on the pass that set it up. The
+  decision's own card explains it, citing the goal and the pass the offside was judged on.
 - **The provider amends an event.** Every insight citing it is flagged. An insight whose facts came
   from it is restated: a new template version with the corrected facts, which the agents draft
   again. A correction insight tells viewers what changed and names the insight it corrects. In the
   showcase match, the 81st-minute goal first recorded as a Penhallow own goal is restated at 84' as
   Adeyani's, and its correction notice ranks 0.95.
 
-A draft still being written when a correction restates its insight is cancelled, and one that
-finishes in the moment between is dropped, because the facts it was written from are no longer the
-insight's.
+A restated insight is a fresh job: its wait for a worker and its claims count from the
+restatement. A draft still being written from the old facts is cancelled when a worker claims the
+fresh job, and one that finishes first is dropped, because the facts it was written from are no
+longer the insight's.
 
 ## Delivery
 
