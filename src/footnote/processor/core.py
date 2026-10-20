@@ -9,6 +9,11 @@ carries on from the stored feed.
 
 A push that fails is logged and skipped. Viewers notice the gap in `seq` and fetch the snapshot.
 
+Insights (footnote.insights) are found as each message is folded. Their changes are stored in the
+same transaction as the feed rows that caused them, and the store returns the pushes for them: each
+carries the run's insight revision, so a viewer who misses one fetches the snapshot too. An insight
+that wants an agent's draft is left pending for the agents service, which the store notifies.
+
 A replayer that shuts down publishes `run_end` for its runs; one that crashes can't. `end_overdue`
 ends any run still marked running whose next message is long past the time it was due, as failed,
 so its viewers aren't left waiting for messages that will never come.
@@ -23,6 +28,7 @@ from dataclasses import dataclass, field
 from itertools import groupby
 from typing import Protocol
 
+from footnote.insights.book import Change
 from footnote.live.analysis import Analysis
 from footnote.live.contract import KIND_CONTROL, RunEndReason, client_event
 from footnote.live.match import Match
@@ -67,8 +73,9 @@ class Store(Protocol):
         """The run's descriptor and its stored feed in seq order, or None for an unknown run."""
         ...
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
-        """Store feed rows and, unless it is None, the run's state view, in one transaction."""
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None, changes: list[Change]) -> list[dict]:
+        """Store feed rows, the run's state view unless it is None, and the insight changes the rows
+        made, in one transaction. Returns the pushes for the changed insights, in revision order."""
         ...
 
     async def running_runs(self) -> list[tuple[dict, int]]:
@@ -90,6 +97,7 @@ class LiveRun:
 class _Pending:
     rows: list[FeedRow] = field(default_factory=list)
     outgoing: list[dict] = field(default_factory=list)
+    changes: list[Change] = field(default_factory=list)
 
 
 def _now_ms() -> int:
@@ -139,6 +147,7 @@ class Processor:
             if not run.state.apply(m):
                 continue
             pending.rows.append(FeedRow(run_id, m, item.published_at, item.enqueued_at))
+            pending.changes += run.state.insight_changes()
             if item.backfill:
                 if m["seq"] == run.descriptor["backfill_seq"]:
                     pending.outgoing.append(self._snapshot(run))
@@ -156,14 +165,17 @@ class Processor:
         await self._flush(run_id, pending)
 
     async def _flush(self, run_id: str, pending: _Pending) -> None:
+        insights: list[dict] = []
         if pending.rows:
             run = self.runs[run_id]
             # Viewers get a run's state only once its backfill is in. A view from partway through the
             # backfill would show the score from minutes before the jump point.
             backfilled = run.state.seq >= run.descriptor["backfill_seq"]
-            await self.store.save(pending.rows, run_id, run.state.view() if backfilled else None)
-            pending.rows = []
-        for message in pending.outgoing:
+            insights = await self.store.save(
+                pending.rows, run_id, run.state.view() if backfilled else None, pending.changes
+            )
+            pending.rows, pending.changes = [], []
+        for message in [*pending.outgoing, *insights]:
             await self._send(run_id, message)
         pending.outgoing = []
 
@@ -185,7 +197,7 @@ class Processor:
                 if run_id not in self.runs:
                     await self._run(run_id)
                 return
-            run = LiveRun(descriptor, self._new_state())
+            run = LiveRun(descriptor, self._new_state(descriptor))
             self.runs[run_id] = run
             log.info(
                 "run %s started at replay second %s, speed %s", run_id, descriptor["start_replay"], descriptor["speed"]
@@ -232,14 +244,27 @@ class Processor:
             self._unknown.add(run_id)
             return None
         descriptor, feed = loaded
-        state = RunState.rebuild(self.match.match_id, self.match.home_id, self.match.away_id, feed, self.analysis)
+        state = RunState.rebuild(
+            self.match.match_id,
+            self.match.home_id,
+            self.match.away_id,
+            feed,
+            self.analysis,
+            backfill_seq=int(descriptor["backfill_seq"]),
+        )
         run = LiveRun(descriptor, state)
         self.runs[run_id] = run
         log.info("run %s rebuilt from %d stored messages", run_id, len(feed))
         return run
 
-    def _new_state(self) -> RunState:
-        return RunState(self.match.match_id, self.match.home_id, self.match.away_id, self.analysis)
+    def _new_state(self, descriptor: dict) -> RunState:
+        return RunState(
+            self.match.match_id,
+            self.match.home_id,
+            self.match.away_id,
+            self.analysis,
+            backfill_seq=int(descriptor["backfill_seq"]),
+        )
 
     def _snapshot(self, run: LiveRun) -> dict:
         return {"type": "snapshot", "run_id": run.descriptor["run_id"], "run": run.descriptor, **run.state.view()}

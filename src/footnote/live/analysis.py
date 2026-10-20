@@ -1,7 +1,7 @@
 """What a run works out beyond counting: pass difficulty, the match state, distances, speeds and tags.
 
-`Analysis` is what every run of a match shares: the attacking directions, the tracking and the
-fitted models (`footnote.interpret`). `RunAnalysis` is one run's share of the work, folded message
+`Analysis` is what every run of a match shares: the match metadata, the attacking directions, the
+tracking and the fitted models (`footnote.interpret`). `RunAnalysis` is one run's share of the work, folded message
 by message beside the counts in `RunState`, so a run rebuilt from its stored feed reaches the same
 view. It adds:
 
@@ -38,6 +38,7 @@ _AWAY_STATES = [i for i, side in enumerate(SIDE_OF_LABEL) if side == 1]
 
 @dataclass(frozen=True)
 class Analysis:
+    meta: dict  # the match metadata: clubs and line-ups, for naming what the insights state
     frames: Frames
     tracking: Tracking
     physical: Physical
@@ -50,6 +51,7 @@ class Analysis:
         tracking = Tracking.load((root or data_dir()) / "matches" / match.match_id / "tracking.npz")
         frames = Frames.from_meta(match.meta)
         return cls(
+            meta=match.meta,
             frames=frames,
             tracking=tracking,
             physical=Physical(tracking, match.home_id, match.away_id),
@@ -144,12 +146,19 @@ class RunAnalysis:
         self.players: dict[str, _Passing] = {}
         self.tags: list[dict] = []
         self.frame: int | None = None  # the last tracking frame this run has reached
+        # The state shown for every second estimated so far, by period, as an index into LABELS. The
+        # timeline above only takes the state after each message, so it skips seconds when no
+        # message came (stoppages); the insights measure spells over every second (shown_between).
+        self.shown: dict[int, list[int]] = {}
         self._extras: dict = {}
 
     def apply(self, m: dict) -> None:
         a = self.analysis
         extras: dict = {}
-        if self.tracker.observe(m) and self.tracker.latest is not None:
+        estimates = self.tracker.observe(m)
+        for estimate in estimates:
+            self.shown.setdefault(estimate.period, []).append(estimate.shown)
+        if estimates and self.tracker.latest is not None:
             self.match_state = state_summary(self.tracker.latest, a.frames)
         self.timeline = timeline_after(self.timeline, self.match_state)
         if m["type"] not in ("match_info", "amendment"):
@@ -219,6 +228,11 @@ class RunAnalysis:
     def extras(self) -> dict:
         """What the last message added, for its push: a pass's difficulty, the player's line, tags."""
         return dict(self._extras)
+
+    def shown_between(self, period: int, start: int, end: int) -> list[str]:
+        """The state shown each second of `period` from `start` up to `end`, as labels."""
+        seconds = self.shown.get(period, [])
+        return [LABELS[i] for i in seconds[max(0, start) : max(0, end)]]
 
     def view(self) -> dict:
         players = sorted(set(self.players) | set(self.analysis.physical.player_ids))

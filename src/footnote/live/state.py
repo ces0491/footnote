@@ -6,14 +6,20 @@ is never stale for long. The stored feed is the source of truth: after a restart
 rebuilds a run's state by folding the run's stored messages again.
 
 With an `Analysis` the state also carries what the models work out (live/analysis.py): pass
-difficulty, the match state and its timeline, per-player lines, distances, speeds and tags. Without
-one it carries the counts alone.
+difficulty, the match state and its timeline, per-player lines, distances, speeds and tags. And it
+keeps the run's insights (footnote.insights): the moments worth a card, found and ranked as each
+message is folded, with what later messages change about them. Without an `Analysis` it carries the
+counts alone.
+
+`backfill_seq` is the last message of the run's backfill. Insights found up to it are history: the
+run started after them, so they aren't drafted by the agents or offered for air.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from footnote.insights.book import Change, InsightBook
 from footnote.live.analysis import Analysis, RunAnalysis
 from footnote.live.contract import client_event
 from footnote.live.stats import MatchStats
@@ -50,16 +56,19 @@ class RunState:
     home_id: str
     away_id: str
     analysis: Analysis | None = None
+    backfill_seq: int = 0
     seq: int = 0
     phase: str = "pre_match"
     clock: dict | None = None
     stats: MatchStats = field(init=False)
     insight: RunAnalysis | None = field(init=False)
+    book: InsightBook | None = field(init=False)
     key_events: list[dict] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.stats = MatchStats(self.home_id, self.away_id)
         self.insight = RunAnalysis(self.analysis) if self.analysis is not None else None
+        self.book = InsightBook.for_match(self.analysis.meta) if self.analysis is not None else None
 
     def apply(self, m: dict) -> bool:
         """Fold one feed message in. Returns False for a message already applied (redelivery)."""
@@ -75,7 +84,13 @@ class RunState:
             self.insight.apply(m)
         if m["type"] in KEY_EVENT_TYPES:
             self.key_events.append(client_event(m))
+        if self.book is not None:
+            self.book.observe(m, self, live=m["seq"] > self.backfill_seq)
         return True
+
+    def insight_changes(self) -> list[Change]:
+        """What the last message applied did to the run's insights."""
+        return self.book.changes() if self.book is not None else []
 
     def live_fields(self) -> dict:
         """What every pushed event carries: everything but the histories."""
@@ -100,9 +115,15 @@ class RunState:
 
     @classmethod
     def rebuild(
-        cls, match_id: str, home_id: str, away_id: str, feed: list[dict], analysis: Analysis | None = None
+        cls,
+        match_id: str,
+        home_id: str,
+        away_id: str,
+        feed: list[dict],
+        analysis: Analysis | None = None,
+        backfill_seq: int = 0,
     ) -> RunState:
-        state = cls(match_id, home_id, away_id, analysis)
+        state = cls(match_id, home_id, away_id, analysis, backfill_seq)
         for m in feed:
             state.apply(m)
         return state

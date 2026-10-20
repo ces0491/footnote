@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from footnote.insights.book import Change
 from footnote.live.analysis import Analysis, timeline_after
 from footnote.live.contract import KIND_CONTROL, KIND_FEED
 from footnote.live.match import Match, load_match
@@ -21,6 +22,8 @@ class MemoryStore:
         self.feed: dict[str, dict[int, dict]] = {}
         self.views: dict[str, dict] = {}
         self.view_seqs: list[int] = []
+        self.insights: dict[str, dict[str, dict]] = {}
+        self.insight_rev: dict[str, int] = {}
         self.fail_saves = 0
 
     async def start_run(self, descriptor: dict) -> bool:
@@ -40,7 +43,7 @@ class MemoryStore:
         stored = self.feed.get(run_id, {})
         return self.runs[run_id], [stored[seq] for seq in sorted(stored)]
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None, changes: list[Change]) -> list[dict]:
         if self.fail_saves:
             self.fail_saves -= 1
             raise ConnectionError("store unavailable")
@@ -49,6 +52,15 @@ class MemoryStore:
         if view is not None:
             self.views[run_id] = view
             self.view_seqs.append(view["seq"])
+        pushes = []
+        for change in changes:
+            insight = change.insight
+            self.insights.setdefault(run_id, {})[insight.insight_id] = insight.record()
+            rev = self.insight_rev[run_id] = self.insight_rev.get(run_id, 0) + 1
+            if insight.live:
+                card = {"insight_id": insight.insight_id, "flag": insight.flag, "card": insight.card().to_json()}
+                pushes.append({"type": "insight", "run_id": run_id, "rev": rev, "insight": card})
+        return pushes
 
     async def running_runs(self) -> list[tuple[dict, int]]:
         return [
@@ -258,3 +270,27 @@ async def test_folding_the_pushes_into_the_snapshot_gives_the_stored_view(showca
     passing = ("passes", "completed", "difficulty", "hardest", "hardest_minute")
     for pid, line in players.items():
         assert {k: line[k] for k in passing} == {k: stored["players"][pid][k] for k in passing}
+
+
+async def test_insights_are_stored_with_their_feed_and_pushed_in_revision_order(showcase: Match) -> None:
+    descriptor, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push, analysis=Analysis.load(showcase))
+    for i in range(0, len(items), 50):
+        await processor.handle(items[i : i + 50])
+    stored = store.insights[RUN_ID]
+    pushed = [m for m in push.sent if m["type"] == "insight"]
+    # Every change bumps the revision, and the live ones are pushed in that order.
+    assert [m["rev"] for m in pushed] == sorted(m["rev"] for m in pushed)
+    assert store.insight_rev[RUN_ID] >= len(pushed)
+    # The goals before the jump point are history: stored for the snapshot, not pushed.
+    assert not stored["goal-e0391"]["live"] and "goal-e0391" not in {m["insight"]["insight_id"] for m in pushed}
+    restated = [m["insight"] for m in pushed if m["insight"]["insight_id"] == "goal-e1586"]
+    assert restated[0]["flag"] is None and restated[-1]["flag"]["event_id"] == "e1586"
+    assert restated[-1]["card"]["headline"] == "Femi Adeyani scores"
+    correction = next(m for m in pushed if m["insight"]["insight_id"] == "correction-e1586-v2")
+    restated_push = next(m for m in reversed(pushed) if m["insight"]["insight_id"] == "goal-e1586")
+    assert correction["rev"] > restated_push["rev"]  # viewers get the restated goal, then the notice
+    # A push goes out after the store holds the event behind it.
+    first = next(m for m in push.sent if m["type"] == "insight")
+    assert push.sent.index(first) > next(i for i, m in enumerate(push.sent) if m["type"] == "snapshot")

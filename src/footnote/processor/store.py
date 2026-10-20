@@ -1,19 +1,23 @@
-"""The processor's Postgres store: runs, their feed and their state view."""
+"""The processor's Postgres store: runs, their feed, their state view and their insights."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
+from footnote.db.insights import AGENT_CHANNEL, Connection, cards, insight_push, next_rev
+from footnote.insights.book import Change, Insight
 from footnote.processor.core import FeedRow
 
 log = logging.getLogger(__name__)
 
 _ATTEMPTS = 3
+SLOW_SAVE_SECONDS = 1.0  # a write slower than this is logged
 
 
 def _ts(ms: int | None) -> datetime | None:
@@ -59,7 +63,7 @@ class PostgresStore:
             )
             return [(row["descriptor"], row["seq"]) for row in await cur.fetchall()]
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None, changes: list[Change]) -> list[dict]:
         params = [
             (
                 r.run_id,
@@ -75,6 +79,7 @@ class PostgresStore:
             )
             for r in rows
         ]
+        started = time.perf_counter()
         for attempt in range(1, _ATTEMPTS + 1):
             try:
                 async with self.pool.connection() as conn, conn.transaction():
@@ -92,12 +97,23 @@ class PostgresStore:
                             " updated_at = now()",
                             (run_id, view["seq"], Jsonb(view)),
                         )
-                return
+                    pushes = await write_insights(conn, run_id, changes) if changes else []
+                elapsed = time.perf_counter() - started
+                if elapsed > SLOW_SAVE_SECONDS:
+                    log.info(
+                        "store write for run %s took %.1f s: %d feed rows, %d insight changes",
+                        run_id,
+                        elapsed,
+                        len(rows),
+                        len(changes),
+                    )
+                return pushes
             except Exception:
                 if attempt == _ATTEMPTS:
                     raise
                 log.warning("store write for run %s failed (attempt %d); retrying", run_id, attempt, exc_info=True)
                 await asyncio.sleep(0.2 * 2**attempt)
+        raise AssertionError("unreachable")
 
     async def _retry(self, query: str, params: tuple) -> int:
         """Run one statement, retrying transient failures; returns the rows it affected."""
@@ -112,3 +128,113 @@ class PostgresStore:
                 log.warning("store write failed (attempt %d); retrying", attempt, exc_info=True)
                 await asyncio.sleep(0.2 * 2**attempt)
         raise AssertionError("unreachable")
+
+
+# What one batch did to each insight, strongest first: an insert carries all the insight now is.
+_PRECEDENCE = {"new": 0, "restated": 1, "flagged": 2}
+
+# Inserts and versions skip what is already stored: a batch the store took before a restart.
+_INSERT_INSIGHT = """
+insert into insights (run_id, insight_id, seq, kind, topic, at, until_at, rank, reason, evidence, placement,
+                      hold, corrects, live, flag, facts, facts_version, template, agent_state)
+values (%(run_id)s, %(insight_id)s, %(seq)s, %(kind)s, %(topic)s, %(at)s, %(until)s, %(rank)s, %(reason)s,
+        %(evidence)s, %(placement)s, %(hold)s, %(corrects)s, %(live)s, %(flag)s, %(facts)s, %(facts_version)s,
+        %(template)s, %(agent_state)s)
+on conflict (run_id, insight_id) do nothing
+"""
+
+_INSERT_VERSION = (
+    "insert into insight_versions (run_id, insight_id, version, source, facts_version, draft, card, provenance)"
+    " values (%s, %s, %s, 'template', %s, %s, %s, %s) on conflict do nothing"
+)
+
+
+def _template_version(run_id: str, insight: Insight, version: int) -> tuple:
+    return (
+        run_id,
+        insight.insight_id,
+        version,
+        insight.facts_version,
+        Jsonb(insight.template.model_dump()),
+        Jsonb(insight.card().to_json()),
+        Jsonb({"source": "template", "template": insight.topic}),
+    )
+
+
+def _insert_params(run_id: str, insight: Insight) -> dict:
+    record = insight.record()
+    return {
+        **record,
+        "run_id": run_id,
+        **{k: Jsonb(record[k]) for k in ("at", "until", "evidence", "facts", "template")},
+        "flag": None if insight.flag is None else Jsonb(insight.flag),
+        "agent_state": "pending" if insight.agent else "off",
+    }
+
+
+async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
+    # The agents add versions too, so the next number comes from the store, under the row lock.
+    key = (run_id, insight.insight_id)
+    await conn.execute("select 1 from insights where run_id = %s and insight_id = %s for update", key)
+    cur = await conn.execute(
+        "select coalesce(max(version), 0) + 1 as next from insight_versions where run_id = %s and insight_id = %s", key
+    )
+    version = int((await cur.fetchone() or {"next": 1})["next"])
+    await conn.execute(_INSERT_VERSION, _template_version(run_id, insight, version))
+    record = insight.record()
+    await conn.execute(
+        "update insights set topic = %s, seq = %s, evidence = %s, flag = %s, facts = %s, facts_version = %s,"
+        " template = %s, version = %s, agent_state = %s, agent_note = null, updated_at = now()"
+        " where run_id = %s and insight_id = %s",
+        (
+            insight.topic,
+            insight.seq,
+            Jsonb(insight.evidence),
+            Jsonb(insight.flag),
+            Jsonb(record["facts"]),
+            insight.facts_version,
+            Jsonb(record["template"]),
+            version,
+            "pending" if insight.agent else "off",
+            *key,
+        ),
+    )
+
+
+async def write_insights(conn: Connection, run_id: str, changes: list[Change]) -> list[dict]:
+    """Store what the batch did to the run's insights; returns the pushes for the live ones.
+
+    New insights and flags go in as pipelined batches, and the run's revisions are taken in one
+    statement, so a backfill that finds dozens of insights costs a handful of round trips.
+    """
+    latest: dict[str, Change] = {}
+    for change in changes:
+        prior = latest.get(change.insight.insight_id)
+        if prior is None or _PRECEDENCE[change.what] < _PRECEDENCE[prior.what]:
+            latest[change.insight.insight_id] = change
+    if not latest:
+        return []
+    by_kind: dict[str, list[Insight]] = {"new": [], "restated": [], "flagged": []}
+    for change in latest.values():
+        by_kind[change.what].append(change.insight)
+    async with conn.cursor() as cur:
+        if by_kind["new"]:
+            await cur.executemany(_INSERT_INSIGHT, [_insert_params(run_id, i) for i in by_kind["new"]])
+            await cur.executemany(_INSERT_VERSION, [_template_version(run_id, i, 1) for i in by_kind["new"]])
+        if by_kind["flagged"]:
+            await cur.executemany(
+                "update insights set flag = %s, until_at = %s, updated_at = now() where run_id = %s and insight_id = %s",
+                [(Jsonb(i.flag), Jsonb(i.until), run_id, i.insight_id) for i in by_kind["flagged"]],
+            )
+    for insight in by_kind["restated"]:
+        await _restate(conn, run_id, insight)
+    # One revision per changed insight, in the order the batch changed them.
+    last = await next_rev(conn, run_id, len(latest))
+    revs = {insight_id: last - len(latest) + 1 + n for n, insight_id in enumerate(latest)}
+    if any(c.insight.agent and c.what != "flagged" for c in latest.values()):
+        await conn.execute("select pg_notify(%s, %s)", (AGENT_CHANNEL, run_id))
+    # History (insights the backfill passed) reaches viewers through the snapshot, not pushes.
+    pushes = [
+        insight_push(run_id, revs[c["insight_id"]], c) for c in await cards(conn, run_id, list(revs)) if c["live"]
+    ]
+    return sorted(pushes, key=lambda p: p["rev"])
