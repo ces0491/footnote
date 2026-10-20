@@ -2,9 +2,24 @@
 // applying one is a replacement, not arithmetic. A snapshot fetched from the web app replaces it in
 // the same way. While a snapshot is on its way, pushes are held and applied on top of it once it
 // arrives, so nothing received in the meantime is lost or applied out of order. A gap in seq means a
-// push was missed and the key-event list may be missing an entry, so the reducer asks for a snapshot.
+// push was missed and the histories (key events, the state timeline, player lines, tags) may be
+// missing an entry, so the reducer asks for a snapshot.
 
-import type { EventMessage, PushMessage, RunEndReason, StateView } from "./contract";
+import type { EventMessage, MatchState, PushMessage, RunEndReason, StateSpell, StateView } from "./contract";
+
+/**
+ * The state timeline once a pushed estimate is folded in: the last spell extends, or a new one
+ * starts. The processor builds the snapshot's timeline by the same rule
+ * (src/footnote/live/analysis.py, timeline_after), so the two agree.
+ */
+export function timelineAfter(timeline: StateSpell[], state: MatchState | null | undefined): StateSpell[] {
+  if (!state) return timeline;
+  const last = timeline.at(-1);
+  if (last && last.period === state.period && last.state === state.state && last.team_id === state.team_id) {
+    return last.end === state.second ? timeline : [...timeline.slice(0, -1), { ...last, end: state.second }];
+  }
+  return [...timeline, { period: state.period, state: state.state, team_id: state.team_id, start: state.second, end: state.second }];
+}
 
 export interface RunViewState {
   view: StateView | null;
@@ -37,16 +52,28 @@ function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
   if (view && message.seq <= view.seq) return state; // redelivered, or already in the snapshot
   // No state yet, or a push was missed: hold this one until a snapshot covers the gap.
   if (!view || message.seq !== view.seq + 1) return requestSnapshot(state, [message]);
-  const { seq, phase, clock, score, teams } = message;
-  const keyEvents = message.key ? [...view.key_events, message.event] : view.key_events;
-  return { ...state, view: { seq, phase, clock, score, teams, key_events: keyEvents } };
+  const { seq, phase, clock, score, teams, match_state } = message;
+  const next: StateView = {
+    seq,
+    phase,
+    clock,
+    score,
+    teams,
+    match_state,
+    key_events: message.key ? [...view.key_events, message.event] : view.key_events,
+    state_timeline: timelineAfter(view.state_timeline ?? [], match_state),
+    players: message.player ? { ...view.players, [message.player.player_id]: message.player } : view.players,
+    tags: message.tags?.length ? [...(view.tags ?? []), ...message.tags] : view.tags,
+  };
+  return { ...state, view: next };
 }
 
 function apply(state: RunViewState, message: PushMessage): RunViewState {
   switch (message.type) {
     case "snapshot": {
-      const { seq, phase, clock, score, teams, key_events } = message;
-      return { ...state, view: newer({ seq, phase, clock, score, teams, key_events }, state.view) };
+      const { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags } = message;
+      const view = { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags };
+      return { ...state, view: newer(view, state.view) };
     }
     case "event":
       return applyEvent(state, message);

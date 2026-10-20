@@ -87,7 +87,10 @@ export function useLiveRun(runId: string) {
     ws.on("disconnected", () => setConnection("reconnecting"));
     ws.on("stopped", () => setConnection("closed"));
     ws.on("group-message", (e) => {
-      const message = e.message.data as unknown as PushMessage;
+      // The processor sends compact JSON as text (src/footnote/live/contract.py, wire); a JSON
+      // payload is taken as it comes.
+      const data = e.message.data;
+      const message = (typeof data === "string" ? JSON.parse(data) : data) as PushMessage;
       if (message.type === "event" && message.timing.published_at) {
         const elapsed = Date.now() + offsetRef.current - message.timing.published_at;
         const window = samples.current;

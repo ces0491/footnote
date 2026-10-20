@@ -5,6 +5,10 @@ function percent(value: number | null): string {
   return value === null ? "–" : `${Math.round(value * 100)}%`;
 }
 
+function measure(value: number | null | undefined, unit: string, digits = 1): string {
+  return value === null || value === undefined ? "–" : `${value.toFixed(digits)}${unit}`;
+}
+
 interface Row {
   label: string;
   home: string;
@@ -28,6 +32,10 @@ function rows(h: TeamStats, a: TeamStats): Row[] {
       away: `${a.passes_completed}/${a.passes}`,
     },
     { label: "Pass accuracy", home: percent(h.pass_accuracy), away: percent(a.pass_accuracy) },
+    { label: "Average pass length", home: measure(h.pass_length, " m"), away: measure(a.pass_length, " m") },
+    { label: "Average pass difficulty", home: measure(h.pass_difficulty, "", 2), away: measure(a.pass_difficulty, "", 2) },
+    { label: "Distance covered", home: measure(h.distance_km, " km"), away: measure(a.distance_km, " km") },
+    { label: "Fastest shot", home: measure(h.top_shot_kmh, " km/h", 0), away: measure(a.top_shot_kmh, " km/h", 0) },
     count("Corners", "corners"),
     count("Fouls", "fouls"),
     count("Offsides", "offsides"),
@@ -57,7 +65,10 @@ export function StatsPanel({ home, away, stats }: { home: Club; away: Club; stat
             <div style={{ width: `${homeShare * 100}%`, background: home.colours[0] }} />
             <div style={{ width: `${(1 - homeShare) * 100}%`, background: away.colours[0] }} />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Share of passes, the broadcast convention.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Share of passes, the broadcast convention. Difficulty is one minus the modelled chance a pass reaches its
+            target; distance comes from the tracking.
+          </p>
         </div>
         <dl className="divide-y">
           {rows(h, a).map((row) => (

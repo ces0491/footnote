@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from itertools import groupby
 from typing import Protocol
 
+from footnote.live.analysis import Analysis
 from footnote.live.contract import KIND_CONTROL, RunEndReason, client_event
 from footnote.live.match import Match
 from footnote.live.state import KEY_EVENT_TYPES, RunState
@@ -96,8 +97,16 @@ def _now_ms() -> int:
 
 
 class Processor:
-    def __init__(self, match: Match, store: Store, push: Push, now_ms: Callable[[], int] = _now_ms) -> None:
+    def __init__(
+        self,
+        match: Match,
+        store: Store,
+        push: Push,
+        now_ms: Callable[[], int] = _now_ms,
+        analysis: Analysis | None = None,
+    ) -> None:
         self.match = match
+        self.analysis = analysis
         self.store = store
         self.push = push
         self.now_ms = now_ms
@@ -140,7 +149,7 @@ class Processor:
                     "run_id": run_id,
                     "event": client_event(m),
                     "key": m["type"] in KEY_EVENT_TYPES,
-                    **run.state.live_fields(),
+                    **run.state.push_fields(),
                     "timing": {"published_at": item.published_at, "enqueued_at": item.enqueued_at},
                 }
             )
@@ -176,7 +185,7 @@ class Processor:
                 if run_id not in self.runs:
                     await self._run(run_id)
                 return
-            run = LiveRun(descriptor, RunState(self.match.match_id, self.match.home_id, self.match.away_id))
+            run = LiveRun(descriptor, self._new_state())
             self.runs[run_id] = run
             log.info(
                 "run %s started at replay second %s, speed %s", run_id, descriptor["start_replay"], descriptor["speed"]
@@ -223,11 +232,14 @@ class Processor:
             self._unknown.add(run_id)
             return None
         descriptor, feed = loaded
-        state = RunState.rebuild(self.match.match_id, self.match.home_id, self.match.away_id, feed)
+        state = RunState.rebuild(self.match.match_id, self.match.home_id, self.match.away_id, feed, self.analysis)
         run = LiveRun(descriptor, state)
         self.runs[run_id] = run
         log.info("run %s rebuilt from %d stored messages", run_id, len(feed))
         return run
+
+    def _new_state(self) -> RunState:
+        return RunState(self.match.match_id, self.match.home_id, self.match.away_id, self.analysis)
 
     def _snapshot(self, run: LiveRun) -> dict:
         return {"type": "snapshot", "run_id": run.descriptor["run_id"], "run": run.descriptor, **run.state.view()}

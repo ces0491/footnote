@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from footnote.live.analysis import Analysis, timeline_after
 from footnote.live.contract import KIND_CONTROL, KIND_FEED
 from footnote.live.match import Match, load_match
 from footnote.live.timeline import Timeline
@@ -231,3 +232,29 @@ async def test_a_finished_run_is_never_taken_for_abandoned(showcase: Match) -> N
     await processor.handle(items)
     assert await processor.end_overdue() == []
     assert store.status[RUN_ID] == "finished"
+
+
+async def test_folding_the_pushes_into_the_snapshot_gives_the_stored_view(showcase: Match) -> None:
+    """With the models: what a browser holds after the snapshot and every push is what was stored."""
+    _, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push, analysis=Analysis.load(showcase))
+    for i in range(0, len(items), 50):
+        await processor.handle(items[i : i + 50])
+    snapshot = push.sent[0]
+    assert snapshot["type"] == "snapshot"
+    timeline, players, tags = snapshot["state_timeline"], dict(snapshot["players"]), list(snapshot["tags"])
+    for m in push.sent[1:]:
+        if m["type"] != "event":
+            continue
+        timeline = timeline_after(timeline, m["match_state"])
+        if "player" in m:
+            players[m["player"]["player_id"]] = m["player"]
+        tags += m.get("tags", [])
+    stored = store.views[RUN_ID]
+    assert timeline == stored["state_timeline"]
+    assert tags == stored["tags"]
+    # A player's passing line is as of their last touch; distance and speed have moved on since.
+    passing = ("passes", "completed", "difficulty", "hardest", "hardest_minute")
+    for pid, line in players.items():
+        assert {k: line[k] for k in passing} == {k: stored["players"][pid][k] for k in passing}

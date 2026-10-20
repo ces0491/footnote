@@ -1,7 +1,7 @@
 // One line per key event for the match ticker, filled from the event's own fields. Templates only:
 // a line says what the event records and nothing more.
 
-import type { FeedEvent, MatchMeta, Player } from "./contract";
+import type { FeedEvent, MatchMeta, Player, Tag } from "./contract";
 
 export interface Roster {
   player(id: unknown): Player | undefined;
@@ -40,7 +40,7 @@ function name(r: Roster, id: unknown): string {
   return r.player(id)?.name ?? "Unknown player";
 }
 
-export type EventTone = "goal" | "var" | "card" | "correction" | "period" | "plain";
+export type EventTone = "goal" | "var" | "card" | "correction" | "period" | "plain" | "sprint" | "distance";
 
 export interface EventLine {
   text: string;
@@ -54,8 +54,11 @@ export function describe(event: FeedEvent, r: Roster): EventLine {
       return event.own_goal
         ? { text: `Goal, ${club}: own goal by ${name(r, event.player_id)}`, tone: "goal" }
         : { text: `Goal, ${club}: ${name(r, event.player_id)}`, tone: "goal" };
-    case "shot":
-      return { text: `${name(r, event.player_id)} (${club}) shoots: ${SHOT_OUTCOME[String(event.outcome)] ?? event.outcome}`, tone: "plain" };
+    case "shot": {
+      const outcome = SHOT_OUTCOME[String(event.outcome)] ?? event.outcome;
+      const speed = typeof event.speed_kmh === "number" ? `, ${Math.round(event.speed_kmh)} km/h` : "";
+      return { text: `${name(r, event.player_id)} (${club}) shoots: ${outcome}${speed}`, tone: "plain" };
+    }
     case "var_check": {
       const subject = `${String(event.incident)} by ${name(r, event.subject_id)}`;
       if (event.status === "started") return { text: `VAR checking the ${String(event.check)} for ${subject}`, tone: "var" };
@@ -83,6 +86,44 @@ export function describe(event: FeedEvent, r: Roster): EventLine {
     default:
       return { text: event.type.replaceAll("_", " "), tone: "plain" };
   }
+}
+
+export interface TickerLine extends EventLine {
+  key: string;
+  minute: number;
+  addedMinute: number | null;
+}
+
+/**
+ * Key events in feed order, with each tag placed before the first event that comes after it in the
+ * match. Events keep their own order: a correction carries the clock of the whistle before it.
+ */
+export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): TickerLine[] {
+  const out: TickerLine[] = [];
+  const tagLine = (tag: Tag): TickerLine => ({
+    key: `tag-${tag.kind}-${tag.player_id}-${tag.period}-${tag.t}`,
+    minute: tag.minute,
+    addedMinute: tag.added_minute,
+    ...describeTag(tag, r),
+  });
+  let next = 0;
+  for (const event of events) {
+    while (next < tags.length && (event.period > tags[next].period || (event.period === tags[next].period && event.t > tags[next].t))) {
+      out.push(tagLine(tags[next++]));
+    }
+    out.push({ key: `${event.seq}`, minute: event.minute, addedMinute: event.added_minute, ...describe(event, r) });
+  }
+  for (const tag of tags.slice(next)) out.push(tagLine(tag));
+  return out;
+}
+
+/** A tag from the tracking: a sprint above the threshold, or a player passing a distance. */
+export function describeTag(tag: Tag, r: Roster): EventLine {
+  const who = `${name(r, tag.player_id)} (${r.clubName(tag.team_id)})`;
+  if (tag.kind === "sprint") {
+    return { text: `${who} sprints at ${tag.value.toFixed(1)} km/h${tag.record ? ", the fastest of the match so far" : ""}`, tone: "sprint" };
+  }
+  return { text: `${who} has covered ${tag.value} km`, tone: "distance" };
 }
 
 function correction(event: FeedEvent, r: Roster): string {

@@ -30,10 +30,15 @@ Built so far:
   moments as they arrive. Managed identities throughout; no keys or passwords.
   How it fits together and what it costs:
   [docs/architecture.md](docs/architecture.md).
+- **The models.** A pass-difficulty model and a live match-state model, fitted
+  on generated matches and scored against the answer key on matches between
+  clubs whose playing styles they never saw: [docs/models.md](docs/models.md).
+  The processor rates every pass, estimates the match state a few seconds
+  behind play, and reads distance covered, top speeds and sprint and distance
+  tags from the tracking; the live page shows them.
 
-Still to come, in the order SCOPE.md lists them: the match-state model and the
-derived stats, the agents, the overlay renderer and fan app, and the
-evaluations and judge quick-start.
+Still to come, in the order SCOPE.md lists them: the agents, the overlay
+renderer and fan app, and the evaluations and judge quick-start.
 
 ## Quick start
 
@@ -48,6 +53,14 @@ uv run python -m footnote.generator showcase     # rebuild the committed showcas
 
 `uv run python -m footnote.generator --help` lists the other commands: the
 league, any single match, the full season and the feed's JSON Schema.
+
+```sh
+uv run python -m footnote.interpret --workers 8  # refit the models; rewrites their parameters and docs/models.md
+```
+
+Refitting generates the whole season in memory, so it takes a while (the run
+time is in [docs/models.md](docs/models.md)). The services load the fitted
+parameters committed in `src/footnote/interpret/params/`.
 
 ## Deploying to Azure
 
@@ -108,7 +121,8 @@ The deployed processor picks up runs started locally. Checks for the web app:
 ```text
 src/footnote/generator/   league, match simulation, officials, feed, tracking, showcase search
 src/footnote/calibration/ published targets and the calibration report
-src/footnote/live/        shared by the services: the match files, replay time, stats, state, contracts
+src/footnote/interpret/   pass difficulty, the match-state model, distances and tags; their training and report
+src/footnote/live/        shared by the services: the match files, replay time, stats, analysis, state, contracts
 src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
 src/footnote/processor/   Event Hubs to match state, Postgres and Web PubSub
 src/footnote/db/          Entra-authenticated Postgres connections and migrations
@@ -116,8 +130,8 @@ frontend/                 the Next.js web app, with its Vitest tests beside the 
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
 scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, latency
-tests/                    contract, consistency, physics, story, calibration, replay and processing checks
+tests/                    contract, consistency, physics, story, calibration, model, replay and processing checks
 data/                     generated output; git keeps the league, the showcase match, its recipe and the name check
-docs/                     audience, experience, data, calibration and architecture
+docs/                     audience, experience, data, calibration, models and architecture
 .github/workflows/        CI: lint, type checks, tests, the web build and the Bicep on every push and pull request
 ```

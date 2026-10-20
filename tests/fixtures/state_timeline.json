@@ -1,0 +1,23 @@
+{
+ "description": "Match-state estimates in push order, and the timeline they fold into. tests/test_analysis.py checks the processor's rule against it, frontend/src/lib/live/run-reducer.test.ts the browser's.",
+ "states": [
+  null,
+  {"period": 1, "second": 0, "state": "balanced", "team_id": null, "confidence": 0.41, "on_top": {"home": 0.2, "away": 0.2}},
+  {"period": 1, "second": 0, "state": "balanced", "team_id": null, "confidence": 0.41, "on_top": {"home": 0.2, "away": 0.2}},
+  {"period": 1, "second": 4, "state": "balanced", "team_id": null, "confidence": 0.44, "on_top": {"home": 0.3, "away": 0.2}},
+  {"period": 1, "second": 9, "state": "control", "team_id": "sal", "confidence": 0.52, "on_top": {"home": 0.6, "away": 0.1}},
+  {"period": 1, "second": 15, "state": "control", "team_id": "sal", "confidence": 0.61, "on_top": {"home": 0.7, "away": 0.1}},
+  {"period": 1, "second": 18, "state": "transition", "team_id": "kin", "confidence": 0.38, "on_top": {"home": 0.2, "away": 0.5}},
+  {"period": 1, "second": 21, "state": "control", "team_id": "sal", "confidence": 0.47, "on_top": {"home": 0.6, "away": 0.2}},
+  {"period": 2, "second": 3, "state": "control", "team_id": "sal", "confidence": 0.5, "on_top": {"home": 0.6, "away": 0.2}},
+  {"period": 2, "second": 7, "state": "chaos", "team_id": null, "confidence": 0.33, "on_top": {"home": 0.3, "away": 0.3}}
+ ],
+ "timeline": [
+  {"period": 1, "state": "balanced", "team_id": null, "start": 0, "end": 4},
+  {"period": 1, "state": "control", "team_id": "sal", "start": 9, "end": 15},
+  {"period": 1, "state": "transition", "team_id": "kin", "start": 18, "end": 18},
+  {"period": 1, "state": "control", "team_id": "sal", "start": 21, "end": 21},
+  {"period": 2, "state": "control", "team_id": "sal", "start": 3, "end": 3},
+  {"period": 2, "state": "chaos", "team_id": null, "start": 7, "end": 7}
+ ]
+}

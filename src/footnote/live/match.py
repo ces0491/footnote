@@ -1,8 +1,9 @@
 """The committed showcase match, as the live services read it.
 
-The services deploy the files committed under data/ (league, match metadata and feed); nothing
-regenerates them in the cloud. FOOTNOTE_DATA_DIR points at that directory inside a container;
-locally it defaults to the repository's data/. The answer key is never read here.
+The services deploy the files committed under data/ (league, match metadata and feed, and for the
+processor the tracking); nothing regenerates them in the cloud. FOOTNOTE_DATA_DIR points at that
+directory inside a container; locally it defaults to the repository's data/. The answer key is
+never read here.
 """
 
 from __future__ import annotations

@@ -26,6 +26,7 @@ from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 from footnote import cloud
 from footnote.db.connect import entra_pool
 from footnote.db.migrate import ensure_web_role, migrate
+from footnote.live.analysis import Analysis
 from footnote.live.match import SHOWCASE_MATCH_ID, load_match
 from footnote.processor.consumer import consume
 from footnote.processor.core import OVERDUE_MS, Processor
@@ -54,6 +55,8 @@ async def sweep(processor: Processor) -> None:
 
 async def main() -> None:
     match = load_match(os.environ.get("FOOTNOTE_MATCH_ID", SHOWCASE_MATCH_ID))
+    # The tracking and the fitted models, shared by every run of the match.
+    analysis = Analysis.load(match)
     credential = cloud.credential()
     pool = entra_pool(credential)
     await pool.open(wait=True, timeout=120)
@@ -84,7 +87,7 @@ async def main() -> None:
         load_balancing_interval=5,
         partition_ownership_expiration_interval=15,
     )
-    processor = Processor(match, store, WebPubSubPush(webpubsub))
+    processor = Processor(match, store, WebPubSubPush(webpubsub), analysis=analysis)
 
     if sys.platform != "win32":
         loop = asyncio.get_running_loop()

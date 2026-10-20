@@ -17,10 +17,20 @@ from datetime import datetime
 
 DEFAULT_HALF_TIME = 30.0  # replay seconds the half-time break is shortened to
 DEFAULT_LEAD_IN = 30.0  # replay seconds a jump starts before the minute it jumps to
+PERIOD_SECONDS = 45 * 60
 
 
 def parse_ts(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def broadcast_minute(period: int, t: float) -> tuple[int, int | None]:
+    """The minute a broadcast shows `t` seconds into `period`, as the feed counts it (docs/data.md):
+    the 23rd minute runs from 22:00, and added time stays at 45 or 90 with its own minute from 1."""
+    base = 0 if period == 1 else 45
+    if t < PERIOD_SECONDS:
+        return base + int(t // 60) + 1, None
+    return base + 45, int((t - PERIOD_SECONDS) // 60) + 1
 
 
 @dataclass(frozen=True)

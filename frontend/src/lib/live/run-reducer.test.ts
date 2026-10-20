@@ -1,7 +1,15 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
-import type { EventMessage, PushMessage, RunEndReason, StateView } from "./contract";
-import { initialRunViewState, type RunAction, runReducer, type RunViewState } from "./run-reducer";
+import type { EventMessage, MatchState, PlayerLine, PushMessage, RunEndReason, StateSpell, StateView, Tag } from "./contract";
+import { initialRunViewState, type RunAction, runReducer, type RunViewState, timelineAfter } from "./run-reducer";
+
+// Shared with the processor's tests, so both sides fold estimates into the same timeline.
+const FIXTURE = JSON.parse(readFileSync(new URL("../../../../tests/fixtures/state_timeline.json", import.meta.url), "utf-8")) as {
+  states: (MatchState | null)[];
+  timeline: StateSpell[];
+};
 
 const SCORE = { home: 0, away: 0 };
 
@@ -118,5 +126,40 @@ describe("runReducer", () => {
     expect(run([snapshot(view(10), "stopped")]).ended).toBe("stopped");
     const ended = run([snapshot(view(10)), push(runEnd("finished"))]);
     expect(runReducer(ended, snapshot(view(10))).ended).toBe("finished");
+  });
+
+  it("folds each push's match state into the timeline, the same way the processor does", () => {
+    expect(FIXTURE.states.reduce(timelineAfter, [] as StateSpell[])).toEqual(FIXTURE.timeline);
+    const pushes = FIXTURE.states.map((state, i) => push({ ...event(11 + i), match_state: state }));
+    const state = run([snapshot({ ...view(10), state_timeline: [] }), ...pushes]);
+    expect(state.view?.state_timeline).toEqual(FIXTURE.timeline);
+    expect(state.view?.match_state).toEqual(FIXTURE.states.at(-1));
+  });
+
+  it("replaces the line of the player on each event and adds tags", () => {
+    const line = (passes: number): PlayerLine => ({
+      player_id: "sal-10",
+      passes,
+      completed: passes,
+      difficulty: 0.3,
+      hardest: 0.6,
+      hardest_minute: 12,
+    });
+    const tag: Tag = {
+      kind: "sprint",
+      player_id: "kin-07",
+      team_id: "kin",
+      value: 33.9,
+      unit: "km/h",
+      period: 1,
+      t: 700.2,
+      minute: 12,
+      added_minute: null,
+      record: true,
+    };
+    const start = { ...view(10), players: { "sal-10": line(4) }, tags: [] };
+    const state = run([snapshot(start), push({ ...event(11), player: line(5) }), push({ ...event(12), tags: [tag] })]);
+    expect(state.view?.players?.["sal-10"].passes).toBe(5);
+    expect(state.view?.tags).toEqual([tag]);
   });
 });

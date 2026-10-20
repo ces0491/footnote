@@ -8,4 +8,5 @@
 !data/league.json
 !data/matches/fl-2627-showcase-sal-kin/meta.json
 !data/matches/fl-2627-showcase-sal-kin/feed.jsonl
+!data/matches/fl-2627-showcase-sal-kin/tracking.npz
 **/__pycache__

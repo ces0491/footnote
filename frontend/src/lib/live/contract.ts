@@ -54,6 +54,56 @@ export interface TeamStats {
   red_cards: number;
   pass_accuracy: number | null;
   possession: number | null;
+  // From the models and the tracking (src/footnote/live/analysis.py).
+  pass_length?: number | null; // metres, throw-ins excluded
+  pass_difficulty?: number | null; // average, 0-1
+  distance_km?: number | null;
+  top_shot_kmh?: number | null;
+}
+
+export type MatchStateKind = "control" | "pressure" | "transition" | "chaos" | "balanced";
+
+/** The state model's estimate, `second` seconds into `period`: a few seconds behind the feed. */
+export interface MatchState {
+  period: number;
+  second: number;
+  state: MatchStateKind;
+  team_id: string | null;
+  confidence: number;
+  on_top: Score; // chance each side holds a state of its own (control, pressure or a break)
+}
+
+/** A spell of one state, from the first to the last second it was the estimate. */
+export interface StateSpell {
+  period: number;
+  state: MatchStateKind;
+  team_id: string | null;
+  start: number;
+  end: number;
+}
+
+export interface PlayerLine {
+  player_id: string;
+  passes: number;
+  completed: number;
+  difficulty: number | null;
+  hardest: number | null;
+  hardest_minute: number | null;
+  distance_km?: number;
+  top_speed_kmh?: number;
+}
+
+export interface Tag {
+  kind: "sprint" | "distance";
+  player_id: string;
+  team_id: string;
+  value: number;
+  unit: "km/h" | "km";
+  period: number;
+  t: number;
+  minute: number;
+  added_minute: number | null;
+  record: boolean; // a sprint faster than any before it in the match
 }
 
 export interface Score {
@@ -83,10 +133,14 @@ export interface LiveFields {
   clock: Clock | null;
   score: Score;
   teams: Record<string, TeamStats>;
+  match_state?: MatchState | null;
 }
 
 export interface StateView extends LiveFields {
   key_events: FeedEvent[];
+  state_timeline?: StateSpell[];
+  players?: Record<string, PlayerLine>;
+  tags?: Tag[];
 }
 
 export interface Timing {
@@ -108,6 +162,9 @@ export interface EventMessage extends LiveFields {
   event: FeedEvent;
   key: boolean;
   timing: Timing;
+  difficulty?: number | null; // a pass's difficulty, 0-1
+  player?: PlayerLine; // the line of the player on the event, after it
+  tags?: Tag[]; // tags that fell due with this event
 }
 
 export interface RunEndMessage {

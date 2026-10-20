@@ -12,18 +12,24 @@ replay's bookkeeping:
 
 Web PubSub, processor to viewers, in the group `run-<run_id>`. JSON with a `type`:
 
-    snapshot  the run descriptor and the full state view, once the backfill is processed
+    snapshot  the run descriptor and the full state view, once the backfill is processed: with the
+              models (live/analysis.py), also the match-state timeline, every player's line and
+              the tags so far
     event     one feed event (freeze frames and provider boilerplate dropped), whether it is a key
-              event, the score, phase, clock and stats after it, and timing for latency measurement
+              event, the score, phase, clock, stats and match state after it, and timing for
+              latency measurement; with the models, also a pass's `difficulty`, the `player` line
+              of the player on the event, and any `tags` that fell due with it
     run_end   the replay finished, was stopped, expired, was evicted to make room, or failed (which
               includes a run the processor ended because its messages stopped arriving)
 
 Every message carries `seq`, the feed sequence number the state reflects. A client that sees a gap
-fetches the snapshot again.
+fetches the snapshot again. Messages go out as compact JSON text (`wire`), so the bytes Web PubSub
+bills in 2 KB units are the bytes the tests measure.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 KIND_FEED = "feed"
@@ -47,3 +53,8 @@ def group_name(run_id: str) -> str:
 
 def client_event(message: dict) -> dict:
     return {k: v for k, v in message.items() if k not in _CLIENT_DROP}
+
+
+def wire(message: dict) -> str:
+    """A pushed message as it travels: JSON without the spaces json.dumps puts after separators."""
+    return json.dumps(message, separators=(",", ":"))

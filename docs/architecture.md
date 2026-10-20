@@ -17,7 +17,7 @@ web app (Next.js) ◀───────── snapshot, match metadata, clien
 | Service | Runs as | Does |
 | --- | --- | --- |
 | replayer (`src/footnote/replayer`) | Container App, internal ingress, one replica | Stands in for the data provider: plays the committed showcase feed into Event Hubs, one run per replay |
-| processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, stores the feed and the state in Postgres, pushes every event with the state after it to the run's viewers |
+| processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, with pass difficulty, the estimated match state and figures from the tracking; stores the feed and the state in Postgres; pushes every event with the state after it to the run's viewers |
 | web (`frontend/`) | Container App, public ingress | Starts and stops replays, serves snapshots and match metadata from Postgres, issues Web PubSub client tokens, renders the live page |
 
 All three run in one Container Apps environment on the Consumption profile. Images are built in the
@@ -43,6 +43,14 @@ is still being written has no view yet, where it would otherwise show the score 
 the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped, expired
 (two hours), evicted (a seventh concurrent run replaces the oldest) or failed.
 
+**What the processor works out.** Beside the counts, each run's state carries what the models in
+`src/footnote/interpret` read from the feed and the tracking ([models.md](models.md)): each pass's
+difficulty, every player's passing line, the match state as of five seconds ago with a timeline of
+it, distance covered and top speeds, and tags for sprints and distance milestones. The tracking
+file ships in the processor's image and stands in for a tracking feed: the processor reads it
+against each event's clock, so a run never sees positions from beyond the point its feed has
+reached. The fitted parameters ship with the code, and the answer key stays out of the image.
+
 **Joining.** The browser fetches the run's snapshot from the web app's API first, and for a run that
 has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and fetches
 the snapshot again each time a connection opens, because pushes sent while it had none are lost.
@@ -58,10 +66,15 @@ the browser's types in `frontend/src/lib/live/contract.ts`.
 - **Event Hubs.** The body is the feed message exactly as the provider published it, or a control
   message. Application properties carry `run_id`, `kind`, `published_at` and `backfill`. The
   partition key is the run ID, so a run's messages arrive in order.
-- **Web PubSub.** `snapshot`, `event` and `run_end`, JSON. Events drop provider boilerplate and
-  freeze frames, and carry timing (`published_at`, `enqueued_at`, `processed_at`) for latency
-  measurement. Every event push fits one 2 KB billing unit: `tests/test_live.py` checks the largest
-  in the showcase match.
+- **Web PubSub.** `snapshot`, `event` and `run_end`, compact JSON sent as text, so the bytes billed
+  are the bytes the tests measure (the SDK's own JSON encoding adds a space after every comma and
+  colon). Events drop provider boilerplate and freeze frames, and carry timing (`published_at`,
+  `enqueued_at`, `processed_at`) for latency measurement. An event push also carries the match state after it, a pass's difficulty, the line
+  of the player on the event and any tags that fell due; the snapshot carries the state timeline,
+  every player's line and the tags so far. The browser extends the timeline from each push by the
+  rule the processor uses, so the two agree (`tests/fixtures/state_timeline.json` is checked on both
+  sides). Every event push fits one 2 KB billing unit: `tests/test_live.py` and
+  `tests/test_analysis.py` check the largest in the showcase match.
 - **Postgres.** `matches` (metadata), `runs` (descriptor and status), `feed_events` (every message
   each run processed) and `run_state` (the latest view). Migrations live in
   `src/footnote/db/migrations` and the processor applies them at start-up.

@@ -164,6 +164,13 @@ describe("useLiveRun", () => {
     expect(keys(hook)).toEqual([33]);
   });
 
+  it("reads pushes sent as JSON text, the way the processor sends them", async () => {
+    const hook = await connectedAt(10);
+    act(() => clients[0].receive(JSON.stringify(event(11, true))));
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(11));
+    expect(keys(hook)).toEqual([11]);
+  });
+
   it("closes the connection when the run ends", async () => {
     const hook = await connectedAt(10);
     act(() => clients[0].receive(runEnd("finished")));

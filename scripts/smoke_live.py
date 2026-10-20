@@ -5,9 +5,11 @@
 Starts a run through the web app's API, waits until the processor has recorded it, joins the run's
 Web PubSub group with the URL the API issues, fetches the snapshot, and listens until the run ends. It then checks that every event after
 the snapshot arrived, in order (repeats from at-least-once delivery are counted and dropped, as the
-browser drops them), that the run finished, and that the stored state agrees with the last push,
-and reports the time from the replayer publishing each event to this machine receiving it. Latency is measured against the web app's clock (offset from the quickest of a few
-round trips), so it includes the network path to wherever this runs.
+browser drops them), that the run finished, that the stored state agrees with the last push, and
+that the match-state timeline a browser builds from the pushes is the stored one. It reports the
+largest push against Web PubSub's 2 KB billing unit and the time from the replayer publishing
+each event to this machine receiving it. Latency is measured against the web app's clock (offset
+from the quickest of a few round trips), so it includes the network path to wherever this runs.
 """
 
 from __future__ import annotations
@@ -20,6 +22,10 @@ import sys
 import time
 
 import aiohttp
+
+from footnote.live.analysis import timeline_after
+
+BILLING_UNIT = 2048  # bytes per Web PubSub outbound message unit
 
 
 async def clock_offset(session: aiohttp.ClientSession, base: str) -> float:
@@ -42,8 +48,9 @@ async def snapshot(session: aiohttp.ClientSession, base: str, run_id: str) -> di
     raise RuntimeError(f"run {run_id} never appeared in the store")
 
 
-async def listen(ws: aiohttp.ClientWebSocketResponse, offset: float) -> list[tuple[dict, float]]:
-    """Every message with when it arrived, on the web app's clock (epoch ms)."""
+async def listen(ws: aiohttp.ClientWebSocketResponse, offset: float, sizes: list[int]) -> list[tuple[dict, float]]:
+    """Every message with when it arrived, on the web app's clock (epoch ms); `sizes` gets each
+    message's length in bytes as sent."""
     received: list[tuple[dict, float]] = []
     async for frame in ws:
         if frame.type != aiohttp.WSMsgType.TEXT:
@@ -51,8 +58,11 @@ async def listen(ws: aiohttp.ClientWebSocketResponse, offset: float) -> list[tup
         envelope = json.loads(frame.data)
         if envelope.get("type") != "message":
             continue
-        message = envelope["data"]
+        data = envelope["data"]
+        message = json.loads(data) if isinstance(data, str) else data  # pushes travel as JSON text
         received.append((message, time.time() * 1000 + offset))
+        # The message as sent, which is what Web PubSub bills; the frame around it escapes its quotes.
+        sizes.append(len(data.encode()) if isinstance(data, str) else len(json.dumps(data, separators=(",", ":"))))
         if message["type"] == "run_end":
             break
     return received
@@ -109,7 +119,8 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
             url = (await response.json())["url"]
 
         async with session.ws_connect(url, protocols=("json.webpubsub.azure.v1",)) as ws:
-            listening = asyncio.create_task(listen(ws, offset))
+            sizes: list[int] = []
+            listening = asyncio.create_task(listen(ws, offset, sizes))
             joined = await snapshot(session, base, run_id)
             try:
                 timed = await asyncio.wait_for(listening, timeout)
@@ -143,6 +154,21 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
     last = max(events, key=lambda m: m["seq"], default=None)
     if last and (view.get("seq") != last["seq"] or view.get("score") != last["score"]):
         failures.append("the stored state disagrees with the last push")
+    # Like the browser: extend the starting snapshot's state timeline with each push's state.
+    start = max(
+        [joined.get("view") or {}] + [m for m in received if m["type"] == "snapshot"], key=lambda v: v.get("seq", 0)
+    )
+    if "state_timeline" in view:
+        timeline = list(start.get("state_timeline") or [])
+        applied = start.get("seq", 0)
+        for m in sorted(events, key=lambda m: m["seq"]):
+            if m["seq"] == applied + 1:
+                timeline = timeline_after(timeline, m.get("match_state"))
+                applied = m["seq"]
+        if timeline != view["state_timeline"]:
+            failures.append("the state timeline built from the pushes disagrees with the stored one")
+    else:
+        print("the stored state has no match-state timeline: is the processor running without its models?")
 
     kinds = [m["type"] for m in received]
     print(
@@ -150,6 +176,8 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
         f"{kinds.count('snapshot')} snapshot, {kinds.count('run_end')} run_end"
     )
     print(f"final: {view.get('phase')}, score {view.get('score')}, run status {final.get('status')}")
+    print(f"largest push {max(sizes, default=0)} bytes; {sum(n > BILLING_UNIT for n in sizes)} over {BILLING_UNIT}")
+    print(f"state timeline: {len(view.get('state_timeline') or [])} spells")
     report_latency(timed, run["started_at"])
     for failure in failures:
         print(f"FAIL {failure}")

@@ -119,7 +119,10 @@ Slots 0–10 are the home side and 11–21 the away side in formation order;
 `slot_players[occupancy[f]]` names the player in each slot at frame `f`, which changes with
 substitutions. `Tracking.load()` decodes it to metres.
 Player paths pass through the simulation's keyframes, so tracking and freeze frames agree, and no
-player moves faster than 10.5 m/s between frames; `tests/test_match.py` checks both.
+player moves faster than 10.5 m/s between frames; `tests/test_match.py` checks both. The processor
+reads the showcase's tracking against each event's clock, standing in for a tracking feed: positions
+for pass difficulty, each side's shape for the match state, and distances and speeds
+([models.md](models.md)).
 
 ## The showcase match
 

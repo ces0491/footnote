@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from footnote.live.contract import client_event
+from footnote.live.contract import client_event, wire
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
 from footnote.live.timeline import Timeline
@@ -127,8 +125,8 @@ def test_rebuilding_from_the_stored_feed_gives_the_same_view(showcase: Match) ->
 def test_every_pushed_event_fits_one_web_pubsub_message(showcase: Match) -> None:
     """Web PubSub bills outbound traffic in 2 KB units, so each event push should stay inside one.
 
-    The SDK serialises with json.dumps defaults, and the service wraps each message for the client;
-    1800 bytes leaves room for the wrapper.
+    Pushes go out as compact JSON text (contract.wire), and the service wraps each message for the
+    client; 1800 bytes leaves room for the wrapper.
     """
     state = RunState(showcase.match_id, showcase.home_id, showcase.away_id)
     timing = {"published_at": 1_800_000_000_000, "enqueued_at": 1_800_000_000_000, "processed_at": 1_800_000_000_000}
@@ -137,5 +135,5 @@ def test_every_pushed_event_fits_one_web_pubsub_message(showcase: Match) -> None
         state.apply(m)
         message = {"type": "event", "run_id": "0" * 16, "event": client_event(m), "key": True}
         message |= state.live_fields() | {"timing": timing}
-        largest = max(largest, len(json.dumps(message).encode()))
+        largest = max(largest, len(wire(message).encode()))
     assert largest <= 1800

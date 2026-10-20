@@ -14,6 +14,7 @@ import type { Clock, RunDescriptor, RunEndReason, StateView } from "@/lib/live/c
 import { roster } from "@/lib/live/describe";
 import { clockLabel, liveReplaySecond, moment } from "@/lib/live/timeline";
 
+import { MatchStatePanel } from "./match-state";
 import { Scoreboard } from "./scoreboard";
 import { StatsPanel } from "./stats-panel";
 import { Ticker } from "./ticker";
@@ -130,9 +131,10 @@ export function LiveRun({ runId }: { runId: string }) {
           <AlertDescription>{ENDED[live.ended]}</AlertDescription>
         </Alert>
       )}
+      <MatchStatePanel home={match.home} away={match.away} state={view.match_state} timeline={view.state_timeline ?? []} />
       <div className="grid gap-4 md:grid-cols-2">
         <StatsPanel home={match.home} away={match.away} stats={view.teams} />
-        <Ticker events={view.key_events} roster={r} />
+        <Ticker events={view.key_events} tags={view.tags ?? []} roster={r} />
       </div>
       <p className="text-xs text-muted-foreground">
         {match.competition} {match.season} · {match.venue} · Referee {match.referee.name} · Replay from {run.start_minute}&apos; at {run.speed}×
