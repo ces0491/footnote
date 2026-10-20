@@ -72,7 +72,7 @@ def test_var_rules_out_the_31st_minute_goal(final: RunState) -> None:
     assert key_pass.until == {"period": 1, "t": 1931.7}
     # "VAR is checking" is over once the decision is in; it is no less true, so it isn't flagged.
     started = insights["var-e0533"]
-    assert started.flag is None and started.until == {"period": 1, "t": 1931.7}
+    assert started.flag is None and started.until == {"period": 1, "t": 1931.69}
 
 
 def _current(insights: dict[str, Insight], period: int, t: float) -> list[Insight]:
@@ -88,7 +88,8 @@ def _current(insights: dict[str, Insight], period: int, t: float) -> list[Insigh
     ]
 
 
-@pytest.mark.parametrize("after", [1, 30, 90])
+# 0: the clock holds at the decision's time until play restarts, half a minute later.
+@pytest.mark.parametrize("after", [0, 1, 30, 90])
 def test_after_a_goal_is_ruled_out_nothing_on_offer_says_otherwise(
     showcase: Match, analysis: Analysis, after: int
 ) -> None:
@@ -101,7 +102,8 @@ def test_after_a_goal_is_ruled_out_nothing_on_offer_says_otherwise(
 def test_a_check_that_upholds_the_call_ends_its_started_card(final: RunState) -> None:
     started, decision = _insights(final)["var-e1455"], _insights(final)["var-e1456"]
     assert decision.facts["moment.decision"].value == "no_penalty"
-    assert started.flag is None and started.until == {"period": 2, "t": 1773.71}
+    assert started.flag is None and started.until == {"period": 2, "t": 1773.7}
+    assert started.insight_id not in {i.insight_id for i in _current(_insights(final), 2, 1773.71)}
 
 
 def test_every_card_links_to_events_but_tags_from_the_tracking(showcase: Match, final: RunState) -> None:

@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 # correction. ended: off the shortlist sooner than its shelf life, its moment being over.
 ChangeKind = Literal["new", "flagged", "restated", "ended"]
 
+TICK = 0.01  # the feed's times are kept to the hundredth of a second
+
 
 @dataclass
 class Insight:
@@ -153,7 +155,9 @@ class InsightBook:
         started_id = f"var-{m['related_event_id']}" if m.get("related_event_id") else None
         started = self.insights.get(started_id) if started_id else None
         if started is not None and started.topic == "var_started" and _before(now, started.until):
-            started.until = now
+            # Off just before the decision: play stays stopped at the decision's time for a while
+            # (half a minute in the showcase), and `until` is the last moment a card is current.
+            started.until = {"period": m["period"], "t": round(m["t"] - TICK, 2)}
             changes.append(Change(started, "ended"))
         goal_event = m.get("goal_event_id")
         if m.get("decision") != "no_goal" or not goal_event:
