@@ -12,9 +12,9 @@ from azure.eventhub._pyamqp._decode import decode_payload
 from azure.eventhub._pyamqp._encode import encode_payload
 from azure.eventhub._transport._pyamqp_transport import PyamqpTransport
 
-from footnote.live.contract import KIND_CONTROL
+from footnote.live.contract import KIND_CONTROL, PROP_PUBLISHED_AT, PROP_RUN_ID
 from footnote.live.match import load_match
-from footnote.processor.consumer import decode
+from footnote.processor.consumer import decode, decode_batch
 from footnote.replayer.publish import Envelope, to_event
 
 PUBLISHED = datetime(2026, 10, 19, 16, 48, 1, 943000, tzinfo=UTC)
@@ -39,6 +39,17 @@ def test_every_feed_message_encodes_and_decodes_unchanged() -> None:
         assert incoming.backfill == (m["seq"] < 100)
         assert incoming.published_at == 1_792_428_481_943  # epoch ms survive (a 32-bit int would not)
     assert len(batch) == len(feed)
+
+
+def test_events_that_are_not_replayer_messages_are_left_out() -> None:
+    """Sent from the portal's explorer, say: read again they would fail the same way."""
+    feed = load_match().feed
+    good = _received(to_event("0123456789abcdef", Envelope(feed[0]), PUBLISHED))
+    foreign = EventData('{"hello": "world"}')  # no replayer properties
+    listed = EventData("[1, 2]")  # the properties, but not a message
+    listed.properties = {PROP_RUN_ID: "0123456789abcdef", PROP_PUBLISHED_AT: 1_792_428_481_943}
+    later = _received(to_event("0123456789abcdef", Envelope(feed[1]), PUBLISHED))
+    assert [i.body for i in decode_batch([good, foreign, listed, later], "0")] == [feed[0], feed[1]]
 
 
 def test_a_control_message_keeps_its_kind() -> None:

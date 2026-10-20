@@ -37,14 +37,31 @@ def _epoch_ms(value: Any) -> int:
 def decode(event: EventData) -> Incoming:
     props = {_text(k): _text(v) for k, v in (event.properties or {}).items()}
     enqueued = event.enqueued_time
+    body = json.loads(event.body_as_str(encoding="UTF-8"))
+    if not isinstance(body, dict):
+        raise ValueError(f"the body is a JSON {type(body).__name__}, not an object")
     return Incoming(
         run_id=str(props[PROP_RUN_ID]),
         kind=str(props.get(PROP_KIND, KIND_FEED)),
-        body=json.loads(event.body_as_str(encoding="UTF-8")),
+        body=body,
         published_at=_epoch_ms(props[PROP_PUBLISHED_AT]),
         enqueued_at=_epoch_ms(enqueued) if enqueued else None,
         backfill=bool(props.get(PROP_BACKFILL, False)),
     )
+
+
+def decode_batch(events: list[EventData], partition: str) -> list[Incoming]:
+    """The batch decoded. An event that can't be is logged and left out: read again it would fail
+    the same way, and the partition would never get past it."""
+    decoded = []
+    for event in events:
+        try:
+            decoded.append(decode(event))
+        except Exception:
+            log.exception(
+                "feed hub (%s): skipping event %s, which isn't a replayer message", partition, event.sequence_number
+            )
+    return decoded
 
 
 async def consume(client: EventHubConsumerClient, processor: Processor) -> None:
@@ -53,7 +70,8 @@ async def consume(client: EventHubConsumerClient, processor: Processor) -> None:
     async def on_batch(context: PartitionContext, events: list[EventData]) -> None:
         if not events:
             return
-        await processor.handle([decode(e) for e in events])
+        if decoded := decode_batch(events, context.partition_id):
+            await processor.handle(decoded)
         await context.update_checkpoint(events[-1])
 
     async def on_error(context: PartitionContext | None, error: Exception) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from footnote.insights.book import Change
@@ -190,6 +192,53 @@ async def test_a_failed_write_drops_the_run_and_redelivery_recovers_it(showcase:
     assert sorted(store.feed[RUN_ID]) == list(range(1, items[399].body["seq"] + 1))
     pushed = [m["seq"] for m in push.sent if m["type"] == "event"]
     assert pushed == sorted(set(pushed))
+
+
+def _as_run(items: list[Incoming], run_id: str) -> list[Incoming]:
+    """The same replay under another run ID."""
+    out = []
+    for item in items:
+        body = item.body
+        if body["type"] == "run_start":
+            body = {**body, "run": {**body["run"], "run_id": run_id}}
+        elif body["type"] == "run_end":
+            body = {**body, "run_id": run_id}
+        out.append(dataclasses.replace(item, run_id=run_id, body=body))
+    return out
+
+
+async def test_a_message_that_cannot_be_folded_ends_its_run_and_spares_the_others(showcase: Match) -> None:
+    """Redelivering it would fail the same way and hold up the partition, so its run is ended."""
+    _, items = _run_messages(showcase, 1)
+    other_id = "fedcba9876543210"
+    other = _as_run(items, other_id)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push)
+    await processor.handle(items[:100])
+    await processor.handle(other[:100])
+    broken = dataclasses.replace(items[105], body={k: v for k, v in items[105].body.items() if k != "clock"})
+    batch = [*items[100:105], broken, *items[106:110], *other[100:150]]
+    await processor.handle(batch)  # nothing raised: the batch is checkpointed
+    assert store.status[RUN_ID] == "failed" and RUN_ID not in processor.runs
+    assert max(store.feed[RUN_ID]) == items[104].body["seq"]  # what came before it stands
+    ends = [m for m in push.sent if m["type"] == "run_end" and m["run_id"] == RUN_ID]
+    assert [m["reason"] for m in ends] == ["failed"]
+    assert max(store.feed[other_id]) == other[149].body["seq"]
+    # Read again, as by a processor that lost the checkpoint: skipped, and not ended twice.
+    await processor.handle(batch)
+    assert len([m for m in push.sent if m["type"] == "run_end" and m["run_id"] == RUN_ID]) == 1
+
+
+async def test_control_messages_it_cannot_use_are_skipped(showcase: Match) -> None:
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push)
+    await processor.handle([Incoming(RUN_ID, KIND_CONTROL, {"type": "run_start", "run": {"run_id": RUN_ID}}, 1, 2)])
+    assert store.runs == {}
+    _, items = _run_messages(showcase, 1)
+    await processor.handle(items[:10])
+    reasonless = Incoming(RUN_ID, KIND_CONTROL, {"type": "run_end", "run_id": RUN_ID, "reason": "bored"}, 7, 8)
+    await processor.handle([reasonless])
+    assert store.status[RUN_ID] == "failed"
 
 
 async def test_messages_for_a_run_it_never_saw_start_are_skipped(showcase: Match) -> None:

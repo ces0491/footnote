@@ -7,6 +7,11 @@ is dropped from memory and the error propagates: Event Hubs redelivers from the 
 the run's state is rebuilt from what was stored. A run met again, including through its `run_start`,
 carries on from the stored feed.
 
+A message that can't be folded fails the same way every time it is read, so it isn't left to
+redelivery, which would hold up its partition and every run on it until the hub's retention dropped
+it. Its run keeps what came before it and is ended as failed, and its later messages are skipped. A
+control message that can't be used is logged and skipped.
+
 A push that fails is logged and skipped. Viewers notice the gap in `seq` and fetch the snapshot.
 
 Insights (footnote.insights) are found as each message is folded. Their changes are stored in the
@@ -26,7 +31,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import groupby
-from typing import Protocol
+from typing import Protocol, cast, get_args
 
 from footnote.insights.book import Change
 from footnote.live.analysis import Analysis
@@ -40,6 +45,10 @@ log = logging.getLogger(__name__)
 # How late a run's next message may be before the run counts as abandoned: far beyond any delay on
 # the way through Event Hubs, and beyond the time a restarted processor takes to catch up.
 OVERDUE_MS = 5 * 60_000
+
+END_REASONS: frozenset[str] = frozenset(get_args(RunEndReason))
+# What a run_start's descriptor must hold for the processor to follow the run.
+DESCRIPTOR_FIELDS = ("run_id", "match_id", "speed", "start_replay", "started_at", "backfill_seq")
 
 
 @dataclass(frozen=True)
@@ -120,6 +129,7 @@ class Processor:
         self.now_ms = now_ms
         self.runs: dict[str, LiveRun] = {}
         self._unknown: set[str] = set()
+        self._failed: set[str] = set()  # ended over a message that couldn't be folded
         # Each message's replay second, by seq - 1, which sets when a run publishes it.
         timeline = Timeline.from_feed(match.feed)
         self._replay = [timeline.replay_seconds(m["ts"]) for m in match.feed]
@@ -136,6 +146,8 @@ class Processor:
     async def _handle_run(self, run_id: str, items: list[Incoming]) -> None:
         pending = _Pending()
         for item in items:
+            if run_id in self._failed:
+                return
             if item.kind == KIND_CONTROL:
                 await self._flush(run_id, pending)
                 await self._control(run_id, item)
@@ -143,34 +155,53 @@ class Processor:
             run = await self._run(run_id)
             if run is None:
                 continue
-            m = item.body
-            if not run.state.apply(m):
-                continue
-            pending.rows.append(FeedRow(run_id, m, item.published_at, item.enqueued_at))
-            pending.changes += run.state.insight_changes()
-            if item.backfill:
-                if m["seq"] == run.descriptor["backfill_seq"]:
-                    pending.outgoing.append(self._snapshot(run))
-                continue
-            pending.outgoing.append(
-                {
-                    "type": "event",
-                    "run_id": run_id,
-                    "event": client_event(m),
-                    "key": m["type"] in KEY_EVENT_TYPES,
-                    **run.state.push_fields(),
-                    "timing": {"published_at": item.published_at, "enqueued_at": item.enqueued_at},
-                }
-            )
+            try:
+                self._fold(run, item, pending)
+            except Exception:
+                log.exception(
+                    "run %s: can't fold %s seq %s; ending the run as failed",
+                    run_id,
+                    item.body.get("type"),
+                    item.body.get("seq"),
+                )
+                # What came before it stands; the state it left half-applied isn't stored as a view.
+                await self._flush(run_id, pending, with_view=False)
+                self._failed.add(run_id)
+                await self._end(run_id, "failed")
+                return
         await self._flush(run_id, pending)
 
-    async def _flush(self, run_id: str, pending: _Pending) -> None:
+    def _fold(self, run: LiveRun, item: Incoming, pending: _Pending) -> None:
+        """Fold one feed message into the run; what it stores and pushes joins `pending` only once
+        the whole message has been taken in."""
+        m = item.body
+        if not run.state.apply(m):
+            return
+        changes = run.state.insight_changes()
+        outgoing: dict | None = None
+        if not item.backfill:
+            outgoing = {
+                "type": "event",
+                "run_id": run.descriptor["run_id"],
+                "event": client_event(m),
+                "key": m["type"] in KEY_EVENT_TYPES,
+                **run.state.push_fields(),
+                "timing": {"published_at": item.published_at, "enqueued_at": item.enqueued_at},
+            }
+        elif m["seq"] == run.descriptor["backfill_seq"]:
+            outgoing = self._snapshot(run)
+        pending.rows.append(FeedRow(run.descriptor["run_id"], m, item.published_at, item.enqueued_at))
+        pending.changes += changes
+        if outgoing is not None:
+            pending.outgoing.append(outgoing)
+
+    async def _flush(self, run_id: str, pending: _Pending, *, with_view: bool = True) -> None:
         insights: list[dict] = []
         if pending.rows:
             run = self.runs[run_id]
             # Viewers get a run's state only once its backfill is in. A view from partway through the
             # backfill would show the score from minutes before the jump point.
-            backfilled = run.state.seq >= run.descriptor["backfill_seq"]
+            backfilled = with_view and run.state.seq >= run.descriptor["backfill_seq"]
             insights = await self.store.save(
                 pending.rows, run_id, run.state.view() if backfilled else None, pending.changes
             )
@@ -187,9 +218,12 @@ class Processor:
             log.exception("push failed for run %s (%s seq %s)", run_id, message["type"], message.get("seq"))
 
     async def _control(self, run_id: str, item: Incoming) -> None:
-        kind = item.body["type"]
+        kind = item.body.get("type")
         if kind == "run_start":
-            descriptor = item.body["run"]
+            descriptor = item.body.get("run")
+            if not isinstance(descriptor, dict) or any(f not in descriptor for f in DESCRIPTOR_FIELDS):
+                log.error("run %s: skipping a run_start without a usable descriptor", run_id)
+                return
             self._unknown.discard(run_id)
             if not await self.store.start_run(descriptor):
                 # Seen before: a redelivery, or the hub read again after a restart. Carry on from the
@@ -205,7 +239,11 @@ class Processor:
             if descriptor["backfill_seq"] == 0:
                 await self._send(run_id, self._snapshot(run))
         elif kind == "run_end":
-            await self._end(run_id, item.body["reason"])
+            reason = item.body.get("reason")
+            if reason not in END_REASONS:
+                log.warning("run %s: run_end with reason %r; ending it as failed", run_id, reason)
+                reason = "failed"
+            await self._end(run_id, cast(RunEndReason, reason))
         else:
             log.warning("run %s: unknown control message %r", run_id, kind)
 
@@ -235,7 +273,7 @@ class Processor:
 
     async def _run(self, run_id: str) -> LiveRun | None:
         run = self.runs.get(run_id)
-        if run is not None or run_id in self._unknown:
+        if run is not None or run_id in self._unknown or run_id in self._failed:
             return run
         loaded = await self.store.load_run(run_id)
         if loaded is None:
