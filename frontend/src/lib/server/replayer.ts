@@ -39,3 +39,8 @@ export async function stopRun(runId: string): Promise<boolean> {
   const response = await call(`/runs/${runId}`, { method: "DELETE" });
   return response.status === 204;
 }
+
+export async function runInProgress(runId: string): Promise<boolean> {
+  const response = await call(`/runs/${runId}`, { method: "GET" });
+  return response.ok;
+}

@@ -21,7 +21,8 @@ export function allowStart(clientAddress: string, now = Date.now()): boolean {
   return true;
 }
 
-// Container Apps' ingress puts the caller's address first in X-Forwarded-For.
+// Container Apps' ingress appends the caller's address to X-Forwarded-For, after anything the caller
+// sent in that header itself, so only the last entry can be trusted.
 export function clientAddress(headers: Headers): string {
-  return headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  return headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
 }

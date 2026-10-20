@@ -7,7 +7,8 @@ import { runIdPattern } from "@/lib/live/contract";
 async function Run({ params }: { params: PageProps<"/runs/[runId]">["params"] }) {
   const { runId } = await params;
   if (!runIdPattern.test(runId)) notFound();
-  return <LiveRun runId={runId} />;
+  // Keyed so another run's page starts from a fresh state rather than this one's.
+  return <LiveRun key={runId} runId={runId} />;
 }
 
 export default function RunPage({ params }: PageProps<"/runs/[runId]">) {

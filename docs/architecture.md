@@ -41,10 +41,12 @@ the backfill in without pushing it, then pushes one snapshot; from there it push
 end the replayer publishes `run_end` with the reason: finished, stopped, expired (two hours), evicted
 (a seventh concurrent run replaces the oldest) or failed.
 
-**Joining.** The browser connects to the run's Web PubSub group first, then fetches the snapshot
-from the web app's API, then applies pushes, holding any that arrived before the snapshot. Each push
+**Joining.** The browser fetches the run's snapshot from the web app's API first, and for a run that
+has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and fetches
+the snapshot again each time a connection opens, because pushes sent while it had none are lost.
+Pushes that arrive while a snapshot is on its way are held and applied on top of it. Each push
 carries the score, phase, clock and stats after its event, so applying one is a replacement. A gap in
-`seq` means a push was missed; the browser fetches the snapshot again.
+`seq` means a push was missed: the browser holds what follows and fetches the snapshot again.
 
 ## Contracts
 
@@ -123,9 +125,9 @@ app runs as its own user-assigned managed identity with these roles:
 | all three | AcrPull | the container registry |
 
 The browser's Web PubSub token joins one run's group and carries no roles, so a viewer can't
-publish or join another group. The deploying user gets data-plane roles on Event Hubs, the
-checkpoint container and Web PubSub for local development, and becomes a Postgres administrator when
-`AZURE_PRINCIPAL_NAME` is set.
+publish or join another group, and the web app issues one only for a run the processor has recorded.
+The deploying user gets data-plane roles on Event Hubs, the checkpoint container and Web PubSub for
+local development, and becomes a Postgres administrator when `AZURE_PRINCIPAL_NAME` is set.
 
 Postgres admits Azure services through its firewall because Consumption-profile Container Apps have
 no fixed outbound address; sign-in still needs a token for a role the server knows.

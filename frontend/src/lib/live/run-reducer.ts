@@ -1,47 +1,76 @@
 // Folding pushes into what the live page shows. Every push carries the state after its event, so
-// applying one is a replacement, not arithmetic. A gap in seq means a push was missed: the key-event
-// list may be missing an entry, so the page fetches the snapshot again.
+// applying one is a replacement, not arithmetic. A snapshot fetched from the web app replaces it in
+// the same way. While a snapshot is on its way, pushes are held and applied on top of it once it
+// arrives, so nothing received in the meantime is lost or applied out of order. A gap in seq means a
+// push was missed and the key-event list may be missing an entry, so the reducer asks for a snapshot.
 
 import type { EventMessage, PushMessage, RunEndReason, StateView } from "./contract";
 
 export interface RunViewState {
   view: StateView | null;
   ended: RunEndReason | null;
-  needsSnapshot: boolean;
+  /** Pushes waiting for a snapshot that is on its way; null when none is. */
+  held: PushMessage[] | null;
+  /** Bumped each time a fresh snapshot is needed. The page fetches one whenever it changes. */
+  snapshotRequests: number;
 }
 
-export const initialRunViewState: RunViewState = { view: null, ended: null, needsSnapshot: false };
+// The page fetches the first snapshot itself before it connects, so pushes start out held.
+export const initialRunViewState: RunViewState = { view: null, ended: null, held: [], snapshotRequests: 0 };
 
-export type RunAction = { kind: "push"; message: PushMessage } | { kind: "snapshot"; view: StateView | null; ended: RunEndReason | null };
+export type RunAction =
+  | { kind: "push"; message: PushMessage }
+  | { kind: "snapshot"; view: StateView | null; ended: RunEndReason | null }
+  // The connection has (re)opened, and pushes sent while it was closed are lost.
+  | { kind: "resync" };
+
+function newer(candidate: StateView | null, current: StateView | null): StateView | null {
+  return candidate && (!current || candidate.seq >= current.seq) ? candidate : current;
+}
+
+function requestSnapshot(state: RunViewState, held: PushMessage[]): RunViewState {
+  return { ...state, held, snapshotRequests: state.snapshotRequests + 1 };
+}
 
 function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
   const view = state.view;
-  if (!view) return { ...state, needsSnapshot: true };
-  if (message.seq <= view.seq) return state; // redelivered, or already in the snapshot
+  if (view && message.seq <= view.seq) return state; // redelivered, or already in the snapshot
+  // No state yet, or a push was missed: hold this one until a snapshot covers the gap.
+  if (!view || message.seq !== view.seq + 1) return requestSnapshot(state, [message]);
   const { seq, phase, clock, score, teams } = message;
   const keyEvents = message.key ? [...view.key_events, message.event] : view.key_events;
-  return {
-    ...state,
-    view: { seq, phase, clock, score, teams, key_events: keyEvents },
-    needsSnapshot: state.needsSnapshot || message.seq !== view.seq + 1,
-  };
+  return { ...state, view: { seq, phase, clock, score, teams, key_events: keyEvents } };
 }
 
-export function runReducer(state: RunViewState, action: RunAction): RunViewState {
-  if (action.kind === "snapshot") {
-    const current = state.view;
-    const view = action.view && (!current || action.view.seq >= current.seq) ? action.view : current;
-    return { view, ended: action.ended ?? state.ended, needsSnapshot: false };
-  }
-  const message = action.message;
+function apply(state: RunViewState, message: PushMessage): RunViewState {
   switch (message.type) {
     case "snapshot": {
       const { seq, phase, clock, score, teams, key_events } = message;
-      return runReducer(state, { kind: "snapshot", view: { seq, phase, clock, score, teams, key_events }, ended: null });
+      return { ...state, view: newer({ seq, phase, clock, score, teams, key_events }, state.view) };
     }
     case "event":
       return applyEvent(state, message);
     case "run_end":
       return { ...state, ended: message.reason };
+  }
+}
+
+export function runReducer(state: RunViewState, action: RunAction): RunViewState {
+  switch (action.kind) {
+    case "push":
+      return state.held ? { ...state, held: [...state.held, action.message] } : apply(state, action.message);
+    case "resync":
+      return requestSnapshot(state, state.held ?? []);
+    case "snapshot": {
+      let next: RunViewState = {
+        ...state,
+        view: newer(action.view, state.view),
+        ended: action.ended ?? state.ended,
+        held: null,
+      };
+      // A held push can itself reveal a gap the snapshot doesn't cover; the rest are then held again.
+      for (const message of state.held ?? []) next = runReducer(next, { kind: "push", message });
+      return next;
+    }
   }
 }

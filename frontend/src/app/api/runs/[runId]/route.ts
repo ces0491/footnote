@@ -2,10 +2,11 @@ import type { NextRequest } from "next/server";
 
 import { runIdPattern, type RunSnapshot } from "@/lib/live/contract";
 import { db } from "@/lib/server/db";
-import { stopRun } from "@/lib/server/replayer";
+import { runInProgress, stopRun } from "@/lib/server/replayer";
 
-// The run's descriptor, its latest state view and the match metadata, from Postgres. 404 until the
-// processor has recorded the run, which happens within a second or two of starting it.
+// The run's descriptor, its latest state view and the match metadata, from Postgres. The processor
+// records a run within a second or two of its start; until then the answer is 202 for a run the
+// replayer is playing, and 404 for one it doesn't know.
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]">) {
   const { runId } = await ctx.params;
   if (!runIdPattern.test(runId)) return Response.json({ error: "not a run ID" }, { status: 400 });
@@ -17,7 +18,12 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[r
       where r.run_id = $1`,
     [runId],
   );
-  if (rows.length === 0) return Response.json({ error: "no such run yet" }, { status: 404 });
+  if (rows.length === 0) {
+    const starting = await runInProgress(runId).catch(() => false);
+    return starting
+      ? Response.json({ status: "starting" }, { status: 202, headers: { "cache-control": "no-store" } })
+      : Response.json({ error: "no such run" }, { status: 404 });
+  }
   const row = rows[0];
   const body: RunSnapshot = {
     run: row.descriptor,

@@ -101,7 +101,7 @@ cd frontend && npm ci && npm run dev             # http://localhost:3000
 ```
 
 The deployed processor picks up runs started locally. Checks for the web app:
-`npm run lint`, `npm run typecheck`, `npm run build`.
+`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 ## Layout
 
@@ -112,7 +112,7 @@ src/footnote/live/        shared by the services: the match files, replay time, 
 src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
 src/footnote/processor/   Event Hubs to match state, Postgres and Web PubSub
 src/footnote/db/          Entra-authenticated Postgres connections and migrations
-frontend/                 the Next.js web app
+frontend/                 the Next.js web app, with its Vitest tests beside the code
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
 scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, latency

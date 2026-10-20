@@ -2,8 +2,8 @@
 
     uv run python scripts/smoke_live.py https://<web app> [--minute 81] [--speed 4]
 
-Starts a run through the web app's API, joins the run's Web PubSub group with the URL the API
-issues, fetches the snapshot, and listens until the run ends. It then checks that every event after
+Starts a run through the web app's API, waits until the processor has recorded it, joins the run's
+Web PubSub group with the URL the API issues, fetches the snapshot, and listens until the run ends. It then checks that every event after
 the snapshot arrived, in order (repeats from at-least-once delivery are counted and dropped, as the
 browser drops them), that the run finished, and that the stored state agrees with the last push,
 and reports the time from the replayer publishing each event to this machine receiving it. Latency is measured against the web app's clock (offset from the quickest of a few
@@ -100,7 +100,12 @@ async def main(base: str, minute: int, speed: int, timeout: float) -> int:
         print(
             f"run {run_id}: from {minute}' at {speed}x, backfill to seq {run['backfill_seq']}, last seq {run['last_seq']}"
         )
+        # Like the browser: the web app issues a client URL once the processor has recorded the run.
+        await snapshot(session, base, run_id)
         async with session.get(f"{base}/api/runs/{run_id}/negotiate") as response:
+            if response.status != 200:
+                print(f"negotiate failed: HTTP {response.status} {await response.text()}")
+                return 1
             url = (await response.json())["url"]
 
         async with session.ws_connect(url, protocols=("json.webpubsub.azure.v1",)) as ws:
