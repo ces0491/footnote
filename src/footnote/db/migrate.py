@@ -2,8 +2,8 @@
 
 The processor's identity is the server's Entra administrator and owns the schema. It applies the
 numbered SQL files under migrations/ in order, each once, under an advisory lock so two replicas
-can't race. It then makes sure the web app's identity exists as a database role with the privileges
-in WEB_GRANTS and nothing more.
+can't race. It then makes sure the web app's and the agents service's identities exist as database
+roles with the privileges in WEB_GRANTS and AGENT_GRANTS, and nothing more.
 """
 
 from __future__ import annotations
@@ -29,6 +29,22 @@ WEB_GRANTS: dict[str, str] = {
     "runs": "select",
     "feed_events": "select",
     "run_state": "select",
+    "insights": "select",
+    "insight_versions": "select",
+    "insight_cards": "select",
+}
+
+# What the agents service's identity may do. It reads the match and writes only its own work: agent
+# versions, the agent columns of an insight, the run's insight revision, its run log and its cache.
+AGENT_GRANTS: dict[str, str] = {
+    "matches": "select",
+    "runs": "select, update (insight_rev)",
+    "feed_events": "select",
+    "insights": "select, update (agent_state, agent_note, agent_attempts, agent_lease, redraft, version, updated_at)",
+    "insight_versions": "select, insert",
+    "insight_cards": "select",
+    "agent_runs": "select, insert, update",
+    "agent_cache": "select, insert",
 }
 
 
@@ -53,8 +69,10 @@ async def migrate(pool: Pool) -> list[str]:
     return applied
 
 
-async def ensure_web_role(credential: AsyncTokenCredential, pool: Pool, role: str, object_id: str) -> None:
-    """Create the web app's Entra role if it's missing, then grant it WEB_GRANTS."""
+async def ensure_role(
+    credential: AsyncTokenCredential, pool: Pool, role: str, object_id: str, grants: dict[str, str]
+) -> None:
+    """Create a service's Entra role if it's missing, then grant it `grants`."""
     token = await credential.get_token(TOKEN_SCOPE)
     # Entra principals are created from the server's `postgres` database.
     async with await psycopg.AsyncConnection.connect(
@@ -68,7 +86,7 @@ async def ensure_web_role(credential: AsyncTokenCredential, pool: Pool, role: st
             log.info("created database role %s", role)
     async with pool.connection() as conn, conn.transaction():
         await conn.execute(sql.SQL("grant usage on schema public to {}").format(sql.Identifier(role)))
-        for table, privileges in WEB_GRANTS.items():
+        for table, privileges in grants.items():
             await conn.execute(
                 sql.SQL("grant {} on table {} to {}").format(
                     sql.SQL(privileges), sql.Identifier(table), sql.Identifier(role)

@@ -7,6 +7,7 @@ Settings come from the environment (set by infra/processor.bicep in Azure):
     WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB
     POSTGRES_HOST, POSTGRES_DATABASE, POSTGRES_USER
     WEB_DB_ROLE, WEB_DB_OBJECT_ID         the web app's identity, granted read access at start-up
+    AGENTS_DB_ROLE, AGENTS_DB_OBJECT_ID   the agents service's identity, granted what it writes
     AZURE_CLIENT_ID                       the processor's managed identity
 """
 
@@ -25,7 +26,7 @@ from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 
 from footnote import cloud
 from footnote.db.connect import entra_pool
-from footnote.db.migrate import ensure_web_role, migrate
+from footnote.db.migrate import AGENT_GRANTS, WEB_GRANTS, ensure_role, migrate
 from footnote.live.analysis import Analysis
 from footnote.live.match import SHOWCASE_MATCH_ID, load_match
 from footnote.processor.consumer import consume
@@ -62,9 +63,10 @@ async def main() -> None:
     await pool.open(wait=True, timeout=120)
     applied = await migrate(pool)
     log.info("migrations applied: %s", applied or "none pending")
-    web_role, web_object_id = os.environ.get("WEB_DB_ROLE"), os.environ.get("WEB_DB_OBJECT_ID")
-    if web_role and web_object_id:
-        await ensure_web_role(credential, pool, web_role, web_object_id)
+    for prefix, grants in (("WEB", WEB_GRANTS), ("AGENTS", AGENT_GRANTS)):
+        role, object_id = os.environ.get(f"{prefix}_DB_ROLE"), os.environ.get(f"{prefix}_DB_OBJECT_ID")
+        if role and object_id:
+            await ensure_role(credential, pool, role, object_id, grants)
     store = PostgresStore(pool)
     await store.put_match(match.meta)
 
@@ -112,4 +114,7 @@ async def main() -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("azure").setLevel(logging.WARNING)
+    if sys.platform == "win32":
+        # For local runs: psycopg's async mode can't use Windows' default (proactor) loop.
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

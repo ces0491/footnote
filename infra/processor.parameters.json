@@ -10,6 +10,7 @@
     "containerRegistryName": { "value": "${AZURE_CONTAINER_REGISTRY_NAME}" },
     "identityName": { "value": "${SERVICE_PROCESSOR_IDENTITY_NAME}" },
     "webIdentityName": { "value": "${SERVICE_WEB_IDENTITY_NAME}" },
+    "agentsIdentityName": { "value": "${SERVICE_AGENTS_IDENTITY_NAME}" },
     "eventHubNamespace": { "value": "${EVENTHUB_NAMESPACE}" },
     "eventHubName": { "value": "${EVENTHUB_NAME}" },
     "checkpointBlobUrl": { "value": "${CHECKPOINT_BLOB_URL}" },

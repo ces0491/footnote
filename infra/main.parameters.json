@@ -8,6 +8,7 @@
     "principalType": { "value": "${AZURE_PRINCIPAL_TYPE=User}" },
     "principalName": { "value": "${AZURE_PRINCIPAL_NAME=}" },
     "clientIpAddress": { "value": "${CLIENT_IP_ADDRESS=}" },
-    "webPubSubSku": { "value": "${WEBPUBSUB_SKU=Free_F1}" }
+    "webPubSubSku": { "value": "${WEBPUBSUB_SKU=Free_F1}" },
+    "translatorEnabled": { "value": "${TRANSLATOR_ENABLED=false}" }
   }
 }

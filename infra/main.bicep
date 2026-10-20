@@ -27,6 +27,9 @@ param clientIpAddress string = ''
 @description('Web PubSub tier. Free allows 20 connections and 20,000 messages a day; changing tier costs 30-60 minutes of downtime')
 param webPubSubSku string = 'Free_F1'
 
+@description('Create Azure AI Translator (free tier) for the Spanish and French cards')
+param translatorEnabled bool = false
+
 var tags = { 'azd-env-name': environmentName }
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -47,6 +50,7 @@ module resources 'resources.bicep' = {
     principalName: principalName
     clientIpAddress: clientIpAddress
     webPubSubSku: webPubSubSku
+    translatorEnabled: translatorEnabled
   }
 }
 
@@ -70,3 +74,8 @@ output SERVICE_PROCESSOR_NAME string = resources.outputs.processorName
 output SERVICE_PROCESSOR_IDENTITY_NAME string = resources.outputs.processorIdentityName
 output SERVICE_WEB_NAME string = resources.outputs.webName
 output SERVICE_WEB_IDENTITY_NAME string = resources.outputs.webIdentityName
+output SERVICE_AGENTS_NAME string = resources.outputs.agentsName
+output SERVICE_AGENTS_IDENTITY_NAME string = resources.outputs.agentsIdentityName
+output FOUNDRY_PROJECT_ENDPOINT string = resources.outputs.foundryProjectEndpoint
+output FOUNDRY_MODEL string = resources.outputs.foundryModel
+output TRANSLATOR_ENDPOINT string = resources.outputs.translatorEndpoint

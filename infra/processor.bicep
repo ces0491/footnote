@@ -9,6 +9,7 @@ param containerAppsEnvironmentName string
 param containerRegistryName string
 param identityName string
 param webIdentityName string
+param agentsIdentityName string
 param eventHubNamespace string
 param eventHubName string
 param checkpointBlobUrl string
@@ -24,6 +25,10 @@ resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' 
 
 resource webIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
   name: webIdentityName
+}
+
+resource agentsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+  name: agentsIdentityName
 }
 
 resource environment 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
@@ -69,6 +74,8 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             { name: 'POSTGRES_USER', value: identity.name }
             { name: 'WEB_DB_ROLE', value: webIdentity.name }
             { name: 'WEB_DB_OBJECT_ID', value: webIdentity.properties.principalId }
+            { name: 'AGENTS_DB_ROLE', value: agentsIdentity.name }
+            { name: 'AGENTS_DB_OBJECT_ID', value: agentsIdentity.properties.principalId }
           ]
         }
       ]

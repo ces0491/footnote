@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+import asyncio
+import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import pytest
 
 from footnote.generator.league import League, build_league
 from footnote.generator.season import Fixture, GeneratedMatch, generate_match
+
+
+def pytest_asyncio_loop_factories(
+    config: pytest.Config, item: pytest.Item
+) -> dict[str, Callable[[], asyncio.AbstractEventLoop]]:
+    """Psycopg's async mode can't run on Windows' default (proactor) loop; Linux keeps its default."""
+    if sys.platform == "win32":
+        return {"selector": asyncio.SelectorEventLoop}
+    return {"default": asyncio.new_event_loop}
 
 
 @pytest.fixture(scope="session")

@@ -11,6 +11,20 @@ permissions:
 jobs:
   python:
     runs-on: ubuntu-latest
+    # For tests/test_store.py: the SQL against a real Postgres, the version the Azure server runs.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres  # a throwaway container's, nothing else uses it
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FOOTNOTE_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
       # setup-uv publishes full version tags only (no moving v10 tag).

@@ -10,11 +10,16 @@ param principalType string
 param principalName string
 param clientIpAddress string
 param webPubSubSku string
+param translatorEnabled bool
 
 var feedHubName = 'feed'
 var checkpointContainerName = 'checkpoints'
 var webPubSubHubName = 'footnote'
 var databaseName = 'footnote'
+var foundryProjectName = 'footnote'
+// The writers' model. Global Standard bills per token; the capacity caps the rate (thousands of
+// tokens a minute), not the bill.
+var writerModel = { name: 'gpt-5-mini', version: '2025-08-07', capacity: 100 }
 
 // Built-in role definitions.
 var roles = {
@@ -24,6 +29,8 @@ var roles = {
   eventHubsDataOwner: 'f526a384-b230-433a-b45c-95f59c4a2dec'
   storageBlobDataContributor: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
   webPubSubServiceOwner: '12cf5a90-567b-43ae-8102-96cf46c7d9b4'
+  foundryUser: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+  cognitiveServicesUser: 'a97b65f3-24c7-4388-baec-2e87135dc908'
 }
 
 // --- Identities -----------------------------------------------------------------------------------
@@ -42,6 +49,12 @@ resource processorIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@202
 
 resource webIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: 'id-web-${token}'
+  location: location
+  tags: tags
+}
+
+resource agentsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: 'id-agents-${token}'
   location: location
   tags: tags
 }
@@ -98,6 +111,16 @@ resource webPulls 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: registry
   properties: {
     principalId: webIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.acrPull)
+  }
+}
+
+resource agentsPulls 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, agentsIdentity.id, roles.acrPull)
+  scope: registry
+  properties: {
+    principalId: agentsIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.acrPull)
   }
@@ -251,6 +274,17 @@ resource processorPushes 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
   }
 }
 
+// The agents push the versions they write.
+resource agentsPush 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(webPubSub.id, agentsIdentity.id, roles.webPubSubServiceOwner)
+  scope: webPubSub
+  properties: {
+    principalId: agentsIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.webPubSubServiceOwner)
+  }
+}
+
 resource webIssuesTokens 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(webPubSub.id, webIdentity.id, roles.webPubSubServiceOwner)
   scope: webPubSub
@@ -336,6 +370,104 @@ module developerAdministrator 'modules/postgres-admin.bicep' = if (!empty(princi
   dependsOn: [processorAdministrator]
 }
 
+// --- Foundry: the agents' model --------------------------------------------------------------------
+
+resource foundry 'Microsoft.CognitiveServices/accounts@2026-09-01' = {
+  name: 'ai-footnote-${token}'
+  location: location
+  tags: tags
+  kind: 'AIServices'
+  sku: { name: 'S0' }
+  identity: { type: 'SystemAssigned' }
+  properties: {
+    customSubDomainName: 'ai-footnote-${token}'
+    allowProjectManagement: true
+    disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2026-09-01' = {
+  parent: foundry
+  name: foundryProjectName
+  location: location
+  tags: tags
+  identity: { type: 'SystemAssigned' }
+  properties: {
+    displayName: 'Footnote'
+    description: 'The agents that word Footnote match insights'
+  }
+}
+
+// Its own module, checked once the account exists (modules/model-deployment.bicep says why).
+module writerDeployment 'modules/model-deployment.bicep' = {
+  name: 'writer-model'
+  params: {
+    accountName: foundry.name
+    accountEndpoint: foundry.properties.endpoint
+    modelName: writerModel.name
+    modelVersion: writerModel.version
+    capacity: writerModel.capacity
+  }
+  // An account takes one change at a time.
+  dependsOn: [foundryProject]
+}
+
+resource agentsUseFoundry 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryProject.id, agentsIdentity.id, roles.foundryUser)
+  scope: foundryProject
+  properties: {
+    principalId: agentsIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.foundryUser)
+  }
+}
+
+resource developerUsesFoundry 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
+  name: guid(foundryProject.id, principalId, roles.foundryUser)
+  scope: foundryProject
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.foundryUser)
+  }
+}
+
+// --- Translator: Spanish and French cards (free tier: 2M characters a month) ----------------------
+
+resource translator 'Microsoft.CognitiveServices/accounts@2026-09-01' = if (translatorEnabled) {
+  name: 'tr-footnote-${token}'
+  location: location
+  tags: tags
+  kind: 'TextTranslation'
+  sku: { name: 'F0' }
+  properties: {
+    customSubDomainName: 'tr-footnote-${token}'
+    disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource agentsTranslate 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (translatorEnabled) {
+  name: guid(translator.id, agentsIdentity.id, roles.cognitiveServicesUser)
+  scope: translator
+  properties: {
+    principalId: agentsIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.cognitiveServicesUser)
+  }
+}
+
+resource developerTranslates 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (translatorEnabled && !empty(principalId)) {
+  name: guid(translator.id, principalId, roles.cognitiveServicesUser)
+  scope: translator
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.cognitiveServicesUser)
+  }
+}
+
 output registryLoginServer string = registry.properties.loginServer
 output registryName string = registry.name
 output environmentName string = environment.name
@@ -353,3 +485,8 @@ output processorName string = 'ca-processor-${token}'
 output processorIdentityName string = processorIdentity.name
 output webName string = 'ca-web-${token}'
 output webIdentityName string = webIdentity.name
+output agentsName string = 'ca-agents-${token}'
+output agentsIdentityName string = agentsIdentity.name
+output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${foundryProject.name}'
+output foundryModel string = writerDeployment.outputs.name
+output translatorEndpoint string = translatorEnabled ? translator!.properties.endpoint : ''

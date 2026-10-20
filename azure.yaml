@@ -25,6 +25,15 @@ services:
       remoteBuild: true
       buildArgs:
         - SERVICE=processor
+  agents:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true
+      buildArgs:
+        - SERVICE=agents
   web:
     project: frontend
     language: ts
