@@ -1,12 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Club, TeamStats } from "@/lib/live/contract";
+import { NBSP } from "@/lib/live/describe";
 
 function percent(value: number | null): string {
   return value === null ? "–" : `${Math.round(value * 100)}%`;
 }
 
+/** A figure with its unit, joined by a non-breaking space so the unit never wraps away from it. */
 function measure(value: number | null | undefined, unit: string, digits = 1): string {
-  return value === null || value === undefined ? "–" : `${value.toFixed(digits)}${unit}`;
+  if (value === null || value === undefined) return "–";
+  return unit ? `${value.toFixed(digits)}${NBSP}${unit}` : value.toFixed(digits);
 }
 
 interface Row {
@@ -32,10 +35,10 @@ function rows(h: TeamStats, a: TeamStats): Row[] {
       away: `${a.passes_completed}/${a.passes}`,
     },
     { label: "Pass accuracy", home: percent(h.pass_accuracy), away: percent(a.pass_accuracy) },
-    { label: "Average pass length", home: measure(h.pass_length, " m"), away: measure(a.pass_length, " m") },
+    { label: "Average pass length", home: measure(h.pass_length, "m"), away: measure(a.pass_length, "m") },
     { label: "Average pass difficulty", home: measure(h.pass_difficulty, "", 2), away: measure(a.pass_difficulty, "", 2) },
-    { label: "Distance covered", home: measure(h.distance_km, " km"), away: measure(a.distance_km, " km") },
-    { label: "Fastest shot", home: measure(h.top_shot_kmh, " km/h", 0), away: measure(a.top_shot_kmh, " km/h", 0) },
+    { label: "Distance covered", home: measure(h.distance_km, "km"), away: measure(a.distance_km, "km") },
+    { label: "Fastest shot", home: measure(h.top_shot_kmh, "km/h", 0), away: measure(a.top_shot_kmh, "km/h", 0) },
     count("Corners", "corners"),
     count("Fouls", "fouls"),
     count("Offsides", "offsides"),
@@ -72,8 +75,8 @@ export function StatsPanel({ home, away, stats }: { home: Club; away: Club; stat
         </div>
         <dl className="divide-y">
           {rows(h, a).map((row) => (
-            <div key={row.label} className="grid grid-cols-[4rem_1fr_4rem] items-center gap-3 py-2 text-sm">
-              <dd className="font-medium tabular-nums">{row.home}</dd>
+            <div key={row.label} className="grid grid-cols-[5.5rem_1fr_5.5rem] items-center gap-3 py-2 text-sm">
+              <dd className="whitespace-nowrap font-medium tabular-nums">{row.home}</dd>
               <dt className="text-center text-muted-foreground">
                 {row.label}
                 {row.shares && (
@@ -83,7 +86,7 @@ export function StatsPanel({ home, away, stats }: { home: Club; away: Club; stat
                   </span>
                 )}
               </dt>
-              <dd className="text-right font-medium tabular-nums">{row.away}</dd>
+              <dd className="whitespace-nowrap text-right font-medium tabular-nums">{row.away}</dd>
             </div>
           ))}
         </dl>

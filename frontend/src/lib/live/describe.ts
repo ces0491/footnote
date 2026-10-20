@@ -3,6 +3,9 @@
 
 import type { FeedEvent, MatchMeta, Player, Tag } from "./contract";
 
+// Between a figure and its unit, so a line never wraps between them.
+export const NBSP = "\u00a0";
+
 export interface Roster {
   player(id: unknown): Player | undefined;
   clubName(id: unknown): string;
@@ -56,7 +59,7 @@ export function describe(event: FeedEvent, r: Roster): EventLine {
         : { text: `Goal, ${club}: ${name(r, event.player_id)}`, tone: "goal" };
     case "shot": {
       const outcome = SHOT_OUTCOME[String(event.outcome)] ?? event.outcome;
-      const speed = typeof event.speed_kmh === "number" ? `, ${Math.round(event.speed_kmh)} km/h` : "";
+      const speed = typeof event.speed_kmh === "number" ? `, ${Math.round(event.speed_kmh)}${NBSP}km/h` : "";
       return { text: `${name(r, event.player_id)} (${club}) shoots: ${outcome}${speed}`, tone: "plain" };
     }
     case "var_check": {
@@ -121,9 +124,9 @@ export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): Ticker
 export function describeTag(tag: Tag, r: Roster): EventLine {
   const who = `${name(r, tag.player_id)} (${r.clubName(tag.team_id)})`;
   if (tag.kind === "sprint") {
-    return { text: `${who} sprints at ${tag.value.toFixed(1)} km/h${tag.record ? ", the fastest of the match so far" : ""}`, tone: "sprint" };
+    return { text: `${who} sprints at ${tag.value.toFixed(1)}${NBSP}km/h${tag.record ? ", the fastest of the match so far" : ""}`, tone: "sprint" };
   }
-  return { text: `${who} has covered ${tag.value} km`, tone: "distance" };
+  return { text: `${who} has covered ${tag.value}${NBSP}km`, tone: "distance" };
 }
 
 function correction(event: FeedEvent, r: Roster): string {

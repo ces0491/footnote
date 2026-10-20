@@ -22,9 +22,9 @@ Data
 Pipeline (deployed on Azure)
 
 - [x] Replayer → Event Hubs → processor on Container Apps → Postgres → Web PubSub → browser
-- [ ] Live stats: pass distance, accuracy and difficulty rating; ball and shot
+- [x] Live stats: pass distance, accuracy and difficulty rating; ball and shot
       speed; player speed and distance tags when thresholds are crossed
-- [ ] Match-state timeline updated live, and the state model scored against the
+- [x] Match-state timeline updated live, and the state model scored against the
       answer key on held-out matches whose team styles it wasn't fitted on
 - [ ] Template overlay p95 under 1 s from event publish to browser, measured on
       the deployed stack

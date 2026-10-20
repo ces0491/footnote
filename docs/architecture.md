@@ -112,19 +112,22 @@ rebalancing; one replica keeps that out of scope.
 
 `scripts/smoke_live.py` follows a replay from outside the way a browser does and reports the time
 from the replayer publishing each event to the client receiving it, using the timestamps every push
-carries. Measured on 19 October 2026 from a client in South Africa, so the times include the network
-path from westus3:
+carries. Measured from a client in South Africa, so the times include the network path from westus3.
+The first three runs were on 19 October 2026, before the processor ran the models; the last was on
+20 October, with them:
 
 | Replay | Events | Median | p95 | Max |
 | --- | --- | --- | --- | --- |
 | from 23' at 4×, through half-time to full time | 1,458 | 227 ms | 303 ms | 1,345 ms |
 | from 81' at 4× | 256 | 236 ms | 299 ms | 354 ms |
 | from 81' at 4×, started as the processor restarted | 258 | 244 ms | 314 ms | 1,308 ms |
+| from 81' at 4×, with the models | 236 | 278 ms | 359 ms | 427 ms |
 
-By stage, medians across those runs: publish to Event Hubs enqueue about 50 ms, enqueue to the
-processor's push about 55 ms, and push to receipt 115–125 ms, most of it the network. The slowest
-events came early in a replay: in the replay from 23', the 12 events in its first 10 seconds had a
-maximum of 1,345 ms, and the 1,446 after them a maximum of 669 ms.
+By stage, medians across the first three runs: publish to Event Hubs enqueue about 50 ms, enqueue
+to the processor's push about 55 ms, and push to receipt 115–125 ms, most of it the network. The
+slowest events came early in a replay: in the replay from 23', the 12 events in its first 10 seconds
+had a maximum of 1,345 ms, and the 1,446 after them a maximum of 669 ms. In the run with the models,
+the processor's stage kept its median (53 ms); push to receipt took longer that run (172 ms median).
 
 ## Identity and access
 

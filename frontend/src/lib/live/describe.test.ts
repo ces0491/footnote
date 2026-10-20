@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FeedEvent, MatchMeta, Tag } from "./contract";
-import { describe as line, roster, tickerLines } from "./describe";
+import { describe as line, NBSP, roster, tickerLines } from "./describe";
 
 const match = {
   home: { id: "sal", short_name: "Saltmarsh" },
@@ -43,14 +43,14 @@ describe("tickerLines", () => {
 
   it("says what a tag records", () => {
     const [sprint, distance] = tickerLines([], [tag(1, 700.2), tag(2, 10, "distance")], r);
-    expect(sprint.text).toBe("Femi Adeyani (Kingsferry) sprints at 33.9 km/h, the fastest of the match so far");
-    expect(distance.text).toBe("Femi Adeyani (Kingsferry) has covered 10 km");
+    expect(sprint.text).toBe(`Femi Adeyani (Kingsferry) sprints at 33.9${NBSP}km/h, the fastest of the match so far`);
+    expect(distance.text).toBe(`Femi Adeyani (Kingsferry) has covered 10${NBSP}km`);
   });
 });
 
 describe("describe", () => {
   it("gives a shot's speed", () => {
     const shot = feedEvent(5, 2, 403, { team_id: "sal", player_id: "sal-10", outcome: "goal", speed_kmh: 97.4 });
-    expect(line(shot, r).text).toBe("Teo Varlan (Saltmarsh) shoots: scores, 97 km/h");
+    expect(line(shot, r).text).toBe(`Teo Varlan (Saltmarsh) shoots: scores, 97${NBSP}km/h`);
   });
 });
