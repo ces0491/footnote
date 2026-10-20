@@ -13,6 +13,7 @@ Settings come from the environment (set by infra/processor.bicep in Azure):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -27,11 +28,28 @@ from footnote.db.connect import entra_pool
 from footnote.db.migrate import ensure_web_role, migrate
 from footnote.live.match import SHOWCASE_MATCH_ID, load_match
 from footnote.processor.consumer import consume
-from footnote.processor.core import Processor
+from footnote.processor.core import OVERDUE_MS, Processor
 from footnote.processor.push import WebPubSubPush
 from footnote.processor.store import PostgresStore
 
 log = logging.getLogger("footnote.processor")
+
+SWEEP_INTERVAL = 60.0  # seconds between looks for runs left running by a crashed replayer
+
+
+async def sweep(processor: Processor) -> None:
+    """End abandoned runs, once a minute.
+
+    The first look waits until a restarted processor has caught up on the hub: until then, a healthy
+    run's stored state is behind and its next message can look overdue.
+    """
+    await asyncio.sleep(OVERDUE_MS / 1000)
+    while True:
+        try:
+            await processor.end_overdue()
+        except Exception:
+            log.exception("looking for abandoned runs failed")
+        await asyncio.sleep(SWEEP_INTERVAL)
 
 
 async def main() -> None:
@@ -76,7 +94,13 @@ async def main() -> None:
     log.info("processing %s from %s", match.match_id, cloud.require("EVENTHUB_NAME"))
     try:
         async with consumer, webpubsub:
-            await consume(consumer, processor)
+            sweeper = asyncio.create_task(sweep(processor), name="sweep")
+            try:
+                await consume(consumer, processor)
+            finally:
+                sweeper.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await sweeper
     finally:
         await pool.close()
         await credential.close()

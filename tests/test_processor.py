@@ -7,7 +7,7 @@ import pytest
 from footnote.live.contract import KIND_CONTROL, KIND_FEED
 from footnote.live.match import Match, load_match
 from footnote.live.timeline import Timeline
-from footnote.processor.core import FeedRow, Incoming, Processor
+from footnote.processor.core import OVERDUE_MS, FeedRow, Incoming, Processor
 from footnote.replayer.schedule import plan
 
 RUN_ID = "0123456789abcdef"
@@ -30,7 +30,8 @@ class MemoryStore:
         return True
 
     async def end_run(self, run_id: str, reason: str) -> None:
-        self.status[run_id] = reason
+        if self.status.get(run_id) == "running":
+            self.status[run_id] = reason
 
     async def load_run(self, run_id: str) -> tuple[dict, list[dict]] | None:
         if run_id not in self.runs:
@@ -38,14 +39,22 @@ class MemoryStore:
         stored = self.feed.get(run_id, {})
         return self.runs[run_id], [stored[seq] for seq in sorted(stored)]
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict) -> None:
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
         if self.fail_saves:
             self.fail_saves -= 1
             raise ConnectionError("store unavailable")
         for row in rows:
             self.feed.setdefault(row.run_id, {}).setdefault(row.message["seq"], row.message)
-        self.views[run_id] = view
-        self.view_seqs.append(view["seq"])
+        if view is not None:
+            self.views[run_id] = view
+            self.view_seqs.append(view["seq"])
+
+    async def running_runs(self) -> list[tuple[dict, int]]:
+        return [
+            (self.runs[run_id], self.views.get(run_id, {}).get("seq", 0))
+            for run_id, status in self.status.items()
+            if status == "running"
+        ]
 
 
 class MemoryPush:
@@ -106,6 +115,18 @@ async def test_a_run_from_a_jump_point_snapshots_then_pushes_each_event(showcase
     assert sorted(store.feed[RUN_ID]) == list(range(1, len(showcase.feed) + 1))
     assert store.views[RUN_ID]["phase"] == "full_time" and store.status[RUN_ID] == "finished"
     assert processor.runs == {}
+
+
+async def test_a_view_is_stored_only_once_the_backfill_is_in(showcase: Match) -> None:
+    """A snapshot read while the backfill is still being written would show an earlier score."""
+    descriptor, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push)
+    for i in range(0, 1000, 200):  # partway through the backfill
+        await processor.handle(items[i : i + 200])
+    assert RUN_ID not in store.views and len(store.feed[RUN_ID]) == 999
+    await processor.handle(items[1000:])
+    assert store.view_seqs and min(store.view_seqs) >= descriptor["backfill_seq"]
 
 
 async def test_redelivered_messages_are_neither_stored_nor_pushed_twice(showcase: Match) -> None:
@@ -179,3 +200,34 @@ async def test_a_failed_push_does_not_stop_processing(showcase: Match) -> None:
     seqs = [m["seq"] for m in push.sent if m["type"] == "event"]
     assert 10 not in seqs and 11 in seqs
     assert 10 in store.feed[RUN_ID]
+
+
+async def test_a_run_whose_replayer_went_quiet_is_ended_as_failed(showcase: Match) -> None:
+    """A replayer that crashes sends no run_end. Once the run's next message is long overdue, its
+    viewers are told it failed rather than left waiting."""
+    descriptor, items = _run_messages(showcase, 81)
+    head = items[:1600]  # run_start and the feed up to seq 1599, then nothing more
+    store, push = MemoryStore(), MemoryPush()
+    now = {"ms": 0}
+    processor = Processor(showcase, store, push, now_ms=lambda: now["ms"])
+    await processor.handle(head)
+
+    following = showcase.feed[head[-1].body["seq"]]  # the message after the last one stored
+    replay = Timeline.from_feed(showcase.feed).replay_seconds(following["ts"])
+    due = int(descriptor["started_at"] + (replay - descriptor["start_replay"]) / descriptor["speed"] * 1000)
+    now["ms"] = due + OVERDUE_MS - 1
+    assert await processor.end_overdue() == []
+    now["ms"] = due + OVERDUE_MS + 1
+    assert await processor.end_overdue() == [RUN_ID]
+    assert store.status[RUN_ID] == "failed" and processor.runs == {}
+    assert push.sent[-1]["type"] == "run_end" and push.sent[-1]["reason"] == "failed"
+    assert await processor.end_overdue() == []
+
+
+async def test_a_finished_run_is_never_taken_for_abandoned(showcase: Match) -> None:
+    _, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push, now_ms=lambda: 10**15)
+    await processor.handle(items)
+    assert await processor.end_overdue() == []
+    assert store.status[RUN_ID] == "finished"

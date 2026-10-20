@@ -8,6 +8,10 @@ the run's state is rebuilt from what was stored. A run met again, including thro
 carries on from the stored feed.
 
 A push that fails is logged and skipped. Viewers notice the gap in `seq` and fetch the snapshot.
+
+A replayer that shuts down publishes `run_end` for its runs; one that crashes can't. `end_overdue`
+ends any run still marked running whose next message is long past the time it was due, as failed,
+so its viewers aren't left waiting for messages that will never come.
 """
 
 from __future__ import annotations
@@ -19,11 +23,16 @@ from dataclasses import dataclass, field
 from itertools import groupby
 from typing import Protocol
 
-from footnote.live.contract import KIND_CONTROL, client_event
+from footnote.live.contract import KIND_CONTROL, RunEndReason, client_event
 from footnote.live.match import Match
 from footnote.live.state import KEY_EVENT_TYPES, RunState
+from footnote.live.timeline import Timeline
 
 log = logging.getLogger(__name__)
+
+# How late a run's next message may be before the run counts as abandoned: far beyond any delay on
+# the way through Event Hubs, and beyond the time a restarted processor takes to catch up.
+OVERDUE_MS = 5 * 60_000
 
 
 @dataclass(frozen=True)
@@ -57,8 +66,12 @@ class Store(Protocol):
         """The run's descriptor and its stored feed in seq order, or None for an unknown run."""
         ...
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict) -> None:
-        """Store feed rows and the run's state view in one transaction."""
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
+        """Store feed rows and, unless it is None, the run's state view, in one transaction."""
+        ...
+
+    async def running_runs(self) -> list[tuple[dict, int]]:
+        """Each run still marked running: its descriptor and the seq its stored state reflects."""
         ...
 
 
@@ -90,6 +103,9 @@ class Processor:
         self.now_ms = now_ms
         self.runs: dict[str, LiveRun] = {}
         self._unknown: set[str] = set()
+        # Each message's replay second, by seq - 1, which sets when a run publishes it.
+        timeline = Timeline.from_feed(match.feed)
+        self._replay = [timeline.replay_seconds(m["ts"]) for m in match.feed]
 
     async def handle(self, batch: list[Incoming]) -> None:
         for run_id, items in groupby(batch, key=lambda i: i.run_id):
@@ -133,7 +149,10 @@ class Processor:
     async def _flush(self, run_id: str, pending: _Pending) -> None:
         if pending.rows:
             run = self.runs[run_id]
-            await self.store.save(pending.rows, run_id, run.state.view())
+            # Viewers get a run's state only once its backfill is in. A view from partway through the
+            # backfill would show the score from minutes before the jump point.
+            backfilled = run.state.seq >= run.descriptor["backfill_seq"]
+            await self.store.save(pending.rows, run_id, run.state.view() if backfilled else None)
             pending.rows = []
         for message in pending.outgoing:
             await self._send(run_id, message)
@@ -165,13 +184,33 @@ class Processor:
             if descriptor["backfill_seq"] == 0:
                 await self._send(run_id, self._snapshot(run))
         elif kind == "run_end":
-            reason = item.body["reason"]
-            await self.store.end_run(run_id, reason)
-            self.runs.pop(run_id, None)
-            log.info("run %s ended: %s", run_id, reason)
-            await self._send(run_id, {"type": "run_end", "run_id": run_id, "reason": reason})
+            await self._end(run_id, item.body["reason"])
         else:
             log.warning("run %s: unknown control message %r", run_id, kind)
+
+    async def _end(self, run_id: str, reason: RunEndReason) -> None:
+        await self.store.end_run(run_id, reason)
+        self.runs.pop(run_id, None)
+        log.info("run %s ended: %s", run_id, reason)
+        await self._send(run_id, {"type": "run_end", "run_id": run_id, "reason": reason})
+
+    async def end_overdue(self) -> list[str]:
+        """End as failed each run still marked running whose next message is OVERDUE_MS late."""
+        now = self.now_ms()
+        ended = []
+        for descriptor, seq in await self.store.running_runs():
+            if now - self._due_ms(descriptor, seq) > OVERDUE_MS:
+                run_id = descriptor["run_id"]
+                log.warning("run %s: the message after seq %d is overdue; ending the run as failed", run_id, seq)
+                await self._end(run_id, "failed")
+                ended.append(run_id)
+        return ended
+
+    def _due_ms(self, descriptor: dict, seq: int) -> float:
+        """When the run should have published the message after `seq`, or its last once all are in."""
+        replay = self._replay[min(seq, len(self._replay) - 1)]
+        ahead = max(0.0, replay - descriptor["start_replay"]) / descriptor["speed"]
+        return float(descriptor["started_at"]) + ahead * 1000
 
     async def _run(self, run_id: str) -> LiveRun | None:
         run = self.runs.get(run_id)

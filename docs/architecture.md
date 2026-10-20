@@ -37,9 +37,11 @@ mapping (`frontend/src/lib/live/timeline.ts`) and uses it to run the match clock
 **Backfill, then live.** The replayer first publishes a `run_start` control message, then every feed
 message before the start point at once, marked as backfill, then the rest at the pace their
 timestamps set, scaled by the speed. A jump starts 30 seconds before its minute. The processor folds
-the backfill in without pushing it, then pushes one snapshot; from there it pushes each event. At the
-end the replayer publishes `run_end` with the reason: finished, stopped, expired (two hours), evicted
-(a seventh concurrent run replaces the oldest) or failed.
+the backfill in without pushing it, then pushes one snapshot; from there it pushes each event. It
+stores the run's state view only once the backfill is in, so a snapshot fetched while the backfill
+is still being written has no view yet, where it would otherwise show the score from minutes before
+the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped, expired
+(two hours), evicted (a seventh concurrent run replaces the oldest) or failed.
 
 **Joining.** The browser fetches the run's snapshot from the web app's API first, and for a run that
 has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and fetches
@@ -79,7 +81,11 @@ state view in one transaction before pushing anything, then checkpoints in Blob 
 - A partition with no checkpoint yet is read from five minutes before the processor started, so a
   replay that began while a new revision was starting isn't lost.
 - A failed push is logged and skipped; the browser's gap check recovers it.
-- The replayer holds runs in memory, so a replayer restart ends the runs in progress.
+- The replayer holds runs in memory, so a replayer restart ends the runs in progress. A clean
+  shutdown publishes their `run_end`; a crash can't. Once a minute the processor ends, as failed, any
+  run still marked running whose next message is more than five minutes past its schedule, and tells
+  its viewers. The first check waits five minutes after the processor starts, so that a restarted
+  processor has caught up on the hub before it judges any run.
 
 Viewers can therefore receive a push twice, for example when a processor restart re-reads a batch
 the old replica had already pushed. Every push carries its `seq`, and the browser drops one it has

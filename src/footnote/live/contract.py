@@ -15,7 +15,8 @@ Web PubSub, processor to viewers, in the group `run-<run_id>`. JSON with a `type
     snapshot  the run descriptor and the full state view, once the backfill is processed
     event     one feed event (freeze frames and provider boilerplate dropped), whether it is a key
               event, the score, phase, clock and stats after it, and timing for latency measurement
-    run_end   the replay finished, was stopped, expired, was evicted to make room, or failed
+    run_end   the replay finished, was stopped, expired, was evicted to make room, or failed (which
+              includes a run the processor ended because its messages stopped arriving)
 
 Every message carries `seq`, the feed sequence number the state reflects. A client that sees a gap
 fetches the snapshot again.

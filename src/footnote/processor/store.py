@@ -51,7 +51,15 @@ class PostgresStore:
             cur = await conn.execute("select body from feed_events where run_id = %s order by seq", (run_id,))
             return run["descriptor"], [row["body"] for row in await cur.fetchall()]
 
-    async def save(self, rows: list[FeedRow], run_id: str, view: dict) -> None:
+    async def running_runs(self) -> list[tuple[dict, int]]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "select r.descriptor, coalesce(s.seq, 0) as seq from runs r"
+                " left join run_state s on s.run_id = r.run_id where r.status = 'running'"
+            )
+            return [(row["descriptor"], row["seq"]) for row in await cur.fetchall()]
+
+    async def save(self, rows: list[FeedRow], run_id: str, view: dict | None) -> None:
         params = [
             (
                 r.run_id,
@@ -77,11 +85,13 @@ class PostgresStore:
                             " on conflict (run_id, seq) do nothing",
                             params,
                         )
-                    await conn.execute(
-                        "insert into run_state (run_id, seq, view) values (%s, %s, %s)"
-                        " on conflict (run_id) do update set seq = excluded.seq, view = excluded.view, updated_at = now()",
-                        (run_id, view["seq"], Jsonb(view)),
-                    )
+                    if view is not None:
+                        await conn.execute(
+                            "insert into run_state (run_id, seq, view) values (%s, %s, %s)"
+                            " on conflict (run_id) do update set seq = excluded.seq, view = excluded.view,"
+                            " updated_at = now()",
+                            (run_id, view["seq"], Jsonb(view)),
+                        )
                 return
             except Exception:
                 if attempt == _ATTEMPTS:
