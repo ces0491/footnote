@@ -92,11 +92,13 @@ formal security review or on-call docs.
 
 ## Decision
 
-Ces, at the Sunday 25 October checkpoint: walk the judge quick-start against
+Ces, at the Friday 23 October checkpoint: walk the judge quick-start against
 the deployed app end to end. Anything still unticked by then is either finished
-on Monday or dropped, with an entry in the revision history below. If cuts are
-needed, the rule explainers go first, then the amended-event demo.
+on Monday 26 October or dropped, with an entry in the revision history below.
+If cuts are needed, the rule explainers go first, then the amended-event demo.
 
 ## Revision history
 
 - 2026-10-19: initial scope
+- 2026-10-20: checkpoint moved from Sunday 25 to Friday 23 October; Ces is away
+  on 24 and 25 October
