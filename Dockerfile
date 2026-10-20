@@ -1,4 +1,4 @@
-# The Python services (replayer, processor). One image recipe; SERVICE picks the entry point.
+# The Python services (replayer, processor, agents). One image recipe; SERVICE picks the entry point.
 # Only the committed showcase match goes in: the league, the match metadata, the feed and the
 # tracking. The answer key stays out (see .dockerignore).
 

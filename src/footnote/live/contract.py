@@ -19,12 +19,17 @@ Web PubSub, processor to viewers, in the group `run-<run_id>`. JSON with a `type
               event, the score, phase, clock, stats and match state after it, and timing for
               latency measurement; with the models, also a pass's `difficulty`, the `player` line
               of the player on the event, and any `tags` that fell due with it
-    run_end   the replay finished, was stopped, expired, was evicted to make room, or failed (which
-              includes a run the processor ended because its messages stopped arriving)
+    insight   one insight as it now stands (its row of the `insight_cards` view, migration 0002)
+              and `rev`, the run's insight revision the change made; the processor and the agents
+              service both send them (footnote.db.insights)
+    run_end   the replay finished, was stopped (by its viewer, or by their next replay), expired,
+              was evicted to make room, or failed (which includes a run the processor ended because
+              its messages stopped arriving, or over a message it couldn't fold)
 
-Every message carries `seq`, the feed sequence number the state reflects. A client that sees a gap
-fetches the snapshot again. Messages go out as compact JSON text (`wire`), so the bytes Web PubSub
-bills in 2 KB units are the bytes the tests measure.
+A snapshot and each event carry `seq`, the feed sequence number the state reflects, and an insight
+carries `rev`. A client that sees a gap in either fetches the snapshot again. Messages go out as
+compact JSON text (`wire`), so the bytes Web PubSub bills in 2 KB units are the bytes the tests
+measure.
 """
 
 from __future__ import annotations

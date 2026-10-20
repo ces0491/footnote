@@ -34,7 +34,9 @@ container registry by `azd deploy` (remote build), so deploying needs no local D
 
 A judge picks a jump point (kick-off, 23', 31', 60' or 81') and a speed (1×, 2× or 4×). The web app
 asks the replayer for a run and gets back the run descriptor: its ID, start point, speed, the wall
-time at which the start point is live, and the timeline parameters.
+time at which the start point is live, and the timeline parameters. The request carries the
+anonymous ID the browser goes by, and a viewer's new replay replaces their previous one, so trying
+the jump points in turn never pushes anyone else's replay out.
 
 **Replay time.** The feed's timestamps follow the wall clock, including a fifteen-minute half-time
 break. A replay keeps that pacing but shortens the break to 30 seconds. Replay seconds count from
@@ -47,8 +49,9 @@ timestamps set, scaled by the speed. A jump starts 30 seconds before its minute.
 the backfill in without pushing it, then pushes one snapshot; from there it pushes each event. It
 stores the run's state view only once the backfill is in, so a snapshot fetched while the backfill
 is still being written has no view yet, where it would otherwise show the score from minutes before
-the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped, expired
-(two hours), evicted (a seventh concurrent run replaces the oldest) or failed.
+the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped (by the
+viewer, or by their next replay), expired (two hours), evicted (a seventh concurrent run replaces
+the oldest) or failed.
 
 **What the processor works out.** Beside the counts, each run's state carries what the models in
 `src/footnote/interpret` read from the feed and the tracking ([models.md](models.md)): each pass's
@@ -71,6 +74,11 @@ the snapshot again each time a connection opens, because pushes sent while it ha
 Pushes that arrive while a snapshot is on its way are held and applied on top of it. Each push
 carries the score, phase, clock and stats after its event, so applying one is a replacement. A gap in
 `seq` means a push was missed: the browser holds what follows and fetches the snapshot again.
+
+Once the page shows a run it keeps showing it. A snapshot fetch that fails is retried with backoff,
+and the page says the connection is in trouble meanwhile. If the push connection can't be opened
+(the free tier allows 20) the page fetches the snapshot every few seconds instead and tries the
+connection again every half minute; it does the same while the client reconnects.
 
 ## Contracts
 
@@ -115,7 +123,14 @@ state view in one transaction before pushing anything, then checkpoints in Blob 
   `run_start` it reads again.
 - A partition with no checkpoint yet is read from five minutes before the processor started, so a
   replay that began while a new revision was starting isn't lost.
-- A failed push is logged and skipped; the browser's gap check recovers it.
+- An event that isn't a replayer message (one sent from the portal, say) is logged and skipped. A
+  message the processor can't fold fails the same way however often it is read, so it isn't left
+  to redelivery, which would hold up its partition, and every run on it, until the hub's one-day
+  retention dropped it. Its run keeps what came before, is ended as failed, and its later messages
+  are skipped.
+- A failed push is logged and skipped; the browser's gap check recovers an event or an insight. A
+  lost `run_end` isn't recovered: the page shows the run as still going until it next fetches the
+  snapshot.
 - The replayer holds runs in memory, so a replayer restart ends the runs in progress. A clean
   shutdown publishes their `run_end`; a crash can't. Once a minute the processor ends, as failed, any
   run still marked running whose next message is more than five minutes past its schedule, and tells
@@ -130,7 +145,7 @@ The agents service claims pending insights with `for update skip locked` under a
 crashed worker's job is claimed again once the lease runs out, and a job that has been claimed
 three times falls back to its template. Writing a draft locks the insight and checks its facts are
 the ones the job started from: a correction that restated the insight in the meantime has queued a
-fresh job, so the stale draft is dropped. Jobs whose replay has ended are given up. A missed
+fresh job, with its own wait and claims, so the stale draft is dropped. Jobs whose replay has ended are given up. A missed
 notification costs at most five seconds: the service also looks for jobs on a timer.
 
 The processor and replayer each run exactly one replica. Scaling the processor out would work with
@@ -183,7 +198,7 @@ app runs as its own user-assigned managed identity with these roles:
 | web | `select` on `matches`, `runs`, `feed_events`, `run_state`, `insights`, `insight_versions`, `insight_cards` | granted by the processor at start-up |
 | agents | Foundry User | the Foundry project, to call the model |
 | agents | Web PubSub Service Owner | the Web PubSub resource, to push the versions it writes |
-| agents | `select` on the match tables; `insert` on `insight_versions`, `agent_runs`, `agent_cache`; `update` of the agent columns of `insights` and of `runs.insight_rev` | granted by the processor at start-up |
+| agents | `select` on the match tables; `insert` on `insight_versions` and `agent_cache`; `insert` and `update` on `agent_runs`; `update` of the agent columns of `insights` and of `runs.insight_rev` | granted by the processor at start-up |
 | all four | AcrPull | the container registry |
 
 The browser's Web PubSub token joins one run's group and carries no roles, so a viewer can't
@@ -211,11 +226,16 @@ dollars, for 20 October to 10 November (22 days):
 | Event Hubs | Basic, 1 throughput unit | $0.015/hour + $0.028 per million events | $7.90 |
 | Container registry | Basic | $0.1666/day | $3.70 |
 | Log Analytics | pay as you go, capped at 0.2 GB/day | first 5 GB/month free, then $2.30/GB | $0–4 |
-| Storage | Standard LRS, checkpoints only | | under $0.10 |
+| Storage | Standard LRS, hot: the processor's checkpoints | $0.05 per 10,000 writes or lists | $5–6 |
 | Web PubSub | Free | $0 | $0 |
-| Container Apps, the agents service from 21 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
+| Container Apps, the agents service from 20 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
 | Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–13 |
-| **Total** | | | **$42–63** |
+| **Total** | | | **$47–69** |
+
+Storage is billed by operation, and nearly all of them are the processor's partition ownership:
+every 5–6 seconds it lists the ownership blobs and renews its claim on both partitions, three
+operations whether or not anything is replaying, or 43,000–52,000 a day. A replay adds about one
+checkpoint write per publishing step, 1,364 for a whole match.
 
 The model costs nothing until it is called. A card measured at under $0.004 (insights.md), and a
 full match has 13 cards to draft, so a replay from kick-off costs about $0.05 the first time and
@@ -224,8 +244,9 @@ cap on agent runs (`AGENT_DAILY_RUNS`, 150): under $0.60 a day, $13 over the 21 
 reached it.
 
 Web PubSub's Free tier allows 20 concurrent connections and 20,000 outbound messages a day. A viewer
-watching a whole match at any speed receives about 1,830 messages (one per event plus the snapshot),
-so the free tier covers about ten full-match viewers a day. Standard costs $1.61 a day; moving to it
+watching a whole match at any speed receives about 1,870 messages (one per event, about fifty
+insight changes, the snapshot and the end), so the free tier covers about ten full-match viewers a
+day. Standard costs $1.61 a day; moving to it
 for judging (27 October to 10 November) would add $24. A tier change between Free and Standard
 takes the service offline for 30–60 minutes while its address changes, so it has to happen before
 submission.

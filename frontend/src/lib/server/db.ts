@@ -10,8 +10,8 @@ const TOKEN_SCOPE = "https://ossrdbms-aad.database.windows.net/.default";
 let pool: Pool | undefined;
 
 // Postgres accepts Entra tokens only. pg asks for the password on every new connection, so each one
-// signs in with a current token. The web app's role can read matches, runs and their state, nothing
-// more (WEB_GRANTS in src/footnote/db/migrate.py).
+// signs in with a current token. The web app's role can read matches, runs, their feed, state and
+// insights, and write nothing (WEB_GRANTS in src/footnote/db/migrate.py).
 export function db(): Pool {
   if (!pool) {
     const env = serverEnv();
