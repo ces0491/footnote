@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { insightFixture } from "./test-fixtures";
-import { corrections, evidenceSource, provenanceLabel, shortlist } from "./shortlist";
+import { corrections, evidenceSource, provenanceLabel, shortlist, statusLabel } from "./shortlist";
 
 describe("shortlist", () => {
   const goal = insightFixture("goal-e0391", { rank: 0.95 });
@@ -32,6 +32,16 @@ describe("shortlist", () => {
   it("says where the wording came from", () => {
     expect(provenanceLabel(goal)).toBe("Template · agent drafting");
     expect(provenanceLabel({ ...goal, agent_state: "fallback" })).toBe("Template · agent fell back");
-    expect(provenanceLabel({ ...goal, source: "agent", provenance: { source: "agent", cached: true } })).toBe("Agent, reused");
+    const agent = { ...goal, agent_state: "done" as const, source: "agent" as const };
+    expect(provenanceLabel({ ...agent, provenance: { source: "agent", cached: true } })).toBe("Agent, reused");
+    expect(provenanceLabel({ ...agent, agent_state: "pending" })).toBe("Agent redrafting");
+    expect(provenanceLabel({ ...agent, source: "producer", provenance: { source: "producer" } })).toBe("Edited by the producer");
+  });
+
+  it("says whether a card airs, and who decided", () => {
+    expect(statusLabel(goal)).toBe("Approved automatically");
+    expect(statusLabel({ ...goal, status_by: "producer" })).toBe("Approved");
+    expect(statusLabel({ ...goal, status: "drafted", status_by: null })).toBe("Waiting for approval");
+    expect(statusLabel({ ...goal, status: "drafted", status_by: "correction" })).toBe("Corrected: needs approval again");
   });
 });

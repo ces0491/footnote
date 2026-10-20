@@ -110,7 +110,7 @@ export function MatchStatePanel({
       </CardHeader>
       <CardContent className="space-y-4">
         {state ? (
-          <div className="flex flex-wrap items-baseline justify-between gap-2" aria-live="polite">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-lg font-semibold">{stateLine(state.state, club, other)}</p>
             <span className="text-sm text-muted-foreground">
               <Badge variant="outline" className="mr-2 tabular-nums">

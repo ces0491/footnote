@@ -37,8 +37,25 @@ export function evidenceSource(insight: Insight): "events" | "tracking" | null {
 
 /** Where an insight's wording came from, in a few words; `agent_note` says why a template stands. */
 export function provenanceLabel(insight: Insight): string {
+  if (insight.agent_state === "pending" || insight.agent_state === "drafting") {
+    return insight.source === "template" ? "Template · agent drafting" : "Agent redrafting";
+  }
+  if (insight.source === "producer") return "Edited by the producer";
   if (insight.source === "agent") return insight.provenance.cached ? "Agent, reused" : "Agent";
-  if (insight.agent_state === "pending" || insight.agent_state === "drafting") return "Template · agent drafting";
   if (insight.agent_state === "fallback") return "Template · agent fell back";
   return "Template";
+}
+
+/** Whether an insight airs, and who decided, in a few words. */
+export function statusLabel(insight: Insight): string {
+  switch (insight.status) {
+    case "approved":
+      return insight.status_by === "auto" ? "Approved automatically" : "Approved";
+    case "drafted":
+      return insight.status_by === "correction" ? "Corrected: needs approval again" : "Waiting for approval";
+    case "withdrawn":
+      return "Withdrawn";
+    case "killed":
+      return "Killed";
+  }
 }

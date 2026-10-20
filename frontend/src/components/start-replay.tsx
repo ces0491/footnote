@@ -8,7 +8,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type RunDescriptor, SPEEDS } from "@/lib/live/contract";
+import { PROFILES, type Profile, rememberStarted } from "@/lib/live/profiles";
 import { viewerId } from "@/lib/live/viewer";
+import { cn } from "@/lib/utils";
 
 // The judges' jump points from docs/experience.md; each replay starts 30 s before its minute.
 const JUMPS = [
@@ -21,8 +23,9 @@ const JUMPS = [
 
 export function StartReplay() {
   const router = useRouter();
-  const [minute, setMinute] = useState("1");
-  const [speed, setSpeed] = useState("1");
+  const [who, setWho] = useState<Profile["id"]>("sam");
+  const [minute, setMinute] = useState("23");
+  const [speed, setSpeed] = useState("2");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,14 +33,18 @@ export function StartReplay() {
     setStarting(true);
     setError(null);
     try {
+      // Picking the producer means approving each graphic by hand; a fan's replay approves them as
+      // they're found. Either can be switched in the producer console.
+      const producer = PROFILES.find((p) => p.id === who)?.role === "producer" ? "manual" : "auto";
       const response = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed), viewer: viewerId() }),
+        body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed), viewer: viewerId(), producer }),
       });
       const body = (await response.json()) as RunDescriptor | { error: string };
       if (!response.ok || "error" in body) throw new Error("error" in body ? body.error : `HTTP ${response.status}`);
-      router.push(`/runs/${body.run_id}`);
+      rememberStarted(body.run_id);
+      router.push(`/runs/${body.run_id}?as=${who}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setStarting(false);
@@ -46,6 +53,30 @@ export function StartReplay() {
 
   return (
     <div className="space-y-5">
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">Watch as</legend>
+        <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Watch as">
+          {PROFILES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={who === p.id}
+              onClick={() => setWho(p.id)}
+              className={cn(
+                "rounded-lg border p-3 text-left text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                who === p.id && "border-foreground bg-muted",
+              )}
+            >
+              <div className="font-medium">
+                {p.name} <span className="font-normal text-muted-foreground">· {p.role === "producer" ? "producer" : "fan"}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{p.summary}</p>
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">You can switch between them during the replay.</p>
+      </fieldset>
       <div className="space-y-2">
         <div className="text-sm font-medium" id="jump-label">
           Start from

@@ -10,6 +10,7 @@
     "containerRegistryName": { "value": "${AZURE_CONTAINER_REGISTRY_NAME}" },
     "identityName": { "value": "${SERVICE_WEB_IDENTITY_NAME}" },
     "replayerName": { "value": "${SERVICE_REPLAYER_NAME}" },
+    "agentsName": { "value": "${SERVICE_AGENTS_NAME}" },
     "webPubSubEndpoint": { "value": "${WEBPUBSUB_ENDPOINT}" },
     "webPubSubHub": { "value": "${WEBPUBSUB_HUB}" },
     "postgresHost": { "value": "${POSTGRES_HOST}" },

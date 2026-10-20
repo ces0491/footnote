@@ -1,14 +1,17 @@
-// Folding pushes into what the live page shows. Every push carries the state after its event, so
-// applying one is a replacement, not arithmetic. A snapshot fetched from the web app replaces it in
-// the same way. While a snapshot is on its way, pushes are held and applied on top of it once it
-// arrives, so nothing received in the meantime is lost or applied out of order. A gap in seq means a
-// push was missed and the histories (key events, the state timeline, player lines, tags) may be
-// missing an entry, so the reducer asks for a snapshot.
+// Folding what a run sends into what its page knows. The match comes from pushes: the snapshot at
+// the end of the replay's backfill (the base), then every event in seq order, each carrying the
+// state after it. The processor stores each push with its feed row, so a page fetches what it lacks
+// (GET /api/runs/[runId]/pushes) and holds new pushes meanwhile, and its events never have a gap.
+// From the base and the events the page can show the match as of any moment since the replay's
+// start: live for the producer, and as of their own playback for a fan whose stream runs behind
+// (lib/live/playback.ts).
 //
 // Insights follow their own counter. Each change to one bumps the run's insight revision, and its
-// push carries the revision it made; the processor and the agents service both push them. A
-// revision already held is dropped, and a gap (a missed push, or two pushes crossing on the way)
-// asks for a snapshot, which carries every insight and the revision they are as of.
+// push carries the revision it made; the processor, the agents and the producer's desk all push
+// them. A revision already held is dropped, and a gap (a missed push, or two pushes crossing on the
+// way) asks for a fresh snapshot, which carries every insight and the revision they are as of. Each
+// insight's states are kept in the order they came, so a page can show the one that was current at
+// its playback.
 
 import type {
   EventMessage,
@@ -17,6 +20,7 @@ import type {
   MatchState,
   PushMessage,
   RunEndReason,
+  SnapshotMessage,
   StateSpell,
   StateView,
 } from "./contract";
@@ -35,55 +39,24 @@ export function timelineAfter(timeline: StateSpell[], state: MatchState | null |
   return [...timeline, { period: state.period, state: state.state, team_id: state.team_id, start: state.second, end: state.second }];
 }
 
-export interface RunViewState {
-  view: StateView | null;
-  ended: RunEndReason | null;
-  /** Pushes waiting for a snapshot that is on its way; null when none is. */
-  held: PushMessage[] | null;
-  /** Bumped each time a fresh snapshot is needed. The page fetches one whenever it changes. */
-  snapshotRequests: number;
-  insights: Record<string, Insight>;
-  /** The insight revision `insights` is as of; null until the first snapshot. */
-  insightRev: number | null;
-}
-
-// The page fetches the first snapshot itself before it connects, so pushes start out held.
-export const initialRunViewState: RunViewState = {
-  view: null,
-  ended: null,
-  held: [],
-  snapshotRequests: 0,
-  insights: {},
-  insightRev: null,
+/** The match before kick-off, the base of a replay that starts there. */
+export const KICK_OFF_VIEW: StateView = {
+  seq: 0,
+  phase: "pre_match",
+  clock: null,
+  score: { home: 0, away: 0 },
+  teams: {},
+  match_state: null,
+  key_events: [],
+  state_timeline: [],
+  players: {},
+  tags: [],
 };
 
-export type RunAction =
-  | { kind: "push"; message: PushMessage }
-  | {
-      kind: "snapshot";
-      view: StateView | null;
-      ended: RunEndReason | null;
-      insights?: Insight[];
-      insightRev?: number;
-    }
-  // The connection has (re)opened, and pushes sent while it was closed are lost.
-  | { kind: "resync" };
-
-function newer(candidate: StateView | null, current: StateView | null): StateView | null {
-  return candidate && (!current || candidate.seq >= current.seq) ? candidate : current;
-}
-
-function requestSnapshot(state: RunViewState, held: PushMessage[]): RunViewState {
-  return { ...state, held, snapshotRequests: state.snapshotRequests + 1 };
-}
-
-function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
-  const view = state.view;
-  if (view && message.seq <= view.seq) return state; // redelivered, or already in the snapshot
-  // No state yet, or a push was missed: hold this one until a snapshot covers the gap.
-  if (!view || message.seq !== view.seq + 1) return requestSnapshot(state, [message]);
+/** The match after one more event: its push carries the live fields; the histories grow. */
+export function foldEvent(view: StateView, message: EventMessage): StateView {
   const { seq, phase, clock, score, teams, match_state } = message;
-  const next: StateView = {
+  return {
     seq,
     phase,
     clock,
@@ -95,27 +68,105 @@ function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
     players: message.player ? { ...view.players, [message.player.player_id]: message.player } : view.players,
     tags: message.tags?.length ? [...(view.tags ?? []), ...message.tags] : view.tags,
   };
-  return { ...state, view: next };
+}
+
+function viewOf(message: SnapshotMessage): StateView {
+  const { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags } = message;
+  return { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags };
+}
+
+export interface RunViewState {
+  /** The match at the replay's start; null until the page has it. */
+  base: StateView | null;
+  /** Every event after the base, in seq order, without a gap. */
+  events: EventMessage[];
+  /** The match live: the base with every event folded in. */
+  view: StateView | null;
+  ended: RunEndReason | null;
+  /** Pushes waiting for a resync that is on its way; null when none is. */
+  held: PushMessage[] | null;
+  /** Bumped each time the page should fetch the snapshot and the pushes it lacks. */
+  resyncs: number;
+  insights: Record<string, Insight>;
+  /** Each insight's states in the order they came, the current one last. */
+  history: Record<string, Insight[]>;
+  /** The insight revision `insights` is as of; null until the first snapshot. */
+  insightRev: number | null;
+}
+
+// The page fetches what it needs before it connects, so pushes start out held.
+export const initialRunViewState: RunViewState = {
+  base: null,
+  events: [],
+  view: null,
+  ended: null,
+  held: [],
+  resyncs: 0,
+  insights: {},
+  history: {},
+  insightRev: null,
+};
+
+export type RunAction =
+  | { kind: "push"; message: PushMessage }
+  // The connection has (re)opened, and pushes sent while it was closed are lost.
+  | { kind: "resync" }
+  // What a resync fetched: the stored pushes after the page's last event, the run's status and,
+  // from the snapshot, its insights. `backfillSeq` is the descriptor's: 0 for a replay from kick-off.
+  | {
+      kind: "resynced";
+      pushes: (SnapshotMessage | EventMessage)[];
+      ended: RunEndReason | null;
+      backfillSeq: number;
+      insights?: Insight[];
+      insightRev?: number;
+    };
+
+function requestResync(state: RunViewState, held: PushMessage[]): RunViewState {
+  return { ...state, held, resyncs: state.resyncs + 1 };
+}
+
+function same(a: Insight, b: Insight): boolean {
+  return a.updated_at === b.updated_at && a.version === b.version && a.status === b.status;
+}
+
+function remember(history: Record<string, Insight[]>, insight: Insight): Record<string, Insight[]> {
+  const states = history[insight.insight_id] ?? [];
+  const last = states.at(-1);
+  return last && same(last, insight) ? history : { ...history, [insight.insight_id]: [...states, insight] };
+}
+
+function applyBase(state: RunViewState, message: SnapshotMessage): RunViewState {
+  // A run's base never changes; a later snapshot push is one the page already has.
+  if (state.base) return state;
+  const base = viewOf(message);
+  return { ...state, base, view: base, events: [] };
+}
+
+function applyEvent(state: RunViewState, message: EventMessage): RunViewState {
+  const view = state.view;
+  if (view && message.seq <= view.seq) return state; // redelivered, or already fetched
+  // No base yet, or a push was missed: hold this one until a resync covers the gap.
+  if (!view || message.seq !== view.seq + 1) return requestResync(state, [message]);
+  return { ...state, events: [...state.events, message], view: foldEvent(view, message) };
 }
 
 function applyInsight(state: RunViewState, message: InsightMessage): RunViewState {
   const rev = state.insightRev;
   if (rev !== null && message.rev <= rev) return state; // already applied, or in the snapshot
-  if (rev === null || message.rev !== rev + 1) return requestSnapshot(state, [message]);
+  if (rev === null || message.rev !== rev + 1) return requestResync(state, [message]);
   return {
     ...state,
     insights: { ...state.insights, [message.insight.insight_id]: message.insight },
+    history: remember(state.history, message.insight),
     insightRev: message.rev,
   };
 }
 
 function apply(state: RunViewState, message: PushMessage): RunViewState {
   switch (message.type) {
-    case "snapshot": {
-      const { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags } = message;
-      const view = { seq, phase, clock, score, teams, match_state, key_events, state_timeline, players, tags };
-      return { ...state, view: newer(view, state.view) };
-    }
+    case "snapshot":
+      return applyBase(state, message);
     case "event":
       return applyEvent(state, message);
     case "insight":
@@ -125,28 +176,38 @@ function apply(state: RunViewState, message: PushMessage): RunViewState {
   }
 }
 
+/** An insight change with the next revision: it needs nothing a resync on its way could bring. */
+function nextInsight(state: RunViewState, message: PushMessage): boolean {
+  return message.type === "insight" && state.insightRev !== null && message.rev === state.insightRev + 1;
+}
+
 export function runReducer(state: RunViewState, action: RunAction): RunViewState {
   switch (action.kind) {
     case "push":
-      return state.held ? { ...state, held: [...state.held, action.message] } : apply(state, action.message);
+      if (state.held && !nextInsight(state, action.message)) return { ...state, held: [...state.held, action.message] };
+      return apply(state, action.message);
     case "resync":
-      return requestSnapshot(state, state.held ?? []);
-    case "snapshot": {
+      return requestResync(state, state.held ?? []);
+    case "resynced": {
+      let next: RunViewState = { ...state, held: null, ended: action.ended ?? state.ended };
+      if (!next.base && action.backfillSeq === 0) next = { ...next, base: KICK_OFF_VIEW, view: KICK_OFF_VIEW, events: [] };
       const fresher =
         action.insights !== undefined &&
         action.insightRev !== undefined &&
         (state.insightRev === null || action.insightRev >= state.insightRev);
-      let next: RunViewState = {
-        ...state,
-        view: newer(action.view, state.view),
-        ended: action.ended ?? state.ended,
-        held: null,
-        ...(fresher
-          ? { insights: Object.fromEntries(action.insights!.map((i) => [i.insight_id, i])), insightRev: action.insightRev! }
-          : {}),
-      };
-      // A held push can itself reveal a gap the snapshot doesn't cover; the rest are then held again.
-      for (const message of state.held ?? []) next = runReducer(next, { kind: "push", message });
+      if (fresher) {
+        let history = next.history;
+        for (const insight of action.insights!) history = remember(history, insight);
+        next = {
+          ...next,
+          insights: Object.fromEntries(action.insights!.map((i) => [i.insight_id, i])),
+          history,
+          insightRev: action.insightRev!,
+        };
+      }
+      // Fetched or held, pushes go through the same checks; one that reveals a gap holds the rest
+      // for another resync.
+      for (const message of [...action.pushes, ...(state.held ?? [])]) next = runReducer(next, { kind: "push", message });
       return next;
     }
   }

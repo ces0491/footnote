@@ -4,18 +4,20 @@ import { Suspense } from "react";
 import { LiveRun } from "@/components/live/live-run";
 import { runIdPattern } from "@/lib/live/contract";
 
-async function Run({ params }: { params: PageProps<"/runs/[runId]">["params"] }) {
+async function Run({ params, searchParams }: PageProps<"/runs/[runId]">) {
   const { runId } = await params;
+  const { as } = await searchParams;
   if (!runIdPattern.test(runId)) notFound();
-  // Keyed so another run's page starts from a fresh state rather than this one's.
-  return <LiveRun key={runId} runId={runId} />;
+  // Keyed so another run's page starts from a fresh state rather than this one's. `as` names the
+  // ready-made viewer to start as (lib/live/profiles.ts).
+  return <LiveRun key={runId} runId={runId} initialProfile={typeof as === "string" ? as : null} />;
 }
 
-export default function RunPage({ params }: PageProps<"/runs/[runId]">) {
+export default function RunPage(props: PageProps<"/runs/[runId]">) {
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-10">
       <Suspense>
-        <Run params={params} />
+        <Run {...props} />
       </Suspense>
     </main>
   );

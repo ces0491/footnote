@@ -5,9 +5,12 @@ import { z } from "zod";
 // Set by infra/web.bicep in Azure. Locally, copy them from `azd env get-values` (see the README).
 const schema = z.object({
   REPLAYER_URL: z.url(),
+  // The producer's desk, served by the agents service inside the Container Apps environment.
+  DESK_URL: z.url(),
   WEBPUBSUB_ENDPOINT: z.url(),
   WEBPUBSUB_HUB: z.string().min(1),
   POSTGRES_HOST: z.string().min(1),
+  POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
   POSTGRES_DATABASE: z.string().min(1),
   // The Entra role the web app signs in as: its managed identity's name, or the developer's UPN.
   POSTGRES_USER: z.string().min(1),

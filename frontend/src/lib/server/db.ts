@@ -19,7 +19,7 @@ export function db(): Pool {
       host: env.POSTGRES_HOST,
       database: env.POSTGRES_DATABASE,
       user: env.POSTGRES_USER,
-      port: 5432,
+      port: env.POSTGRES_PORT,
       password: () => accessToken(TOKEN_SCOPE),
       ssl: { rejectUnauthorized: true },
       max: 4,

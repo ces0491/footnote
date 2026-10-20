@@ -5,6 +5,10 @@ import { z } from "zod";
 
 export const SPEEDS = [1, 2, 4] as const;
 
+/** How a run's graphics are approved: automatically as they're found, or by the producer. */
+export const PRODUCER_MODES = ["auto", "manual"] as const;
+export type ProducerMode = (typeof PRODUCER_MODES)[number];
+
 /** The anonymous ID a browser goes by (lib/live/viewer.ts): a random UUID. */
 export const viewerIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -12,6 +16,7 @@ export const startRunRequest = z.object({
   start_minute: z.number().int().min(1).max(90),
   speed: z.union(SPEEDS.map((s) => z.literal(s))),
   viewer: z.string().regex(viewerIdPattern).optional(), // a new start replaces this viewer's last
+  producer: z.enum(PRODUCER_MODES).optional(),
 });
 export type StartRunRequest = z.infer<typeof startRunRequest>;
 
@@ -165,7 +170,9 @@ export interface EventMessage extends LiveFields {
   run_id: string;
   event: FeedEvent;
   key: boolean;
-  timing: Timing;
+  replay: number; // the replay second at which the provider published it
+  stoppage: boolean; // play is stopped after it
+  timing?: Timing; // on live pushes only; a stored push has none
   difficulty?: number | null; // a pass's difficulty, 0-1
   player?: PlayerLine; // the line of the player on the event, after it
   tags?: Tag[]; // tags that fell due with this event
@@ -178,11 +185,12 @@ export interface RunEndMessage {
   timing: Timing;
 }
 
-// --- Insights (src/footnote/insights, and the insight_cards view in migration 0002) -------------
+// --- Insights: the overlay contract (docs/overlay.md, src/footnote/live/overlay.py) -------------
 
 export type InsightKind = "moment" | "rule_call" | "segment" | "stat" | "player_tag" | "recap" | "correction";
 export type AgentState = "off" | "pending" | "drafting" | "done" | "fallback";
-export type InsightStatus = "drafted" | "approved" | "aired" | "withdrawn" | "killed";
+export type InsightStatus = "drafted" | "approved" | "withdrawn" | "killed";
+export type WordingSource = "template" | "agent" | "producer";
 
 /** When something happened, in match time: each client holds an insight against its own playback. */
 export interface MatchTime {
@@ -203,7 +211,7 @@ export interface InsightCard {
 }
 
 export interface Provenance {
-  source: "template" | "agent";
+  source: WordingSource;
   template?: string;
   agent_run_id?: string;
   model?: string;
@@ -213,6 +221,7 @@ export interface Provenance {
   latency_ms?: number;
   checks?: string;
   cached?: boolean;
+  edited_from?: number; // the version a producer edited
 }
 
 export interface InsightFlag {
@@ -222,27 +231,37 @@ export interface InsightFlag {
   seq: number;
 }
 
+/** One item of the overlay contract: an insight as it now stands. */
 export interface Insight {
+  match_id: string;
   insight_id: string;
-  seq: number;
+  seq: number; // the feed message its facts are as of
   kind: InsightKind;
-  topic: string;
-  at: MatchTime;
+  topic: string; // also the graphics template that shows it
+  at: MatchTime; // when it happened
   until: MatchTime; // leaves the shortlist after this
+  shown_seq: number; // the feed message behind its current state: shown once playback reaches it
+  shown_at: MatchTime; // that message's match time
+  ts: string; // that message's timestamp from the provider
   rank: number;
   reason: string;
   evidence: string[];
   placement: "lower_third" | "side_panel" | "full_card";
-  hold: "stoppage" | null;
+  hold: "stoppage" | null; // wait for the next stoppage after shown_at
+  duration: number | null; // seconds of match time on screen; null for a side-panel card
+  motion: "still" | "animated";
   corrects: string | null;
   live: boolean; // false for moments the run's backfill passed
   flag: InsightFlag | null; // VAR or a correction undid what it cites
-  status: InsightStatus;
+  status: InsightStatus; // only an approved item airs
+  status_by: "auto" | "producer" | "correction" | null;
+  status_at: string | null;
   agent_state: AgentState;
   agent_note: string | null; // why the template stands, when it does
   version: number;
-  source: "template" | "agent";
+  source: WordingSource;
   card: InsightCard;
+  fields: Record<string, string>; // each fact's text, for graphics systems filling a template
   provenance: Provenance;
   created_at: string;
   updated_at: string;
@@ -284,21 +303,110 @@ export interface MatchMeta {
   referee: { id: string; name: string };
   home: Club;
   away: Club;
-  lineups: { club_id: string; formation: string; starters: Player[]; bench: Player[] }[];
+  lineups: {
+    club_id: string;
+    formation: string;
+    attacking_direction: { first_half: "+x" | "-x"; second_half: "+x" | "-x" };
+    starters: Player[];
+    bench: Player[];
+  }[];
+}
+
+/** How the tracking chunks for the pitch view are laid out (src/footnote/live/pitch.py). */
+export interface TrackingLayout {
+  frame_rate: number;
+  frames_per_chunk: number;
+  values_per_frame: number;
+  frames: Record<string, number>; // frames in each period, by period
+  slot_players: string[][]; // the player in each of the 22 slots, per line-up
 }
 
 /** GET /api/runs/[runId] */
 export interface RunSnapshot {
   run: RunDescriptor;
   status: RunStatus;
+  producer: ProducerMode;
   view: StateView | null;
   match: MatchMeta;
+  tracking: TrackingLayout | null;
   insights: Insight[];
   insight_rev: number; // the revision the insights are as of
   server_time: number;
 }
 
+/** GET /api/runs/[runId]/pushes?after=<seq>: what viewers were sent after `seq`, as stored with
+ * each feed row: the snapshot at the end of the backfill, then every event. */
+export interface PushesResponse {
+  pushes: (SnapshotMessage | EventMessage)[];
+  more: boolean; // a page limit cut it short: ask again after the last
+}
+
 /** GET /api/runs/[runId]/events?ids=... : the events an insight cites, as they stand. */
 export interface EvidenceResponse {
   events: FeedEvent[];
+}
+
+// --- The producer's desk (src/footnote/agents/desk.py) ------------------------------------------
+
+export interface Sentence {
+  text: string;
+  events: string[];
+}
+
+/** A card's wording before code fills its placeholders in: `{fact.key}` where each figure goes. */
+export interface Draft {
+  headline: string;
+  casual: Sentence[];
+  analyst: Sentence[];
+}
+
+const sentence = z.object({ text: z.string().max(400), events: z.array(z.string().regex(/^e\d{4,6}$/)).max(24) });
+export const draftSchema = z.object({
+  headline: z.string().max(200),
+  casual: z.array(sentence).max(4),
+  analyst: z.array(sentence).max(5),
+});
+
+export const DESK_ACTIONS = ["approve", "kill", "withdraw", "redraft", "edit"] as const;
+export type DeskAction = (typeof DESK_ACTIONS)[number];
+
+export const deskActionRequest = z.discriminatedUnion("action", [
+  z.object({ action: z.enum(["approve", "kill", "withdraw", "redraft"]), viewer: z.string().regex(viewerIdPattern) }),
+  z.object({ action: z.literal("edit"), viewer: z.string().regex(viewerIdPattern), draft: draftSchema }),
+]);
+export type DeskActionRequest = z.infer<typeof deskActionRequest>;
+
+export const producerModeRequest = z.object({
+  viewer: z.string().regex(viewerIdPattern),
+  mode: z.enum(PRODUCER_MODES),
+});
+
+/** What the desk says when it won't act: why, and for an edit, what failed the checks. */
+export interface DeskRefusal {
+  error: string;
+  problems: string[];
+}
+
+export interface AgentRunSummary {
+  agent_run_id: string;
+  started_at: string;
+  finished_at: string | null;
+  outcome: "accepted" | "rejected" | "timeout" | "error" | "superseded" | null;
+  attempts: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  reasoning_tokens: number | null;
+  latency_ms: number | null;
+  problems: string[] | null;
+  tool_calls: { name: string; arguments: Record<string, unknown> }[] | null;
+  error: string | null;
+}
+
+/** GET /api/runs/[runId]/insights/[insightId]: what the console needs to edit a card and to show
+ * the agents' work on it. */
+export interface InsightDetail {
+  draft: Draft; // the wording to start an edit from
+  draft_from: "current" | "template";
+  facts: { key: string; display: string; about: string }[];
+  agent_runs: AgentRunSummary[];
 }

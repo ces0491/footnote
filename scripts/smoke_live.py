@@ -15,6 +15,10 @@ For insights it checks that folding the insight pushes into the joined snapshot 
 the store ends with, and reports how many cards the agents drafted, how long their drafts took to
 replace the template's as this machine received them, and which fell back and why. It waits
 `--settle` seconds after the run ends before the final snapshot, so drafts still in flight land.
+
+For delivery held to a viewer's playback it checks that the pushes the web app serves from the store
+are the ones that were pushed, starting from the backfill's snapshot, and that the tracking for the
+pitch view is served up to the live point and not beyond it.
 """
 
 from __future__ import annotations
@@ -51,6 +55,37 @@ async def snapshot(session: aiohttp.ClientSession, base: str, run_id: str) -> di
                 return await response.json()
         await asyncio.sleep(0.5)
     raise RuntimeError(f"run {run_id} never appeared in the store")
+
+
+async def stored_pushes(session: aiohttp.ClientSession, base: str, run_id: str) -> list[dict]:
+    """Every push the web app serves from the store for the run, page by page."""
+    pushes: list[dict] = []
+    after = 0
+    while True:
+        async with session.get(f"{base}/api/runs/{run_id}/pushes", params={"after": after}) as response:
+            page = await response.json()
+        pushes += page["pushes"]
+        if not page["more"] or not page["pushes"]:
+            return pushes
+        after = page["pushes"][-1]["seq"]
+
+
+async def tracking_frames(
+    session: aiohttp.ClientSession, base: str, run_id: str, layout: dict, period: int, t: float
+) -> int:
+    """How many frames the web app serves of the tracking chunk holding `t` seconds into `period`."""
+    chunk = int(t * layout["frame_rate"]) // layout["frames_per_chunk"]
+    async with session.get(f"{base}/api/runs/{run_id}/tracking/{period}/{chunk}") as response:
+        if response.status != 200:
+            return -1
+        return len(await response.read()) // (layout["values_per_frame"] * 2)
+
+
+def moment(replay: float, timeline: dict) -> tuple[int, float]:
+    """The period and seconds into it of a replay second, as lib/live/timeline.ts has it."""
+    if replay <= timeline["first_half_end"]:
+        return 1, max(0.0, replay)
+    return 2, max(0.0, replay - timeline["first_half_end"] - timeline["half_time"])
 
 
 async def listen(ws: aiohttp.ClientWebSocketResponse, offset: float, sizes: list[int]) -> list[tuple[dict, float]]:
@@ -168,6 +203,15 @@ async def main(base: str, minute: int, speed: int, timeout: float, settle: float
             sizes: list[int] = []
             listening = asyncio.create_task(listen(ws, offset, sizes))
             joined = await snapshot(session, base, run_id)
+            # The pitch view's tracking: there at the start of the replay, nothing a minute beyond it.
+            layout = joined.get("tracking")
+            gate = None
+            if layout:
+                period, t = moment(run["start_replay"], run["timeline"])
+                gate = (
+                    await tracking_frames(session, base, run_id, layout, period, t),
+                    await tracking_frames(session, base, run_id, layout, period, t + 60),
+                )
             try:
                 timed = await asyncio.wait_for(listening, timeout)
             except TimeoutError:
@@ -175,6 +219,7 @@ async def main(base: str, minute: int, speed: int, timeout: float, settle: float
                 return 1
         await asyncio.sleep(settle)
         final = await snapshot(session, base, run_id)
+        kept = await stored_pushes(session, base, run_id)
 
     received = [m for m, _ in timed]
     # Like the browser: the state to build on is the newer of the fetched snapshot (empty until the
@@ -217,6 +262,24 @@ async def main(base: str, minute: int, speed: int, timeout: float, settle: float
     else:
         print("the stored state has no match-state timeline: is the processor running without its models?")
 
+    # What the store serves a viewer whose stream runs behind is what was pushed, timing aside.
+    sent = {
+        m["seq"]: {k: v for k, v in m.items() if k != "timing"} for m in received if m["type"] in ("event", "snapshot")
+    }
+    by_seq = {m["seq"]: m for m in kept}
+    differ = [seq for seq, m in sent.items() if seq in by_seq and by_seq[seq] != m]
+    if differ:
+        failures.append(f"stored pushes differ from the ones pushed at seq {differ[:6]}")
+    kept_events = [m["seq"] for m in kept if m["type"] == "event"]
+    if kept_events != list(range(run["backfill_seq"] + 1, run["last_seq"] + 1)):
+        failures.append(f"the stored pushes don't cover every event after the backfill ({len(kept_events)} kept)")
+    if run["backfill_seq"] and (not kept or kept[0]["type"] != "snapshot" or kept[0]["seq"] != run["backfill_seq"]):
+        failures.append("the stored pushes don't start with the backfill's snapshot")
+    if gate is None:
+        failures.append("the snapshot carries no tracking layout for the pitch view")
+    elif gate[0] <= 0 or gate[1] != 0:
+        failures.append(f"tracking frames served at the start and a minute beyond it: {gate}; expected some, then none")
+
     kinds = [m["type"] for m in received]
     print(
         f"joined at seq {base_seq}; received {len(events)} events ({repeats} repeated, dropped as the browser does), "
@@ -225,6 +288,7 @@ async def main(base: str, minute: int, speed: int, timeout: float, settle: float
     print(f"final: {view.get('phase')}, score {view.get('score')}, run status {final.get('status')}")
     print(f"largest push {max(sizes, default=0)} bytes; {sum(n > BILLING_UNIT for n in sizes)} over {BILLING_UNIT}")
     print(f"state timeline: {len(view.get('state_timeline') or [])} spells")
+    print(f"stored pushes: {len(kept)}; tracking frames at the start and a minute beyond: {gate}")
     report_latency(timed, run["started_at"])
     report_insights(joined, final, timed, failures)
     for failure in failures:

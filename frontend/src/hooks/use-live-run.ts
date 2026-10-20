@@ -3,11 +3,11 @@
 import { WebPubSubClient } from "@azure/web-pubsub-client";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
-import type { PushMessage, RunSnapshot } from "@/lib/live/contract";
+import type { EventMessage, PushesResponse, PushMessage, RunSnapshot, SnapshotMessage } from "@/lib/live/contract";
 import { initialRunViewState, runReducer } from "@/lib/live/run-reducer";
 
-// "polling": no push connection (refused, or the negotiate call failed), so the page fetches the
-// snapshot every few seconds and tries the connection again now and then.
+// "polling": no push connection (refused, or the negotiate call failed), so the page fetches what it
+// lacks every few seconds and tries the connection again now and then.
 export type Connection = "connecting" | "connected" | "reconnecting" | "polling" | "closed";
 
 export interface Latency {
@@ -17,9 +17,9 @@ export interface Latency {
 }
 
 const LATENCY_WINDOW = 200;
-// Waits before retrying a snapshot fetch that failed, in ms; the last one repeats.
+// Waits before retrying a fetch that failed, in ms; the last one repeats.
 const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
-// Tries at the first snapshot before the page gives up: with nothing to show, an error says more.
+// Tries at the first load before the page gives up: with nothing to show, an error says more.
 const FIRST_LOAD_TRIES = 4;
 const POLL_MS = 3_000;
 const RECONNECT_MS = 30_000;
@@ -79,6 +79,19 @@ async function fetchSnapshot(runId: string, signal: AbortSignal): Promise<RunSna
   }
 }
 
+/** Every stored push after `after`, page by page. */
+async function fetchPushes(runId: string, after: number, signal: AbortSignal): Promise<(SnapshotMessage | EventMessage)[]> {
+  const pushes: (SnapshotMessage | EventMessage)[] = [];
+  for (let from = after; ; ) {
+    const response = await fetch(`/api/runs/${runId}/pushes?after=${from}`, { cache: "no-store", signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const page = (await response.json()) as PushesResponse;
+    pushes.push(...page.pushes);
+    if (!page.more || page.pushes.length === 0) return pushes;
+    from = page.pushes[page.pushes.length - 1].seq;
+  }
+}
+
 async function clientAccessUrl(runId: string): Promise<string> {
   const response = await fetch(`/api/runs/${runId}/negotiate`, { cache: "no-store" });
   if (!response.ok) throw new Error(`negotiate: HTTP ${response.status}`);
@@ -86,14 +99,15 @@ async function clientAccessUrl(runId: string): Promise<string> {
 }
 
 /**
- * Follow a run. The page shows the stored snapshot first, and a run that has already ended stops
- * there. For a run in progress it joins the run's Web PubSub group and fetches the snapshot again
- * each time a connection opens, since pushes sent while there was none are lost. The reducer holds
- * pushes while a snapshot is on its way, applies them on top of it, and asks for another after a gap.
+ * Follow a run. The page fetches the run's snapshot (its status, insights and match) and the pushes
+ * stored after the last event it has, from the replay's start the first time; a run that has already
+ * ended stops there. For a run in progress it joins the run's Web PubSub group, and does the same
+ * again each time a connection opens, since pushes sent while there was none are lost. The reducer
+ * holds pushes while that is on its way, applies them on top, and asks again after a gap.
  *
- * Once something is on screen it stays there. A snapshot fetch that fails is retried with backoff
- * (`trouble` says so meanwhile), and a push connection that can't be opened is replaced by polling
- * the snapshot until it can. `error` is only for a page with nothing to show.
+ * Once something is on screen it stays there. A fetch that fails is retried with backoff (`trouble`
+ * says so meanwhile), and a push connection that can't be opened is replaced by polling until it
+ * can. `error` is only for a page with nothing to show.
  */
 export function useLiveRun(runId: string) {
   const [state, dispatch] = useReducer(runReducer, initialRunViewState);
@@ -106,13 +120,29 @@ export function useLiveRun(runId: string) {
   const offsetRef = useRef(0);
   const samples = useRef<number[]>([]);
   const stopLive = useRef<(() => void) | null>(null);
+  const lastSeq = useRef<number | null>(null);
 
-  const applySnapshot = useCallback((loaded: RunSnapshot) => {
+  useEffect(() => {
+    lastSeq.current = state.view?.seq ?? null;
+  }, [state.view]);
+
+  /** The snapshot and the pushes after the page's last event, fetched together. */
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      const after = lastSeq.current ?? 0;
+      const [loaded, pushes] = await Promise.all([fetchSnapshot(runId, signal), fetchPushes(runId, after, signal)]);
+      return { loaded, pushes };
+    },
+    [runId],
+  );
+
+  const apply = useCallback((loaded: RunSnapshot, pushes: (SnapshotMessage | EventMessage)[]) => {
     setSnapshot(loaded);
     dispatch({
-      kind: "snapshot",
-      view: loaded.view,
+      kind: "resynced",
+      pushes,
       ended: loaded.status === "running" ? null : loaded.status,
+      backfillSeq: loaded.run.backfill_seq,
       insights: loaded.insights,
       insightRev: loaded.insight_rev,
     });
@@ -166,7 +196,7 @@ export function useLiveRun(runId: string) {
         // payload is taken as it comes.
         const data = e.message.data;
         const message = (typeof data === "string" ? JSON.parse(data) : data) as PushMessage;
-        if (message.type === "event" && message.timing.published_at) {
+        if (message.type === "event" && message.timing?.published_at) {
           const elapsed = Date.now() + offsetRef.current - message.timing.published_at;
           const window = samples.current;
           window.push(elapsed);
@@ -187,8 +217,8 @@ export function useLiveRun(runId: string) {
         await ws.start();
       } catch {
         if (abort.signal.aborted || ws !== client) return;
-        // Refused (the free tier allows 20 connections in all) or no token: follow by polling the
-        // snapshot, and try for a connection again in a while.
+        // Refused (the free tier allows 20 connections in all) or no token: follow by polling, and
+        // try for a connection again in a while.
         ws.stop();
         setConnection("polling");
         startPolling();
@@ -206,13 +236,13 @@ export function useLiveRun(runId: string) {
       const measured = clockOffset();
       for (let attempt = 0; ; attempt++) {
         try {
-          const first = await fetchSnapshot(runId, abort.signal);
+          const { loaded, pushes } = await load(abort.signal);
           if (abort.signal.aborted) return;
           offsetRef.current = await measured;
           setOffset(offsetRef.current);
-          applySnapshot(first);
+          apply(loaded, pushes);
           // An ended run sends nothing more, so there is nothing to connect for.
-          if (first.status !== "running") {
+          if (loaded.status !== "running") {
             setConnection("closed");
             return;
           }
@@ -235,20 +265,20 @@ export function useLiveRun(runId: string) {
       stopLive.current = null;
       client = null;
     };
-  }, [runId, applySnapshot]);
+  }, [runId, load, apply]);
 
-  // Fetch the snapshot each time the reducer asks for one: on connecting, after a missed push, and
-  // on each poll. A failure keeps what is on screen and tries again, backing off.
+  // Fetch what the page lacks each time the reducer asks: on connecting, after a missed push, and on
+  // each poll. A failure keeps what is on screen and tries again, backing off.
   useEffect(() => {
-    if (state.snapshotRequests === 0) return;
+    if (state.resyncs === 0) return;
     const abort = new AbortController();
     (async () => {
       for (let attempt = 0; ; attempt++) {
         try {
-          const loaded = await fetchSnapshot(runId, abort.signal);
+          const { loaded, pushes } = await load(abort.signal);
           if (abort.signal.aborted) return;
           setTrouble(null);
-          applySnapshot(loaded);
+          apply(loaded, pushes);
           return;
         } catch (cause) {
           if (abort.signal.aborted) return;
@@ -259,14 +289,20 @@ export function useLiveRun(runId: string) {
       }
     })();
     return () => abort.abort();
-  }, [state.snapshotRequests, runId, applySnapshot]);
+  }, [state.resyncs, load, apply]);
 
   // A finished run sends nothing more; free the connection (the free tier allows 20 in all).
   useEffect(() => {
     if (state.ended) stopLive.current?.();
   }, [state.ended]);
 
+  // What the page itself learns first, such as the card a producer's action changed: it goes through
+  // the reducer like a push, so the same push arriving later is dropped.
+  const receive = useCallback((message: PushMessage) => dispatch({ kind: "push", message }), []);
+
   return {
+    receive,
+    state,
     view: state.view,
     insights: state.insights,
     ended: state.ended,
