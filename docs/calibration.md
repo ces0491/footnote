@@ -4,8 +4,8 @@ How closely generated seasons match a real one. The generator was tuned against 
 figures below. This report measures two full generated seasons, under league seeds 2026 and 2027,
 which shows the gaps that hold under every seed apart from those that come and go with the draws.
 
-Generated on 2026-10-19: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
-tracking, in 4 minutes. Generator fingerprint `8a7e189854364873`. Regenerate with
+Generated on 2026-10-20: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
+tracking, in 4 minutes. Generator fingerprint `5e1cde3bdb459aba`. Regenerate with
 `python -m footnote.calibration`.
 
 Published figures are for the 2025/26 Premier League season unless the row says otherwise.
