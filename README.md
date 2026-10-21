@@ -49,15 +49,16 @@ Built so far:
   producer, or as one of the ready-made fans, and switch between them
   mid-match. The producer approves, edits, kills or withdraws each card, or lets
   them through automatically; an edit passes the same checks as an agent's
-  draft, and only the viewer who started a replay can produce it. A fan's
-  stream runs a set delay behind live, and the page shows the match, the cards
-  and the graphics as of that stream, so nothing arrives before the fan's
-  screen shows it. Fans choose casual or analyst mode, their club, a player to
-  follow and the figure to pin, and calm mode keeps every graphic still. On a
+  draft, what the producer approves is the wording they saw, and only the
+  viewer who started a replay can produce or stop it. A fan's stream runs a set
+  delay behind live, and the page shows the match, the cards and the graphics
+  as of that stream, so nothing arrives before the fan's screen shows it. Fans
+  choose casual or analyst mode, their club, a player to follow and the figure
+  to pin; calm mode stills the page, and the pitch view can be hidden. On a
   desktop the match is drawn from the tracking on our own 2D pitch, standing
   in for the video; casual fans get a still of the pitch with each VAR
-  decision. What a card carries, and when it may show, is the overlay
-  contract: [docs/overlay.md](docs/overlay.md).
+  decision, with the offside margin up close. What a card carries, and when it
+  may show, is the overlay contract: [docs/overlay.md](docs/overlay.md).
 
 Still to come, in the order SCOPE.md lists them: recaps and catch-up, the
 described feed, translation, evaluations, tracing and the judge quick-start.

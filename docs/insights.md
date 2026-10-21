@@ -103,7 +103,11 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   events the card links to at least one (the card's evidence is the cited events plus those behind
   each fact used);
 - the headline fits in 60 characters, the casual line in two sentences and 240, the analyst line
-  in three and 360, filled in; no betting language, exclamation marks, links or emoji.
+  in three and 360, filled in; no betting language, exclamation marks, links or emoji;
+- the text is plain: no markup, no characters a reader can't see, no number characters besides the
+  digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
+  can't pass the checks above in disguise (a circled digit, a fraction sign, a zero-width space
+  inside "two", a look-alike letter from another alphabet, a name in small capitals).
 
 The checks catch figures and names a writer made up. A name from the match given to the wrong
 player, or a sentence that describes the facts unfairly (that a goal really was against the run of
@@ -175,18 +179,22 @@ processor and the agents do. The desk is reachable only inside the Container App
 
 - **Who may produce.** The viewer who started the replay: the browser's anonymous ID travels with
   the start request to the run's record, where no API serves it, and the desk compares it with the
-  ID each action carries. Anyone else with the link sees the console as it stands.
+  ID each action carries. Anyone else with the link sees the console as it stands. Stopping the
+  replay is the starter's alone too: the replayer compares the ID the stop request carries.
 - **Approval.** A replay approves each card automatically as it is found, or leaves every card to
   the producer; it starts the second way when it is started from the producer's profile. The
-  producer can switch, from the cards found next on. The status lifecycle is in
-  [overlay.md](overlay.md#who-decides-what-airs).
+  producer can switch, from the cards found next on. What the producer approves is the wording they
+  saw: approval waits while an agent is drafting the card, since the draft would replace the
+  wording. The status lifecycle is in [overlay.md](overlay.md#who-decides-what-airs).
 - **Edit.** The producer edits the wording as a draft, with placeholders where the figures go, and
   the desk runs `check` on it as on an agent's draft: against the moment's own facts, and the events
   the card already links to. An edit that fails comes back with the problems; one that passes is a
   version of its own (`source: producer`), and is never cached for later replays. An agent's draft
   that used figures from beyond the moment's facts is edited from the template's wording.
 - **Redraft.** The insight joins the agents' queue afresh, with no claims against it and past the
-  cache of earlier replays.
+  cache of earlier replays. A card on air with wording the producer approved is withdrawn first.
+  Each card gets at most five agent runs and each replay thirty, its first drafts and corrections'
+  included, so one producer can't spend the agents' daily runs; past that, the producer edits.
 
 ## VAR and corrections
 
@@ -213,7 +221,9 @@ Each change to an insight bumps the run's insight revision in the same transacti
 carries the revision it made. The processor, the agents service and the producer's desk all push; a
 browser applies revisions in order and fetches the snapshot after a gap
 (`frontend/src/lib/live/run-reducer.ts`). The snapshot carries every insight with the revision they
-are as of. Insights the backfill passed reach viewers through the snapshot only.
+are as of. Every push is stored too (`insight_pushes`), and a page fetches the ones after the last
+revision it has, so one that loads late, or misses pushes, still has each card's earlier states.
+Insights the backfill passed reach viewers through the snapshot only.
 
 Each change also names the feed message behind it (`shown_seq`), and a fan's browser shows a
 card's state only once their stream reaches that message: a goal VAR ruled out stays a goal on a

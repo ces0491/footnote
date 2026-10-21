@@ -74,7 +74,9 @@ State  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒ 
 
 Each card shows its reason and its evidence, and opening the evidence lists the
 events. A card starts as the template version and swaps to the agent's version
-when it arrives, marked either way. Nothing airs without Approve (P3).
+when it arrives, marked either way. Nothing airs without Approve (P3), and Approve
+waits for an agent's draft that is on its way, so what airs is the wording Nadia
+saw.
 
 ### Fan view, casual
 
@@ -201,10 +203,12 @@ rule explanation in the stoppage.
 
 **81' and 84', the amended goal.** The 81st-minute goal is first recorded as a
 Penhallow own goal, and an "own goal" card airs. At 84' the feed amends the
-credit to Adeyani. Every insight citing the original event is flagged. Nadia's
-console shows a correction alert, and Nadia withdraws the aired graphic and
-approves the corrected one. Fans' cards update with "Corrected: goal now credited to
-Adeyani." Tom's feed reads the correction.
+credit to Adeyani. Every insight citing the original event is flagged, and the
+goal's card is restated with the corrected facts. Nadia approved the old wording,
+so the corrected card comes off air and waits for her again, listed under
+corrections beside the correction notice. Nadia approves the corrected card and
+the notice. Fans' cards update when their streams reach 84', and say the provider
+corrected them. Tom's feed reads the correction.
 
 **Full time.** Recaps in each mode and language.
 
@@ -238,7 +242,7 @@ Under two minutes, recorded from the deployed app.
 | 0:10–0:35 | 23' goal: ranked shortlist, reason, evidence, approve | Nadia's console |
 | 0:35–1:00 | The same goal for Sam (held for the stream delay), Priya (player focus), Lucía (Spanish) | Split screen |
 | 1:00–1:20 | 31' offside, read by a real screen reader from Tom's feed | Described feed with audio |
-| 1:20–1:35 | 84' correction flows to the console and every fan | Correction alert, withdrawn graphic |
+| 1:20–1:35 | 84' correction flows to the console and every fan | Correction alert, the corrected card back for approval |
 | 1:35–1:50 | How it runs: architecture, state model scored against the answer key, measured latency | Diagram and figures |
 | 1:50–1:58 | Close and synthetic-data disclaimer | End card |
 
@@ -249,6 +253,7 @@ Under two minutes, recorded from the deployed app.
    fan's replay approves them as they're found.
 2. Start the showcase match from a jump point: 23', 31', 60' or 81'.
 3. Switch between Nadia and the fans mid-match to see the same moment change: Sam
-   gets it 40 seconds after Nadia's console does.
+   gets it 40 seconds of match time after Nadia's console does, which is 20
+   seconds at 2×.
 4. Open any card's evidence to see the events behind it, and in the console the
    agents' runs on it.

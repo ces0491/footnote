@@ -38,8 +38,10 @@ screen shows the moment (P4).
 
 - **The state current at playback.** `shown_seq` moves when the feed changes an item: when it is
   found, when a correction restates it, when VAR or a correction flags it. A client keeps each
-  state it receives and shows the latest one playback has reached. A goal VAR rules out stays a goal
-  on a delayed screen until that screen reaches the decision.
+  state it receives and shows the latest one playback has reached. Every state pushed is also
+  stored with the run (`/api/runs/[runId]/insights`), so a client that loads after an item changed
+  still has the state before. A goal VAR rules out stays a goal on a delayed screen until that
+  screen reaches the decision.
 - **Held for a stoppage.** A segment or a stat (`hold: "stoppage"`) waits for the first stoppage
   after `shown_at`, so live play stays uncluttered (P5). The event pushes say which events stop play.
 - **On screen.** A lower third or a full card stays on screen for `duration` seconds of match time.
@@ -52,7 +54,10 @@ screen shows the moment (P4).
 
 The web app also holds the match itself to each viewer's playback: it serves the event pushes it
 stored, each with the replay second it was published at, and the tracking for the pitch view only up
-to the run's live point (lib/live/playback.ts, `/api/runs/[runId]/pushes` and `/tracking`).
+to the run's live point (lib/live/playback.ts, `/api/runs/[runId]/pushes` and `/tracking`). The
+events behind a card are served as they stood at the card's `shown_seq` (`/events?upto=`), so a
+viewer whose stream hasn't reached a correction isn't shown the corrected event either. A run's end
+is announced to a fan once their stream reaches it.
 
 ## Who decides what airs
 
@@ -67,9 +72,14 @@ drafted ──approve──▶ approved ──withdraw──▶ withdrawn
 `status_by` says who: `auto` when the run approves each item as it is found, `producer` for the
 producer's own decisions, and `correction` when a correction restated an item the producer had
 approved by hand: the producer approved what it said before, so the corrected item waits for them
-again. A run starts approving automatically, or by hand when it is started from the producer's
-profile; the producer can switch either way, and the switch applies to the items found from then
-on. The producer's desk ([insights.md](insights.md#the-producers-desk)) records each decision.
+again. Who approved the item decides that, whichever way the run approves now. A run starts
+approving automatically, or by hand when it is started from the producer's profile; the producer
+can switch either way, and the switch applies to the items found from then on.
+
+What the producer approves is the wording they saw. Approval waits while an agent is drafting the
+item, and an item on air with wording the producer approved comes off air before it can be
+redrafted, so no agent's draft replaces wording the producer approved. The producer's desk
+([insights.md](insights.md#the-producers-desk)) records each decision.
 
 ## Corrections and flags
 
@@ -94,6 +104,7 @@ corrected, or struck through with the reason.
   is stale by then and is dropped. It keeps each graphic up for at least four seconds of wall time,
   so a graphic stays readable in a replay at 2× or 4×.
 - `motion: "animated"` (moments) may animate on and off. Calm mode keeps every graphic still, as
-  does a device set to reduce motion; nothing flashes.
+  does a device set to reduce motion, and stills the rest of the page too, dialogs included; nothing
+  flashes. A fan can hide the pitch view itself and follow from the panel.
 - Every graphic's text is in the side panel too (P8), and `plain` is the one text a screen reader
   needs.
