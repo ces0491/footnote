@@ -12,7 +12,9 @@ replayer ──AMQP──▶ Event Hubs (feed) ──▶ processor ──▶ Pos
    ▲                                         │            │ notify                     │
    │ start / stop                            │            ▼                            │
    │                                         │       agents service ── MCP ──▶ match tools
-   │                                         │            │  └──── Responses API ──▶ Foundry (gpt-5-mini)
+   │                                         │            │  ├──── Responses API ──▶ Foundry (gpt-5-mini)
+   │                                         │            │  ├──── cards in English ──▶ Azure AI Translator
+   │                                         │            │  └──── traces ──▶ Application Insights
    │                                         ▼            ▼
    │                               Web PubSub (group per run) ──▶ browser
    │                                                                │
@@ -24,7 +26,7 @@ web app (Next.js) ◀── snapshot, stored pushes, tracking, evidence, client 
 | --- | --- | --- |
 | replayer (`src/footnote/replayer`) | Container App, internal ingress, one replica | Stands in for the data provider: plays the committed showcase feed into Event Hubs, one run per replay |
 | processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, with pass difficulty, the estimated match state and figures from the tracking; finds and ranks the run's insights; stores the feed (each live row with the push viewers were sent), the state and the insights in Postgres, and the match's tracking for the pitch view; pushes every event with the state after it, and every insight change, to the run's viewers |
-| agents (`src/footnote/agents`) | Container App, internal ingress, one replica | Serves the match tools over MCP on localhost (`src/footnote/tools`), and drafts the cards insights want with Agent Framework writers on Foundry; code checks each draft; stores and pushes the accepted ones, or says why the template stands. Translates the cards viewers see into Spanish and French with Azure AI Translator, checked by code. Serves the producer's desk to the web app: approves, edits, kills and withdraws cards for the viewer who started the replay |
+| agents (`src/footnote/agents`) | Container App, internal ingress, one replica | Serves the match tools over MCP on localhost (`src/footnote/tools`), and drafts the cards insights want with Agent Framework writers on Foundry; code checks each draft; stores and pushes the accepted ones, or says why the template stands. Translates the cards viewers see into Spanish and French with Azure AI Translator, checked by code. Serves the producer's desk to the web app: approves, edits, kills and withdraws cards for the viewer who started the replay. Traces each card it drafts and each batch it translates to Application Insights |
 | web (`frontend/`) | Container App, public ingress | Starts replays, and stops one for the browser that started it; serves snapshots (with insights), the event and insight pushes stored for a run, the tracking up to its live point, match metadata and the events behind an insight from Postgres; passes producer actions to the desk; issues Web PubSub client tokens; renders the fan view and the producer console |
 
 All four run in one Container Apps environment on the Consumption profile. The model is a Global
@@ -230,11 +232,35 @@ No store write in that run took over a second, which leaves folding the backfill
 models, on the processor's quarter of a vCPU, as the likely cost. The 233 events after them had a
 p95 of 368 ms and a maximum of 429 ms.
 
+## Tracing
+
+The agents service sends traces to Application Insights through the Azure Monitor OpenTelemetry
+distro, signed in with its managed identity (`src/footnote/telemetry.py`). The resource is
+workspace-based, so the traces are kept in the Log Analytics workspace, under its daily cap.
+
+- **Each card drafted is a trace.** Its `draft card` span carries the run, the insight, its topic
+  and facts version, whether the producer asked for a redraft, and how the job ended: `cached`,
+  `accepted` or `rejected` (with the attempts and the `agent_runs` row), `fallback` (with the note
+  viewers see) or `superseded`. Agent Framework's spans nest under it: the writer and checker
+  workflow, each call to gpt-5-mini with its tokens, each MCP tool call, then the push to Web PubSub.
+- **Each batch translated is a trace**, `translate cards`: how many cards were waiting, how many
+  went to the Translator rather than coming from the cache, and how many translations failed the
+  check.
+- Prompts and replies stay out of the spans. The service sends traces only: its logs stay in the
+  container logs, and it sends no metrics.
+
+A replay from 81' to full time at 4× on 21 October made five card traces (four drafts reused, one
+drafted) and 18 translation batches: 93 spans, 102 KB, and 4 KB of span events. In the workspace,
+`AppDependencies | where Name == "draft card"` lists the jobs, and a trace's `OperationId` finds the
+rest of it.
+
 ## Identity and access
 
-No service uses a key, connection string or password. Local authentication is off on Event Hubs,
-Web PubSub and the storage account, and Postgres accepts Microsoft Entra tokens only. Each container
-app runs as its own user-assigned managed identity with these roles:
+No service uses a key or password. Local authentication is off on Event Hubs, Web PubSub, the
+storage account and Application Insights, and Postgres accepts Microsoft Entra tokens only; the
+connection string the agents service has for Application Insights names the resource and its
+endpoint, and sending takes the service's token. Each container app runs as its own user-assigned
+managed identity with these roles:
 
 | Identity | Role | On |
 | --- | --- | --- |
@@ -248,6 +274,7 @@ app runs as its own user-assigned managed identity with these roles:
 | agents | Foundry User | the Foundry project, to call the model |
 | agents | Cognitive Services User | the Translator, to translate the cards |
 | agents | Web PubSub Service Owner | the Web PubSub resource, to push the versions it writes |
+| agents | Monitoring Metrics Publisher | Application Insights, to send its traces |
 | agents | `select` on the match tables; `insert` on `insight_versions`, `insight_pushes`, `agent_cache`, `card_translations` and `translation_cache`; `insert` and `update` on `agent_runs`; `update` of the agent and status columns of `insights`, of `runs.insight_rev` and of `runs.producer` | granted by the processor at start-up |
 | all four | AcrPull | the container registry |
 
@@ -256,10 +283,10 @@ version granted on those tables first, in one transaction.
 
 The browser's Web PubSub token joins one run's group and carries no roles, so a viewer can't
 publish or join another group, and the web app issues one only for a run the processor has recorded.
-The deploying user gets data-plane roles on Event Hubs, the checkpoint container, Web PubSub and
-Foundry for local development (on the account as well as the project, since the evaluations' judge
-calls the account's OpenAI endpoint), and becomes a Postgres administrator when
-`AZURE_PRINCIPAL_NAME` is set.
+The deploying user gets data-plane roles on Event Hubs, the checkpoint container, Web PubSub,
+Application Insights and Foundry for local development (on the account as well as the project,
+since the evaluations' judge calls the account's OpenAI endpoint), and becomes a Postgres
+administrator when `AZURE_PRINCIPAL_NAME` is set.
 
 The match tools listen on 127.0.0.1 inside the agents container, so nothing outside it can reach
 them. The producer's desk listens on the container's internal ingress, which only apps in the
@@ -281,7 +308,7 @@ dollars, for 20 October to 10 November (22 days):
 | Container Apps, three replicas always on | 0.25 vCPU, 0.5 GiB each | idle $0.000003/vCPU-s and /GiB-s; active $0.000024/vCPU-s; a monthly free grant | $10–14 |
 | Event Hubs | Basic, 1 throughput unit | $0.015/hour + $0.028 per million events | $7.90 |
 | Container registry | Basic | $0.1666/day | $3.70 |
-| Log Analytics | pay as you go, capped at 0.2 GB/day | first 5 GB/month free, then $2.30/GB | $0–4 |
+| Log Analytics, with the Application Insights traces | pay as you go, capped at 0.2 GB/day | first 5 GB/month free, then $2.30/GB | $0–4 |
 | Storage | Standard LRS, hot: the processor's checkpoints | $0.05 per 10,000 writes or lists | $5–6 |
 | Web PubSub | Free | $0 | $0 |
 | Container Apps, the agents service from 20 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
@@ -297,8 +324,11 @@ checkpoint write per publishing step, 1,364 for a whole match.
 The overlay contract, the producer's desk and the fan view add no resource. Translation uses the
 Translator's free tier of 2 million characters a month: the showcase's 36 template cards come to
 5,226 characters and its agent drafts to a few hundred each, every version is billed once for each
-of the two languages, and replays after the first reuse the translations they have met. In
-Postgres the pushes
+of the two languages, and replays after the first reuse the translations they have met. The tier
+also limits the rate, to about 33,300 characters a minute; the worker sends ten cards a request and
+backs off when refused, and none of the 18 batches in the replay from 81' above was refused.
+Application Insights has no charge of its own: its traces are ingestion into the workspace, 105 KB
+for that replay, under the same free 5 GB and daily cap. In Postgres the pushes
 kept for delayed viewers take about 1.1 KB an event, around 2 MB for a replay from kick-off; the
 insight pushes kept beside them, about fifty a replay, the largest 2,310 bytes; and the tracking
 7 MB once. The server's 32 GB holds them all. A viewer's pitch view fetches 960 bytes of

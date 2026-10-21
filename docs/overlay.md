@@ -102,9 +102,10 @@ corrected, or struck through with the reason.
 ## Languages
 
 Cards are written in English. The agents service has Azure AI Translator render the version of each
-live card viewers see in Spanish and French, with the names marked for it to leave alone, and code
-checks that every figure and name came through ([insights.md](insights.md#translation)). A
-translation that passes joins the item's `translations` and the item is pushed again, with a new
+live card viewers see in Spanish and French, with the names given as dictionary entries so they
+come back as they are, and code checks that every figure and name came through
+([insights.md](insights.md#translation)). A translation that passes joins the item's
+`translations` and the item is pushed again, with a new
 `updated_at`, so a client keeps it as a new state of the card. A client shows a language's wording
 once it is there and the English until then; a translation that failed the check never reaches the
 item, so its readers get the English. The reference renderer marks a card it shows in English to a

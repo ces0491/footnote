@@ -218,14 +218,30 @@ processor and the agents do. The desk is reachable only inside the Container App
 The agents and the templates write English; Azure AI Translator renders each card in Spanish and
 French (`src/footnote/agents/translator.py`). The agents service translates the version of each
 live card viewers see, every few seconds and whenever the processor finds new cards, one request for
-a batch of them. Every name in the match (players' full names and surnames, clubs' names) is marked
-for the Translator to leave alone, and code then checks each translation against its English
-(`src/footnote/insights/translation.py`): the same figures, a decimal comma read as a point, every
-name, no part empty. A translation that passes joins the card and the card is pushed again; one that
-fails is kept with its problems and never shown, and the viewer reads the English. Translations are
-kept under a hash of the English and reused, so a replay after the first calls the Translator only
-for wording it hasn't met, such as a producer's edit. The producer sees which languages each card is
-ready in.
+a batch of them. The English is prepared for the Translator first
+(`src/footnote/insights/translation.py`):
+
+- Every name in the match (players' full names and surnames, clubs' names) goes as a dictionary
+  entry that translates as itself, so the name comes back unchanged and the Translator still builds
+  the sentence around it. A name marked to be left alone comes back too, but the verbs around it
+  stay in the infinitive ("Saltmarsh igualar la partida").
+- Minutes are written out: "6'" goes as "minute 6", since the Translator reads "6'" as six feet.
+- A headline goes with a full stop, taken off again after: without one, "Femi Adeyani scores" comes
+  back as "Femi Adeyani puntuaciones".
+- Two words it gets wrong are said another way: "spell" as "period", "the provider's" as "the data
+  provider's".
+
+Code then checks each translation against its English: the same figures, a decimal comma read as a
+point, every name, no part empty. A small number may come back as a word ("1 shot" as "un tiro",
+"minute 2" as "el segundo minuto"); a figure that changed, or one the English doesn't have, fails. A
+translation that passes joins the card and the card is pushed again; one that fails is kept with its
+problems and never shown, and the viewer reads the English. Translations are kept under a hash of
+the English and reused, so a replay after the first calls the Translator only for wording it hasn't
+met, such as a producer's edit. The producer sees which languages each card is ready in.
+
+The check covers the figures and the names. The words around them are the Translator's, and it
+still picks a wrong one at times: "penalización" for a penalty, "Tiempo completo" for full time,
+which is why the full-time recap is headed "Final score".
 
 ## VAR and corrections
 

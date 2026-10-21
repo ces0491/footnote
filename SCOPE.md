@@ -61,7 +61,7 @@ Render and personalise
 Quality and submission
 
 - [ ] `azd up` deploys from scratch; no secrets in code; Azure budget alert set
-- [ ] CI runs lint, type checks, tests and agent-output evaluations
+- [x] CI runs lint, type checks, tests and agent-output evaluations
 - [ ] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
 - [ ] Video under 2:00 showing the deployed app; public repo; elevator pitch

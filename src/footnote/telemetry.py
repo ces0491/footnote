@@ -5,8 +5,8 @@ Application Insights through the Azure Monitor OpenTelemetry distro, signed in w
 managed identity: the resource takes no keys. A trace covers each card an agent drafts (the job,
 then Agent Framework's own spans for the agent's run, its model calls and its tool calls), each batch
 of translations, the producer's desk requests and the Azure SDK's calls, such as the pushes to Web
-PubSub. Prompts and replies are left out of the spans. Logs and metrics stay in the container logs,
-so traces are all this sends, into the Log Analytics workspace and under its daily cap.
+PubSub. Prompts and replies are left out of the spans. Traces are all this sends, into the Log
+Analytics workspace and under its daily cap: logs stay in the container logs, and no metrics go.
 """
 
 from __future__ import annotations

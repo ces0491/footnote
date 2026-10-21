@@ -52,6 +52,10 @@ Built so far:
   drafted against the deployed model and evaluated in code and with Azure AI
   Evaluation's groundedness evaluator; CI replays the recorded run through the
   current checks on every push: [docs/evaluations.md](docs/evaluations.md).
+- **Tracing.** Each card the agents draft is a trace in Application Insights,
+  from the job through every model and tool call to the push, and so is each
+  batch of translations:
+  [docs/architecture.md](docs/architecture.md#tracing).
 - **The producer console and the fan view.** Watch the replay as Nadia, the
   producer, or as one of the ready-made fans, and switch between them
   mid-match. The producer approves, edits, kills or withdraws each card, or lets
@@ -67,17 +71,16 @@ Built so far:
   decision, with the offside margin up close. What a card carries, and when it
   may show, is the overlay contract: [docs/overlay.md](docs/overlay.md).
 - **Spanish and French.** The agents service has Azure AI Translator render each
-  card fans see, with the names marked to be left alone, and code checks every
-  figure and name came through before a translation is shown; Lucía, joining
-  from Madrid at 60', reads the catch-up and the cards in Spanish.
+  card fans see, with the names kept as they are, and code checks every figure
+  and name came through before a translation is shown; Lucía, joining from
+  Madrid at 60', reads the catch-up and the cards in Spanish.
 - **The described feed.** Tom, a blind fan, follows the match in words: lines
   from templates over each event (where the ball is, the passes, the build-up,
   every graphic as it airs), spoken by the phone's screen reader at a chosen
   pace and detail, from key moments only to every pass, with a pause that
   catches up on resume.
 
-Still to come: tracing, viewer profiles stored server-side, and the judge
-quick-start.
+Still to come: viewer profiles stored server-side, and the judge quick-start.
 
 ## Quick start
 
@@ -171,8 +174,9 @@ uv run python -m footnote.replayer               # http://localhost:8000
 
 # The agents service, with the producer's desk on http://localhost:8080:
 # FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB,
-# POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your sign-in name.
-# Stop the deployed one first, or the two share the jobs.
+# POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your sign-in name;
+# TRANSLATOR_ENDPOINT translates the cards and APPLICATIONINSIGHTS_CONNECTION_STRING
+# traces them, when set. Stop the deployed one first, or the two share the jobs.
 uv run python -m footnote.agents
 
 # The web app: frontend/.env.local with REPLAYER_URL=http://localhost:8000,
@@ -199,6 +203,7 @@ src/footnote/tools/       the match tools: an MCP server answering as of one mom
 src/footnote/agents/      the agents service: the Agent Framework writers, their checks, the job loop, the producer's desk
 src/footnote/evals/       the agents' evaluations: every agent job in the showcase, code evaluators, the groundedness judge, the report
 src/footnote/db/          Entra-authenticated Postgres connections, migrations and roles
+src/footnote/telemetry.py the agents service's traces to Application Insights
 frontend/                 the Next.js web app (fan view, producer console, 2D pitch), with its Vitest tests beside the code
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
