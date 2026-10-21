@@ -39,6 +39,9 @@ dev = [
     "ruff>=0.17.1",
     "scipy>=1.17.1",
 ]
+evals = [
+    "azure-ai-evaluation>=1.18.9",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

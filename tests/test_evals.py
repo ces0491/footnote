@@ -1,0 +1,149 @@
+"""The agents' evaluations: each evaluator on cards made for it, and the recorded live run replayed
+through today's writer workflow, checks and evaluators (docs/evaluations.md)."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from footnote.evals.cases import JUMPS, cases
+from footnote.evals.groundedness import openai_endpoint, verdict
+from footnote.evals.judges import (
+    Seen,
+    Verdict,
+    adds_to_the_template,
+    claims_hold,
+    names_the_subject,
+    one_line_per_figure,
+)
+from footnote.evals.run import replay, stale
+from footnote.insights import facts as F
+from footnote.insights.draft import Card, Draft, Sentence, render
+from footnote.insights.facts import Facts
+from footnote.live.analysis import Analysis
+from footnote.live.match import Match, load_match
+
+RECORDING = Path(__file__).resolve().parents[1] / "data" / "evals" / "drafts.json"
+# The bar the recorded run must clear: three cards in four pass every evaluation.
+PASSING_SHARE = 0.75
+
+
+@pytest.fixture(scope="module")
+def showcase() -> Match:
+    return load_match()
+
+
+@pytest.fixture(scope="module")
+def analysis(showcase: Match) -> Analysis:
+    return Analysis.load(showcase)
+
+
+GOAL: Facts = {
+    "moment.scorer": F.text("Femi Adeyani", "who put the ball in the net", ("e0391",)),
+    "moment.club": F.text("Kingsferry", "the club the goal counts for"),
+    "moment.minute": F.minute(23, None, "minute of the goal", ("e0391",)),
+    "moment.situation": F.text("take the lead", "what the goal does to the score"),
+    "moment.shot_speed": F.speed(89.1, "speed of the shot", ("e0390",)),
+    "moment.shot_distance": F.metres(21.0, "distance of the shot from goal", ("e0390",)),
+    "moment.score_line": F.text("Saltmarsh 0-1 Kingsferry", "the score after the goal", ("e0391",)),
+    "moment.other_club": F.text("Saltmarsh", "the other club"),
+}
+
+
+def _card(
+    casual: str, analyst: str = "The shot left the boot at {moment.shot_speed}.", headline: str = "Goal"
+) -> Draft:
+    return Draft(
+        headline=headline,
+        casual=[Sentence(text=casual, events=["e0391"])],
+        analyst=[Sentence(text=analyst, events=[])],
+    )
+
+
+def _seen(facts: Facts = GOAL, topic: str = "goal", corrected: bool = False) -> Seen:
+    return Seen(topic=topic, moment=facts, facts=facts, corrected=corrected)
+
+
+def _judge(judge: Callable[[Seen, Card, Draft], Verdict], draft: Draft, seen: Seen | None = None) -> Verdict:
+    seen = seen or _seen()
+    return judge(seen, render(draft, seen.facts), draft)
+
+
+def test_a_card_names_who_it_is_about() -> None:
+    assert _judge(names_the_subject, _card("{moment.club} take the lead through {moment.scorer}.")).passed
+    missing = _judge(names_the_subject, _card("{moment.club} take the lead on the break."))
+    assert not missing.passed and missing.note == "never names Femi Adeyani"
+    goals = F.text("Femi Adeyani (Kingsferry) 23', Teo Varlan (Saltmarsh) 52'", "the goals")
+    recap = {**GOAL, "recap.goals": goals}
+    told = _judge(names_the_subject, _card("Adeyani struck before Varlan levelled."), _seen(recap, "half_time"))
+    untold = _judge(names_the_subject, _card("Adeyani struck before the break."), _seen(recap, "half_time"))
+    assert told.passed and not untold.passed and untold.note == "leaves out Varlan"
+
+
+def test_a_claim_in_words_needs_a_fact_behind_it() -> None:
+    assert not _judge(claims_hold, _card("{moment.scorer} scores against the run of play.")).passed
+    assert not _judge(claims_hold, _card("{moment.scorer} equalises for {moment.club}.")).passed
+    assert not _judge(claims_hold, _card("{moment.scorer} scores after a goal was ruled out.")).passed
+    against = {**GOAL, "moment.run_of_play": F.text("against the run of play", "the state model's view")}
+    assert _judge(claims_hold, _card("{moment.scorer} scores against the run of play."), _seen(against)).passed
+    # Denied, it isn't a claim; and a restated card may say it was corrected.
+    assert _judge(claims_hold, _card("{moment.other_club} could not find an equaliser.")).passed
+    assert _judge(claims_hold, _card("{moment.scorer} is credited after a correction."), _seen(corrected=True)).passed
+
+
+def test_a_card_must_be_more_than_the_template_reworded() -> None:
+    template = "{moment.score_line}: {moment.scorer} scores at {moment.minute}."
+    copied = _judge(adds_to_the_template, _card(template))
+    assert not copied.passed and "of its words are the template's" in copied.note
+    own = _judge(adds_to_the_template, _card("{moment.club} break away to take the lead through {moment.scorer}."))
+    assert own.passed
+
+
+def test_each_line_gets_figures_of_its_own() -> None:
+    twice = _judge(one_line_per_figure, _card("It left the boot at {moment.shot_speed}."))
+    assert not twice.passed and twice.note == "moment.shot_speed in both lines"
+    # The minute places the moment, so it may be in both.
+    minute = _card("{moment.scorer} scores at {moment.minute}.", "The shot at {moment.minute} hit {moment.shot_speed}.")
+    assert _judge(one_line_per_figure, minute).passed
+
+
+def test_the_judge_reaches_the_foundry_accounts_openai_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FOUNDRY_OPENAI_ENDPOINT", raising=False)
+    project = "https://ai-footnote-abc123.services.ai.azure.com/api/projects/footnote"
+    assert openai_endpoint(project) == "https://ai-footnote-abc123.openai.azure.com/"
+    assert verdict(None) is None
+    failed = verdict({"score": 2.0, "passed": False, "reason": "says the only shot of the match"})
+    assert failed is not None and not failed.passed and failed.note.startswith("scored 2.0")
+
+
+def test_the_cases_are_every_agent_job_in_a_replay(showcase: Match, analysis: Analysis) -> None:
+    keys = [c.key for c in cases(showcase, analysis)]
+    # The 81st-minute goal is drafted twice: as the own goal first recorded, and as corrected.
+    assert "goal-e1586/v1" in keys and "goal-e1586/v2" in keys
+    assert {"ht/v1", "ft/v1"} <= set(keys)
+    assert [k for k in keys if k.startswith("catchup@")] == [f"catchup@{m}" for m in JUMPS]
+    assert len(keys) == len(set(keys))
+
+
+async def test_the_recorded_run_passes_todays_checks_and_evaluations(showcase: Match, analysis: Analysis) -> None:
+    """The model's recorded output, replayed through today's writer workflow, checks and evaluators.
+
+    A change to the checks, the facts or the tools that a recorded draft no longer passes fails here;
+    so does a change to the agents' instructions, tools or workflow until the evaluations are run and
+    recorded again: `uv run --group evals python -m footnote.evals live --record --report`.
+    """
+    recording = json.loads(RECORDING.read_text(encoding="utf-8"))
+    assert stale(recording) == [], "record the evaluations again"
+    all_cases = cases(showcase, analysis)
+    assert {c.key for c in all_cases} == set(recording["cases"]), "record the evaluations again"
+    results = await replay(showcase, analysis, all_cases, recording)
+    for result in results:
+        live = recording["cases"][result.case.key]["outcome"]
+        if live == "accepted":
+            assert result.outcome == "accepted", (result.case.key, result.problems)
+            assert any(v.evaluator == "grounded" for v in result.verdicts), result.case.key
+    passing = sum(r.passed for r in results) / len(results)
+    assert passing >= PASSING_SHARE, [(r.case.key, [v for v in r.verdicts if not v.passed]) for r in results]
