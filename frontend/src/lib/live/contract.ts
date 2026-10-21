@@ -22,6 +22,20 @@ export type StartRunRequest = z.infer<typeof startRunRequest>;
 
 export const runIdPattern = /^[0-9a-f]{16}$/;
 
+/** DELETE /api/runs/[runId]: only the viewer who started a replay may stop it. */
+export const stopRunRequest = z.object({ viewer: z.string().regex(viewerIdPattern) });
+
+/** The largest seq or revision a query parameter may name: Postgres' integer. */
+export const MAX_COUNTER = 2_147_483_647;
+
+/** A seq or a revision from a query parameter or a path: undefined when there is none, null when
+ * it isn't a whole number from 0 up to MAX_COUNTER. */
+export function counterParam(text: string | null): number | null | undefined {
+  if (text === null) return undefined;
+  const value = Number(text);
+  return text.trim() !== "" && Number.isInteger(value) && value >= 0 && value <= MAX_COUNTER ? value : null;
+}
+
 export function groupName(runId: string): string {
   return `run-${runId}`;
 }
@@ -79,7 +93,11 @@ export interface MatchState {
   state: MatchStateKind;
   team_id: string | null;
   confidence: number;
-  on_top: Score; // chance each side holds a state of its own (control, pressure or a break)
+  on_top: Score; // chance each side holds a state of its own (control, pressure or a break) now
+  // Each side's share of the last five minutes of the period in which the state shown, second by
+  // second, was its own: who has been on top lately, as the cards count it. Null until a minute is
+  // covered; absent from pushes made before it was added.
+  recent?: Score | null;
 }
 
 /** A spell of one state, from the first to the last second it was the estimate. */
@@ -341,7 +359,15 @@ export interface PushesResponse {
   more: boolean; // a page limit cut it short: ask again after the last
 }
 
-/** GET /api/runs/[runId]/events?ids=... : the events an insight cites, as they stand. */
+/** GET /api/runs/[runId]/insights?after=<rev>: every insight change the run's viewers were pushed
+ * after revision `rev`, as sent, so a page keeps each card's earlier states (migration 0005). */
+export interface InsightPushesResponse {
+  pushes: InsightMessage[];
+  more: boolean; // a page limit cut it short: ask again after the last
+}
+
+/** GET /api/runs/[runId]/events?ids=...&upto=<seq>: the events an insight cites, each as it stood
+ * at feed message `upto` (a card's `shown_seq`), or as it stands now without one. */
 export interface EvidenceResponse {
   events: FeedEvent[];
 }

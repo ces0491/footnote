@@ -2,10 +2,18 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EventMessage, MatchMeta, PushMessage, RunSnapshot, RunStatus, SnapshotMessage } from "@/lib/live/contract";
-import { baseSnapshot, eventPush, runFixture } from "@/lib/live/test-fixtures";
+import type {
+  EventMessage,
+  InsightMessage,
+  MatchMeta,
+  PushMessage,
+  RunSnapshot,
+  RunStatus,
+  SnapshotMessage,
+} from "@/lib/live/contract";
+import { baseSnapshot, eventPush, insightFixture, runFixture } from "@/lib/live/test-fixtures";
 
-import { useLiveRun } from "./use-live-run";
+import { steady, useLiveRun } from "./use-live-run";
 
 // A stand-in for the Web PubSub client: the tests decide when it connects and what it receives.
 const { FakeClient, clients } = vi.hoisted(() => {
@@ -44,9 +52,11 @@ vi.mock("@azure/web-pubsub-client", () => ({ WebPubSubClient: FakeClient }));
 const RUN_ID = "0123456789abcdef";
 
 // Snapshot requests wait until a test answers them, so it controls what arrives first. The stored
-// pushes are answered at once, from what the test has put in `stored`.
+// pushes and insight pushes are answered at once, from what the test has put in `stored` and
+// `storedInsights`.
 let snapshotRequests: ((response: Response) => void)[] = [];
 let stored: (SnapshotMessage | EventMessage)[] = [];
+let storedInsights: InsightMessage[] = [];
 let pushRequests: number[] = [];
 
 function fetchStub(input: RequestInfo | URL): Promise<Response> {
@@ -57,6 +67,10 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
     const after = Number(url.searchParams.get("after"));
     pushRequests.push(after);
     return Promise.resolve(Response.json({ pushes: stored.filter((p) => p.seq > after), more: false }));
+  }
+  if (url.pathname.endsWith("/insights")) {
+    const after = Number(url.searchParams.get("after"));
+    return Promise.resolve(Response.json({ pushes: storedInsights.filter((p) => p.rev > after), more: false }));
   }
   return new Promise((resolve) => snapshotRequests.push(resolve));
 }
@@ -109,6 +123,7 @@ const keys = (hook: { result: { current: ReturnType<typeof useLiveRun> } }) =>
 beforeEach(() => {
   snapshotRequests = [];
   stored = [];
+  storedInsights = [];
   pushRequests = [];
   clients.length = 0;
   FakeClient.refuse = false;
@@ -248,5 +263,63 @@ describe("useLiveRun", () => {
     act(() => clients[0].emit("connected")); // the SDK ignores stop() while it connects
     expect(clients[0].stopped).toBe(stopped + 1);
     expect(snapshotRequests).toHaveLength(1);
+  });
+
+  it("keeps each card's earlier states when it loads after they changed", async () => {
+    // A goal, then VAR ruling it out: the page loads after both, and a delayed screen needs the first.
+    const goal = insightFixture("goal-e0532", { shown_seq: 11 });
+    const ruledOut = { ...goal, flag: { reason: "Ruled out by VAR", event_id: "e0532", version: 1, seq: 12 }, shown_seq: 12, updated_at: "2026-10-20T12:01:00Z" };
+    storedInsights = [
+      { type: "insight", run_id: RUN_ID, rev: 1, insight: goal },
+      { type: "insight", run_id: RUN_ID, rev: 2, insight: ruledOut },
+    ];
+    stored = storedUpTo(12);
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await answer(0, { ...snapshot("finished"), insights: [ruledOut], insight_rev: 2 });
+    await waitFor(() => expect(hook.result.current.state.history["goal-e0532"]).toHaveLength(2));
+    expect(hook.result.current.state.history["goal-e0532"].map((i) => i.shown_seq)).toEqual([11, 12]);
+    expect(hook.result.current.insights["goal-e0532"].flag?.seq).toBe(12);
+  });
+
+  it("lets a slow fetch finish while it polls", { timeout: 15_000 }, async () => {
+    FakeClient.refuse = true;
+    stored = storedUpTo(10);
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await answer(0, snapshot());
+    await waitFor(() => expect(hook.result.current.connection).toBe("polling"));
+    stored = storedUpTo(20); // what the first poll's fetch brings, once its snapshot lands
+    await waitFor(() => expect(snapshotRequests).toHaveLength(2), { timeout: 5_000 }); // the first poll
+    // Slower than the next poll: the poll waits for it rather than starting over.
+    await new Promise((resolve) => setTimeout(resolve, 3_500));
+    expect(snapshotRequests).toHaveLength(2);
+    await answer(1, snapshot());
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(20));
+  });
+
+  it("stays closed when a run ends while the client is reconnecting", { timeout: 10_000 }, async () => {
+    const hook = await connectedAt(10);
+    act(() => clients[0].emit("disconnected"));
+    await waitFor(() => expect(snapshotRequests).toHaveLength(3), { timeout: 5_000 }); // a poll
+    await answer(2, snapshot("finished"));
+    await waitFor(() => expect(hook.result.current.ended).toBe("finished"));
+    const stopped = clients[0].stopped;
+    act(() => clients[0].emit("connected")); // the SDK got its connection back after all
+    expect(clients[0].stopped).toBe(stopped + 1);
+    expect(hook.result.current.connection).toBe("closed");
+    await new Promise((resolve) => setTimeout(resolve, 3_500));
+    expect(snapshotRequests).toHaveLength(3); // no catching up, no polling
+  });
+});
+
+describe("steady", () => {
+  it("keeps what doesn't change during a run as the objects the page has", () => {
+    const first = snapshot();
+    const again = { ...snapshot(), run: { ...first.run }, match: { ...first.match }, insight_rev: 3 };
+    const kept = steady(first, again);
+    expect(kept.run).toBe(first.run);
+    expect(kept.match).toBe(first.match);
+    expect(kept.insight_rev).toBe(3);
+    const other = { ...again, run: { ...again.run, run_id: "fedcba9876543210" } };
+    expect(steady(first, other).run).toBe(other.run);
   });
 });

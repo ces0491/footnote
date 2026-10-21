@@ -127,7 +127,7 @@ export function MatchStatePanel({
             <span className="tabular-nums">
               {home.short_name} {Math.round(homeShare * 100)}%
             </span>
-            <span className="text-muted-foreground">On top</span>
+            <span className="text-muted-foreground">Chance on top now</span>
             <span className="tabular-nums">
               {Math.round(awayShare * 100)}% {away.short_name}
             </span>

@@ -34,9 +34,14 @@ export async function startRun(request: StartRunRequest): Promise<RunDescriptor>
   return (await response.json()) as RunDescriptor;
 }
 
-/** False when the replayer has no such run in progress. */
-export async function stopRun(runId: string): Promise<boolean> {
-  const response = await call(`/runs/${runId}`, { method: "DELETE" });
+/** False when the replayer has no such run in progress; a ReplayerError (403) when `viewer` isn't
+ * the one who started it. */
+export async function stopRun(runId: string, viewer: string): Promise<boolean> {
+  const response = await call(`/runs/${runId}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ viewer }),
+  });
   return response.status === 204;
 }
 

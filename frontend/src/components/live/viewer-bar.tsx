@@ -112,22 +112,34 @@ export function SettingsDialog({
             </NativeSelect>
           </Row>
           <Row id="set-delay" label="Stream delay">
-            <NativeSelect
-              id="set-delay"
-              value={settings.delay}
-              onChange={(e) => set("delay", Number(e.target.value) as Settings["delay"])}
-            >
-              {DELAYS.map((d) => (
-                <option key={d} value={d}>
-                  {d} seconds behind live
-                </option>
-              ))}
-            </NativeSelect>
+            <div className="grid gap-1">
+              <NativeSelect
+                id="set-delay"
+                value={settings.delay}
+                onChange={(e) => set("delay", Number(e.target.value) as Settings["delay"])}
+                aria-describedby="set-delay-note"
+              >
+                {DELAYS.map((d) => (
+                  <option key={d} value={d}>
+                    {d} seconds behind live
+                  </option>
+                ))}
+              </NativeSelect>
+              <span id="set-delay-note" className="text-xs text-muted-foreground">
+                In match time: a replay at 2× plays it in half the time.
+              </span>
+            </div>
           </Row>
           <Row id="set-calm" label="Calm mode">
             <div className="flex items-center gap-2">
               <Switch id="set-calm" checked={settings.calm} onCheckedChange={(v) => set("calm", v)} />
               <span className="text-xs text-muted-foreground">No motion or flashing</span>
+            </div>
+          </Row>
+          <Row id="set-pitch" label="The pitch view">
+            <div className="flex items-center gap-2">
+              <Switch id="set-pitch" checked={settings.pitch} onCheckedChange={(v) => set("pitch", v)} />
+              <span className="text-xs text-muted-foreground">Hide it to follow from the panel alone</span>
             </div>
           </Row>
           <Row id="set-graphics" label="Graphics on the pitch">

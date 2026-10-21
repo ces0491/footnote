@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { type RunDescriptor, runIdPattern, type TrackingLayout } from "@/lib/live/contract";
+import { counterParam, type RunDescriptor, runIdPattern, type TrackingLayout } from "@/lib/live/contract";
 import { liveReplaySecond, moment } from "@/lib/live/timeline";
 import { framesUpTo } from "@/lib/live/tracking";
 import { db } from "@/lib/server/db";
@@ -13,8 +13,8 @@ import { db } from "@/lib/server/db";
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]/tracking/[period]/[chunk]">) {
   const { runId, period: periodText, chunk: chunkText } = await ctx.params;
   const period = Number(periodText);
-  const chunk = Number(chunkText);
-  if (!runIdPattern.test(runId) || (period !== 1 && period !== 2) || !Number.isInteger(chunk) || chunk < 0) {
+  const chunk = counterParam(chunkText);
+  if (!runIdPattern.test(runId) || (period !== 1 && period !== 2) || chunk === null || chunk === undefined) {
     return Response.json({ error: "a run ID, a period (1 or 2) and a chunk number" }, { status: 400 });
   }
   const { rows } = await db().query(

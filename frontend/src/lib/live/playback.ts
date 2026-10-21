@@ -14,23 +14,41 @@ import type { EventMessage, Insight, RunDescriptor, StateView } from "./contract
 import { foldEvent, type RunViewState } from "./run-reducer";
 import { liveReplaySecond } from "./timeline";
 
-/** The stream delays a fan can choose, in seconds. The pitch view needs a few seconds' lead to
- * fetch the tracking before playback reaches it, so none is shorter than the first. */
+/** The stream delays a fan can choose, in seconds of match time: a replay at 2x plays them in half
+ * the time, as it plays the match. The pitch view needs a lead to fetch the tracking before playback
+ * reaches it, so none is shorter than the first (hooks/use-tracking.ts fetches faster near live). */
 export const DELAYS = [3, 10, 20, 40, 60] as const;
 
 /** The least time a graphic stays on screen, in wall seconds, so it stays readable at 2x and 4x. */
 export const MIN_ON_SCREEN_SECONDS = 4;
 
 export interface Playback {
-  live: number; // the replay second live play is at
+  live: number; // the replay second live play is at; once the run has ended, where it ended
   at: number; // the viewer's playback, in replay seconds
   waiting: number; // replay seconds until the stream reaches the replay's start; 0 once it has
 }
 
-export function playbackOf(run: RunDescriptor, serverNow: number, delay: number): Playback {
-  const live = liveReplaySecond(run, serverNow);
-  const behind = live - delay;
-  return { live, at: Math.max(run.start_replay, behind), waiting: Math.max(0, run.start_replay - behind) };
+/**
+ * Where live play and the viewer's playback are. `liveEnd` is the replay second a run that has ended
+ * stopped at (its last event's): live stays there, while a delayed stream plays on to it, as a
+ * stream would after the broadcast ends.
+ */
+export function playbackOf(run: RunDescriptor, serverNow: number, delay: number, liveEnd = Infinity): Playback {
+  const clock = liveReplaySecond(run, serverNow);
+  const behind = clock - delay;
+  return {
+    live: Math.min(clock, liveEnd),
+    at: Math.max(run.start_replay, behind),
+    waiting: Math.max(0, run.start_replay - behind),
+  };
+}
+
+/** How far a stream runs behind live, in words: in match seconds, and in real time when the replay
+ * runs faster than the match. */
+export function delayText(delay: number, speed: number): string {
+  if (speed === 1) return `${delay} seconds behind live`;
+  const real = delay / speed;
+  return `${delay} seconds of match time behind live (${Number.isInteger(real) ? real : real.toFixed(1)} s at ${speed}×)`;
 }
 
 /** How many of the events playback at `at` has reached: they are in replay order. */

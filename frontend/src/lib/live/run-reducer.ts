@@ -11,7 +11,8 @@
 // them. A revision already held is dropped, and a gap (a missed push, or two pushes crossing on the
 // way) asks for a fresh snapshot, which carries every insight and the revision they are as of. Each
 // insight's states are kept in the order they came, so a page can show the one that was current at
-// its playback.
+// its playback; the pushes are stored too (GET /api/runs/[runId]/insights), so a page that loads
+// late, or misses some, still has the earlier states.
 
 import type {
   EventMessage,
@@ -111,8 +112,10 @@ export type RunAction =
   | { kind: "push"; message: PushMessage }
   // The connection has (re)opened, and pushes sent while it was closed are lost.
   | { kind: "resync" }
-  // What a resync fetched: the stored pushes after the page's last event, the run's status and,
-  // from the snapshot, its insights. `backfillSeq` is the descriptor's: 0 for a replay from kick-off.
+  // What a resync fetched: the stored pushes after the page's last event, the run's status, from the
+  // snapshot its insights, and the stored insight pushes after the page's last revision, which keep
+  // each card's earlier states for a page that wasn't there when they changed. `backfillSeq` is the
+  // descriptor's: 0 for a replay from kick-off.
   | {
       kind: "resynced";
       pushes: (SnapshotMessage | EventMessage)[];
@@ -120,6 +123,7 @@ export type RunAction =
       backfillSeq: number;
       insights?: Insight[];
       insightRev?: number;
+      insightPushes?: InsightMessage[];
     };
 
 function requestResync(state: RunViewState, held: PushMessage[]): RunViewState {
@@ -191,6 +195,11 @@ export function runReducer(state: RunViewState, action: RunAction): RunViewState
     case "resynced": {
       let next: RunViewState = { ...state, held: null, ended: action.ended ?? state.ended };
       if (!next.base && action.backfillSeq === 0) next = { ...next, base: KICK_OFF_VIEW, view: KICK_OFF_VIEW, events: [] };
+      // Every state each card went through, in the order they happened, before the snapshot's
+      // current ones: a delayed screen shows the one its playback has reached.
+      let past = next.history;
+      for (const message of action.insightPushes ?? []) past = remember(past, message.insight);
+      next = { ...next, history: past };
       const fresher =
         action.insights !== undefined &&
         action.insightRev !== undefined &&

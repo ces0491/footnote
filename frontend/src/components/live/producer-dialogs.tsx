@@ -1,7 +1,7 @@
 "use client";
 
-import { Bot, PenLine } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bot } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -28,45 +28,52 @@ async function loadDetail(runId: string, insightId: string): Promise<InsightDeta
 
 /**
  * The producer's own wording for a card. Figures go in as placeholders, `{fact.key}`, filled in by
- * code; the desk checks an edit as it checks an agent's draft, and says what failed.
+ * code; the desk checks an edit as it checks an agent's draft, and says what failed. The console
+ * owns the dialog, so it stays open while the card moves on the shortlist or leaves it. The wording
+ * is loaded once each time it opens: if the card changes meanwhile (a correction, a new draft), the
+ * dialog says so and keeps what the producer typed.
  */
 export function EditDialog({
   runId,
   insight,
   viewer,
-  disabled,
+  open,
+  onOpenChange,
   onSaved,
 }: {
   runId: string;
-  insight: Insight;
+  insight: Insight | null; // the card being edited, as it now stands
   viewer: string;
-  disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSaved: (message: InsightMessage) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<InsightDetail | null>(null);
+  const [loadedVersion, setLoadedVersion] = useState<number | null>(null);
+  const [reloads, setReloads] = useState(0);
   const [headline, setHeadline] = useState("");
   const [casual, setCasual] = useState("");
   const [analyst, setAnalyst] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  function openWith(next: boolean) {
-    if (next) {
-      setError(null);
-      setProblems([]);
-    }
-    setOpen(next);
-  }
-
+  const insightId = insight?.insight_id ?? null;
+  // The card's version as it renders, read when the wording loads without reloading on each change.
+  const version = useRef<number | null>(insight?.version ?? null);
   useEffect(() => {
-    if (!open) return;
+    version.current = insight?.version ?? null;
+  });
+
+  // The console mounts a fresh dialog for each card, so there is nothing to reset here.
+  useEffect(() => {
+    if (!open || insightId === null) return;
     let live = true;
-    loadDetail(runId, insight.insight_id)
+    const asked = version.current;
+    loadDetail(runId, insightId)
       .then((loaded) => {
         if (!live) return;
         setDetail(loaded);
+        setLoadedVersion(asked);
         setHeadline(loaded.draft.headline);
         setCasual(asLines(loaded.draft.casual));
         setAnalyst(asLines(loaded.draft.analyst));
@@ -75,17 +82,18 @@ export function EditDialog({
     return () => {
       live = false;
     };
-  }, [open, runId, insight.insight_id, insight.version]);
+  }, [open, runId, insightId, reloads]);
 
   const fields = Object.fromEntries((detail?.facts ?? []).map((f) => [f.key, f.display]));
+  const changed = detail !== null && insight !== null && loadedVersion !== null && insight.version !== loadedVersion;
 
   async function save() {
-    if (!detail) return;
+    if (!detail || insightId === null) return;
     setSaving(true);
     setProblems([]);
     setError(null);
     try {
-      const response = await fetch(`/api/runs/${runId}/insights/${insight.insight_id}`, {
+      const response = await fetch(`/api/runs/${runId}/insights/${insightId}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "edit", viewer, draft: edited(detail.draft, headline, casual, analyst) }),
@@ -98,7 +106,7 @@ export function EditDialog({
         return;
       }
       onSaved(body);
-      setOpen(false);
+      onOpenChange(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -107,13 +115,9 @@ export function EditDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={openWith}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
-          <PenLine /> Edit
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open && insight !== null} onOpenChange={onOpenChange}>
+      {/* The console moves focus to the card when the dialog closes. */}
+      <DialogContent className="max-w-2xl" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit the card</DialogTitle>
           <DialogDescription>
@@ -122,6 +126,27 @@ export function EditDialog({
             {detail?.draft_from === "template" && " The agent's draft used figures beyond the moment's own, so this starts from the template."}
           </DialogDescription>
         </DialogHeader>
+        {changed && (
+          <Alert>
+            <AlertTitle>The card has changed since you opened it</AlertTitle>
+            <AlertDescription>
+              <p>A correction or a new draft came in. Your text stays here, and it is checked against the card as it now stands.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => {
+                  setDetail(null);
+                  setProblems([]);
+                  setError(null);
+                  setReloads((n) => n + 1);
+                }}
+              >
+                Start again from the new wording
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         {!detail && !error && <p className="text-muted-foreground">Loading…</p>}
         {detail && (
           <div className="grid gap-4">

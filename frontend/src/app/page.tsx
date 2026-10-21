@@ -39,8 +39,13 @@ export default function Home() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Footnote</h1>
         <p className="text-muted-foreground">
-          Explained match intelligence from synthetic football events. Replay the showcase match and watch the
-          live stats follow the feed through Azure Event Hubs, the stream processor and Web PubSub.
+          Explained match intelligence from synthetic football events. Watch the showcase match as Nadia, the producer
+          who approves each graphic before it airs, or as a fan whose stream runs behind live.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          A match-state model ranks the moments worth a card, an agent on Microsoft Foundry words them through our MCP
+          match tools, and code checks every figure. Each viewer gets a card when their own stream reaches the moment.
+          It runs on Azure: Event Hubs, Container Apps, PostgreSQL and Web PubSub.
         </p>
       </header>
       <Card>

@@ -3,7 +3,7 @@
 import { ArrowLeft, Square } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { PitchView } from "@/components/pitch/pitch-view";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Connection, type Latency, useLiveRun } from "@/hooks/use-live-run";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { useNow } from "@/hooks/use-now";
 import { usePlaybackView } from "@/hooks/use-playback-view";
 import type { Clock, DeskRefusal, InsightMessage, ProducerMode, RunEndReason, RunSnapshot, StateView } from "@/lib/live/contract";
 import { roster } from "@/lib/live/describe";
 import { forMode } from "@/lib/live/fan";
-import { airing, DELAYS, insightsAt, onScreenAt, playbackOf, reached } from "@/lib/live/playback";
+import { airing, DELAYS, delayText, insightsAt, onScreenAt, playbackOf, reached } from "@/lib/live/playback";
 import {
   profile as profileOf,
   type Profile,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/live/profiles";
 import { clockLabel, moment } from "@/lib/live/timeline";
 import { viewerId } from "@/lib/live/viewer";
+import { cn } from "@/lib/utils";
 
 import { FanPanel } from "./fan-panel";
 import { MatchStatePanel } from "./match-state";
@@ -101,7 +103,11 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   const [stopping, setStopping] = useState(false);
   const ended = live.ended !== null;
   const now = useNow(250, true);
-  const r = useMemo(() => (live.snapshot ? roster(live.snapshot.match) : null), [live.snapshot]);
+  // The match stays the same object across refetches (useLiveRun keeps it), so the roster does too.
+  const shownMatch = live.snapshot?.match;
+  const r = useMemo(() => (shownMatch ? roster(shownMatch) : null), [shownMatch]);
+  // A phone shows the panel only: the pitch view isn't drawn or fed there at all.
+  const wide = useMediaQuery("(min-width: 768px)");
 
   // What this browser keeps: its ID, whether it started this replay, and each profile's settings.
   const viewer = useSyncExternalStore(never, viewerId, () => "");
@@ -123,22 +129,42 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   const delay = producer ? PREVIEW_DELAY : settings.delay;
   const run = live.snapshot?.run ?? null;
   const offset = live.offset;
-  const position = useCallback(() => {
-    const p = run ? playbackOf(run, Date.now() + offset, delay) : { at: 0, live: 0, waiting: 0 };
-    return { at: p.at, live: p.live };
-  }, [run, offset, delay]);
-
   const state = live.state;
   const { base, events, view: liveView } = state;
-  const pb = run ? playbackOf(run, now + offset, producer ? 0 : delay) : null;
+  // Once the run has ended, live stays at its last event; a delayed stream plays on up to it.
+  const liveEnd = ended ? (events.at(-1)?.replay ?? run?.start_replay ?? Infinity) : Infinity;
+  const position = useCallback(() => {
+    const p = run ? playbackOf(run, Date.now() + offset, delay, liveEnd) : { at: 0, live: 0, waiting: 0 };
+    return { at: p.at, live: p.live };
+  }, [run, offset, delay, liveEnd]);
+
+  const pb = run ? playbackOf(run, now + offset, producer ? 0 : delay, liveEnd) : null;
   const count = pb ? reached(events, pb.at) : 0;
+  // Whether this viewer's stream has reached the end of a run that has ended: until then, nothing on
+  // the page says it has.
+  const caughtUp = !ended || count >= events.length;
   const atPlayback = usePlaybackView(base, events, liveView, count);
   const shown = run && pb ? insightsAt(state, run, pb.at) : [];
-  const preview = run ? playbackOf(run, now + offset, PREVIEW_DELAY) : null;
+  const preview = run ? playbackOf(run, now + offset, PREVIEW_DELAY, liveEnd) : null;
+
+  // Calm mode reaches everything on the page, dialogs included, which render outside this component.
+  const calm = !producer && settings.calm;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (calm) root.dataset.calm = "";
+    else delete root.dataset.calm;
+    return () => {
+      delete root.dataset.calm;
+    };
+  }, [calm]);
 
   async function stop() {
     setStopping(true);
-    await fetch(`/api/runs/${runId}`, { method: "DELETE" }).catch(() => undefined);
+    await fetch(`/api/runs/${runId}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewer }),
+    }).catch(() => undefined);
     setStopping(false);
   }
 
@@ -175,8 +201,10 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <ConnectionBadge connection={live.connection} latency={live.latency} />
-        {!ended && (
+        {/* A delayed stream is still playing after the run ends; the badge says so until it has finished. */}
+        <ConnectionBadge connection={producer || caughtUp ? live.connection : "connected"} latency={live.latency} />
+        {/* Only the browser that started the replay stops it, as only it produces it. */}
+        {canProduce && !ended && (
           <Button variant="outline" size="sm" onClick={stop} disabled={stopping}>
             <Square /> Stop
           </Button>
@@ -224,8 +252,9 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
           <AlertDescription>{live.trouble} What is shown here is the latest the page has.</AlertDescription>
         </Alert>
       )}
-      {live.ended && (
-        <Alert>
+      {/* Said politely, and to a fan only once their stream has reached the end. */}
+      {live.ended && (producer || caughtUp) && (
+        <Alert role="status">
           <AlertTitle>Replay over</AlertTitle>
           <AlertDescription>{ENDED[live.ended]}</AlertDescription>
         </Alert>
@@ -290,20 +319,22 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   const graphics = settings.graphics ? onScreenAt(cards, pb.at, run.speed) : [];
   const focus = settings.player ? (r.player(settings.player) ?? null) : null;
   const analyst = settings.mode === "analyst";
-  const clock = clockAt(atPlayback, run.timeline, pb.at, ended && count >= state.events.length);
+  const clock = clockAt(atPlayback, run.timeline, pb.at, ended && caughtUp);
+  const pitch = Boolean(tracking) && wide && settings.pitch;
+  const behind = delayText(settings.delay, run.speed);
   return (
-    <div className="space-y-4" data-calm={settings.calm || undefined}>
+    <div className="space-y-4">
       {header}
       {notices}
       <Scoreboard home={match.home} away={match.away} score={atPlayback.score} phase={atPlayback.phase} clock={clock} />
       <p className="text-sm text-muted-foreground">
         {pb.waiting > 0
-          ? `Your stream is ${settings.delay} seconds behind live: it reaches the replay's start in ${Math.ceil(pb.waiting / run.speed)} seconds.`
-          : `Your stream: ${settings.delay} seconds behind live. Nothing reaches this page before your stream shows it.`}
+          ? `Your stream is ${behind}: it reaches the replay's start in ${Math.ceil(pb.waiting / run.speed)} seconds.`
+          : `Your stream: ${behind}. Nothing reaches this page before your stream shows it.`}
       </p>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        {tracking && (
-          <div className="hidden md:block">
+      <div className={cn("grid gap-4", pitch && "lg:grid-cols-[minmax(0,1fr)_24rem]")}>
+        {pitch && tracking && (
+          <div>
             <PitchView
               runId={runId}
               run={run}

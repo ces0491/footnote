@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 
-import { runIdPattern, type RunSnapshot } from "@/lib/live/contract";
+import { runIdPattern, type RunSnapshot, stopRunRequest } from "@/lib/live/contract";
 import { db } from "@/lib/server/db";
-import { runInProgress, stopRun } from "@/lib/server/replayer";
+import { ReplayerError, runInProgress, stopRun } from "@/lib/server/replayer";
 
 // The run's descriptor, its latest state view, its insights, how its graphics are approved, and the
 // match metadata and tracking layout, from Postgres. One statement reads them all, so the insights
@@ -43,8 +43,25 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[r
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }
 
-export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]">) {
+// Stop a replay: { viewer }, the anonymous ID of the browser that started it, which alone may stop
+// it, as it alone may produce it. JSON only, like starting one.
+export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/runs/[runId]">) {
   const { runId } = await ctx.params;
   if (!runIdPattern.test(runId)) return Response.json({ error: "not a run ID" }, { status: 400 });
-  return (await stopRun(runId)) ? new Response(null, { status: 204 }) : Response.json({ error: "no such run in progress" }, { status: 404 });
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return Response.json({ error: "send JSON" }, { status: 415 });
+  }
+  const parsed = stopRunRequest.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: "viewer: the ID of the browser that started it" }, { status: 422 });
+  try {
+    return (await stopRun(runId, parsed.data.viewer))
+      ? new Response(null, { status: 204 })
+      : Response.json({ error: "no such run in progress" }, { status: 404 });
+  } catch (error) {
+    if (error instanceof ReplayerError && error.status === 403) {
+      return Response.json({ error: "Only the browser that started this replay can stop it." }, { status: 403 });
+    }
+    console.error("stopping a run failed", error);
+    return Response.json({ error: "the replayer didn't answer" }, { status: 502 });
+  }
 }

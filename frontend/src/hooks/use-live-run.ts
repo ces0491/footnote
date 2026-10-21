@@ -3,7 +3,15 @@
 import { WebPubSubClient } from "@azure/web-pubsub-client";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
-import type { EventMessage, PushesResponse, PushMessage, RunSnapshot, SnapshotMessage } from "@/lib/live/contract";
+import type {
+  EventMessage,
+  InsightMessage,
+  InsightPushesResponse,
+  PushesResponse,
+  PushMessage,
+  RunSnapshot,
+  SnapshotMessage,
+} from "@/lib/live/contract";
 import { initialRunViewState, runReducer } from "@/lib/live/run-reducer";
 
 // "polling": no push connection (refused, or the negotiate call failed), so the page fetches what it
@@ -92,6 +100,36 @@ async function fetchPushes(runId: string, after: number, signal: AbortSignal): P
   }
 }
 
+/** Every stored insight push after revision `after`, page by page. */
+async function fetchInsightPushes(runId: string, after: number, signal: AbortSignal): Promise<InsightMessage[]> {
+  const pushes: InsightMessage[] = [];
+  for (let from = after; ; ) {
+    const response = await fetch(`/api/runs/${runId}/insights?after=${from}`, { cache: "no-store", signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const page = (await response.json()) as InsightPushesResponse;
+    pushes.push(...page.pushes);
+    if (!page.more || page.pushes.length === 0) return pushes;
+    from = page.pushes[page.pushes.length - 1].rev;
+  }
+}
+
+interface Fetched {
+  loaded: RunSnapshot;
+  pushes: (SnapshotMessage | EventMessage)[];
+  insightPushes: InsightMessage[];
+}
+
+/**
+ * The snapshot just fetched, keeping the parts that don't change during a run (its descriptor, the
+ * match and the tracking layout) as the objects the page already has, so what is built on them, such
+ * as the pitch view's tracking, doesn't start over on every refetch.
+ */
+export function steady(prev: RunSnapshot | null, next: RunSnapshot): RunSnapshot {
+  if (!prev || prev.run.run_id !== next.run.run_id) return next;
+  const keep = <T>(a: T, b: T): T => (JSON.stringify(a) === JSON.stringify(b) ? a : b);
+  return { ...next, run: keep(prev.run, next.run), match: keep(prev.match, next.match), tracking: keep(prev.tracking, next.tracking) };
+}
+
 async function clientAccessUrl(runId: string): Promise<string> {
   const response = await fetch(`/api/runs/${runId}/negotiate`, { cache: "no-store" });
   if (!response.ok) throw new Error(`negotiate: HTTP ${response.status}`);
@@ -121,23 +159,34 @@ export function useLiveRun(runId: string) {
   const samples = useRef<number[]>([]);
   const stopLive = useRef<(() => void) | null>(null);
   const lastSeq = useRef<number | null>(null);
+  const lastRev = useRef<number | null>(null);
+  // The page's time on this run, aborted when it leaves; the resync loop runs under it.
+  const lifetime = useRef<AbortController | null>(null);
+  // The lifetime a resync loop is running under, while one is; and the last resync asked for.
+  const resyncing = useRef<AbortSignal | null>(null);
+  const wanted = useRef(0);
 
   useEffect(() => {
     lastSeq.current = state.view?.seq ?? null;
-  }, [state.view]);
+    lastRev.current = state.insightRev;
+  }, [state.view, state.insightRev]);
 
-  /** The snapshot and the pushes after the page's last event, fetched together. */
+  /** The snapshot, the pushes after the page's last event and the insight pushes after its last
+   * revision, fetched together. */
   const load = useCallback(
-    async (signal: AbortSignal) => {
-      const after = lastSeq.current ?? 0;
-      const [loaded, pushes] = await Promise.all([fetchSnapshot(runId, signal), fetchPushes(runId, after, signal)]);
-      return { loaded, pushes };
+    async (signal: AbortSignal): Promise<Fetched> => {
+      const [loaded, pushes, insightPushes] = await Promise.all([
+        fetchSnapshot(runId, signal),
+        fetchPushes(runId, lastSeq.current ?? 0, signal),
+        fetchInsightPushes(runId, lastRev.current ?? 0, signal),
+      ]);
+      return { loaded, pushes, insightPushes };
     },
     [runId],
   );
 
-  const apply = useCallback((loaded: RunSnapshot, pushes: (SnapshotMessage | EventMessage)[]) => {
-    setSnapshot(loaded);
+  const apply = useCallback(({ loaded, pushes, insightPushes }: Fetched) => {
+    setSnapshot((prev) => steady(prev, loaded));
     dispatch({
       kind: "resynced",
       pushes,
@@ -145,14 +194,19 @@ export function useLiveRun(runId: string) {
       backfillSeq: loaded.run.backfill_seq,
       insights: loaded.insights,
       insightRev: loaded.insight_rev,
+      insightPushes,
     });
   }, []);
 
   useEffect(() => {
     const abort = new AbortController();
+    lifetime.current = abort;
     let client: WebPubSubClient | null = null;
     let poll: ReturnType<typeof setInterval> | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // Set once the run has ended: nothing more comes, so the page stops connecting and polling, even
+    // for an attempt that was on its way when the end arrived.
+    let finished = false;
     samples.current = [];
 
     const startPolling = () => {
@@ -166,9 +220,10 @@ export function useLiveRun(runId: string) {
     function open(): WebPubSubClient {
       const ws = new WebPubSubClient({ getClientAccessUrl: () => clientAccessUrl(runId) });
       // The SDK can finish connecting after stop() (stop is ignored while it connects or recovers),
-      // so a client this page has let go of is stopped again whenever it shows signs of life.
+      // so a client this page has let go of, or one for a run that has ended since, is stopped again
+      // whenever it shows signs of life.
       const current = () => {
-        if (abort.signal.aborted || ws !== client) {
+        if (abort.signal.aborted || finished || ws !== client) {
           ws.stop();
           return false;
         }
@@ -210,13 +265,14 @@ export function useLiveRun(runId: string) {
     }
 
     async function connect(): Promise<void> {
+      if (abort.signal.aborted || finished) return;
       client?.stop();
       const ws = open();
       client = ws;
       try {
         await ws.start();
       } catch {
-        if (abort.signal.aborted || ws !== client) return;
+        if (abort.signal.aborted || finished || ws !== client) return;
         // Refused (the free tier allows 20 connections in all) or no token: follow by polling, and
         // try for a connection again in a while.
         ws.stop();
@@ -227,6 +283,7 @@ export function useLiveRun(runId: string) {
     }
 
     stopLive.current = () => {
+      finished = true;
       stopPolling();
       clearTimeout(retry);
       client?.stop();
@@ -236,11 +293,12 @@ export function useLiveRun(runId: string) {
       const measured = clockOffset();
       for (let attempt = 0; ; attempt++) {
         try {
-          const { loaded, pushes } = await load(abort.signal);
+          const fetched = await load(abort.signal);
           if (abort.signal.aborted) return;
           offsetRef.current = await measured;
           setOffset(offsetRef.current);
-          apply(loaded, pushes);
+          apply(fetched);
+          const { loaded } = fetched;
           // An ended run sends nothing more, so there is nothing to connect for.
           if (loaded.status !== "running") {
             setConnection("closed");
@@ -261,6 +319,7 @@ export function useLiveRun(runId: string) {
 
     return () => {
       abort.abort();
+      if (lifetime.current === abort) lifetime.current = null;
       stopLive.current?.();
       stopLive.current = null;
       client = null;
@@ -268,27 +327,37 @@ export function useLiveRun(runId: string) {
   }, [runId, load, apply]);
 
   // Fetch what the page lacks each time the reducer asks: on connecting, after a missed push, and on
-  // each poll. A failure keeps what is on screen and tries again, backing off.
+  // each poll. One fetch at a time: a request made while one is on its way is met by fetching again
+  // when it lands, so a poll never cancels a slow fetch. A failure keeps what is on screen and tries
+  // again, backing off.
   useEffect(() => {
     if (state.resyncs === 0) return;
-    const abort = new AbortController();
-    (async () => {
-      for (let attempt = 0; ; attempt++) {
-        try {
-          const { loaded, pushes } = await load(abort.signal);
-          if (abort.signal.aborted) return;
-          setTrouble(null);
-          apply(loaded, pushes);
-          return;
-        } catch (cause) {
-          if (abort.signal.aborted) return;
-          setTrouble(`Couldn't refresh the replay (${reason(cause)}); trying again.`);
-          await pause(RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)], abort.signal);
-          if (abort.signal.aborted) return;
+    wanted.current = state.resyncs;
+    const signal = lifetime.current?.signal;
+    if (!signal || resyncing.current === signal) return;
+    resyncing.current = signal;
+    void (async () => {
+      try {
+        for (let attempt = 0; !signal.aborted; ) {
+          const asked = wanted.current;
+          try {
+            const fetched = await load(signal);
+            if (signal.aborted) return;
+            setTrouble(null);
+            apply(fetched);
+            if (wanted.current === asked) return;
+            attempt = 0;
+          } catch (cause) {
+            if (signal.aborted) return;
+            setTrouble(`Couldn't refresh the replay (${reason(cause)}); trying again.`);
+            await pause(RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)], signal);
+            attempt++;
+          }
         }
+      } finally {
+        if (resyncing.current === signal) resyncing.current = null;
       }
     })();
-    return () => abort.abort();
   }, [state.resyncs, load, apply]);
 
   // A finished run sends nothing more; free the connection (the free tier allows 20 in all).

@@ -8,7 +8,12 @@ import { between, chunkAt, type Frame, readFrame } from "@/lib/live/tracking";
 
 const LOOK_BEHIND = 2; // replay seconds kept behind playback
 const LOOK_AHEAD = 12; // replay seconds fetched ahead of playback, as far as live allows
-const TICK_MS = 750;
+const TICK_MS = 250;
+// How often a chunk live is still inside is fetched again: the frames it gains must arrive before
+// playback needs them. With a lead under NEAR_LIVE_SECONDS of real time (a 3 s delay at 4x), a fetch
+// every 750 ms plus the round trip would let playback catch up, so it goes every tick instead.
+const REFETCH_MS = 750;
+const NEAR_LIVE_SECONDS = 1.2;
 
 interface Chunk {
   values: Int16Array;
@@ -54,11 +59,13 @@ export function useTracking(
     if (!run || !layout) return;
     const store = chunks.current;
     const fetching = inFlight.current;
+    const tried = new Map<string, number>(); // when each chunk was last asked for
     const abort = new AbortController();
 
     async function load(period: number, chunk: number) {
       const key = `${period}:${chunk}`;
       fetching.add(key);
+      tried.set(key, Date.now());
       try {
         const response = await fetch(`/api/runs/${runId}/tracking/${period}/${chunk}`, { signal: abort.signal });
         if (!response.ok) return;
@@ -78,12 +85,17 @@ export function useTracking(
 
     function tick() {
       const { at, live } = positionRef.current();
+      // Nothing beyond live exists yet, and once a run has ended live stays where it stopped, so a
+      // playback past it asks for nothing.
       const wanted = chunksBetween(layout!, run!, at - LOOK_BEHIND, Math.min(live, at + LOOK_AHEAD));
       const keep = new Set(wanted.map(([p, c]) => `${p}:${c}`));
       for (const key of store.keys()) if (!keep.has(key)) store.delete(key);
+      for (const key of tried.keys()) if (!keep.has(key)) tried.delete(key);
+      const every = (live - at) / run!.speed < NEAR_LIVE_SECONDS ? TICK_MS : REFETCH_MS;
+      const now = Date.now();
       for (const [period, chunk] of wanted) {
         const key = `${period}:${chunk}`;
-        if (store.get(key)?.complete || fetching.has(key)) continue;
+        if (store.get(key)?.complete || fetching.has(key) || now - (tried.get(key) ?? -Infinity) < every) continue;
         void load(period, chunk);
       }
     }

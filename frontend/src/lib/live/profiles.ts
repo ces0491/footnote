@@ -22,9 +22,10 @@ export interface Settings {
   club: string | null; // club ID: the fan's side
   player: string | null; // player ID: the player in focus, on top of the club
   metric: Metric;
-  delay: (typeof DELAYS)[number]; // seconds the fan's stream runs behind live
+  delay: (typeof DELAYS)[number]; // seconds of match time the fan's stream runs behind live
   calm: boolean; // no motion, nothing flashing
   graphics: boolean; // graphics on the pitch view
+  pitch: boolean; // the pitch view itself: moving content a viewer can hide (WCAG 2.2.2)
 }
 
 export interface Profile {
@@ -43,6 +44,7 @@ const BASE: Settings = {
   delay: DELAYS[0],
   calm: false,
   graphics: true,
+  pitch: true,
 };
 
 // The showcase's clubs and cast (docs/experience.md): Saltmarsh are "sal", Teo Varlan "sal-10".

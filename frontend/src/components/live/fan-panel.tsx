@@ -17,32 +17,44 @@ import { cn } from "@/lib/utils";
 import { Evidence } from "./evidence";
 import { stateLine } from "./match-state";
 
+/**
+ * Who's been on top over the last five minutes, counted by the processor as the cards count it
+ * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The model's
+ * estimate of the moment swings with every break; the share of recent minutes moves as the game does.
+ */
 function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: Club; own: string | null }) {
   const state = view.match_state;
   const [a, b] = ownFirst(home, away, own);
-  const share = (club: Club) => (!state ? 0 : club.id === home.id ? state.on_top.home : state.on_top.away);
+  const shares = state?.recent ?? null;
+  const share = (club: Club) => (!shares ? 0 : club.id === home.id ? shares.home : shares.away);
   const leader = state?.team_id === home.id ? home : state?.team_id === away.id ? away : null;
   const other = leader === null ? null : leader.id === home.id ? away : home;
   const label = (club: Club) => `${club.short_name} ${Math.round(share(club) * 100)}%`;
   return (
     <div className="space-y-1.5">
-      <div className="flex justify-between text-sm">
-        <span className={cn("tabular-nums", a.id === own && "font-semibold")}>{label(a)}</span>
-        <span className="text-muted-foreground">Who&apos;s on top</span>
-        <span className={cn("tabular-nums", b.id === own && "font-semibold")}>
-          {Math.round(share(b) * 100)}% {b.short_name}
-        </span>
-      </div>
-      <div
-        className="flex h-2.5 overflow-hidden rounded-full bg-muted"
-        role="img"
-        aria-label={`Who's on top: ${label(a)}, ${label(b)}; the rest neither`}
-      >
-        <div style={{ width: `${share(a) * 100}%`, background: a.colours[0] }} />
-        <div className="flex-1" />
-        <div style={{ width: `${share(b) * 100}%`, background: b.colours[0] }} />
-      </div>
-      {state && <p className="text-sm text-muted-foreground">{stateLine(state.state, leader, other)}</p>}
+      {shares ? (
+        <>
+          <p className="text-sm text-muted-foreground">Who&apos;s on top, last 5 minutes</p>
+          <div className="flex justify-between gap-2 text-sm">
+            <span className={cn("tabular-nums", a.id === own && "font-semibold")}>{label(a)}</span>
+            <span className={cn("tabular-nums", b.id === own && "font-semibold")}>
+              {Math.round(share(b) * 100)}% {b.short_name}
+            </span>
+          </div>
+          <div
+            className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+            role="img"
+            aria-label={`Who's on top over the last five minutes: ${label(a)}, ${label(b)}; the rest neither`}
+          >
+            <div style={{ width: `${share(a) * 100}%`, background: a.colours[0] }} />
+            <div className="flex-1" />
+            <div style={{ width: `${share(b) * 100}%`, background: b.colours[0] }} />
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">Who&apos;s on top shows once a minute of the half has been played.</p>
+      )}
+      {state && <p className="text-sm text-muted-foreground">Now: {stateLine(state.state, leader, other)}</p>}
     </div>
   );
 }

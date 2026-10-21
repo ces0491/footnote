@@ -131,3 +131,28 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Still when the device asks for reduced motion, or the viewer turns calm mode on (data-calm on the
+ * root, so it reaches dialogs, which render outside the page's own tree). Outside the layers, so it
+ * outranks every utility that animates, such as data-[state=open]:animate-in (docs/audience.md, P8).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-calm] *,
+html[data-calm] *::before,
+html[data-calm] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

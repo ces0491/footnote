@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { airing, insightsAt, onScreenAt, playbackOf, reached, shownFrom, viewAfter } from "./playback";
+import { airing, delayText, insightsAt, onScreenAt, playbackOf, reached, shownFrom, viewAfter } from "./playback";
 import { initialRunViewState, runReducer, type RunViewState } from "./run-reducer";
 import { baseSnapshot, eventPush, insightFixture, runFixture } from "./test-fixtures";
 
@@ -30,6 +30,44 @@ describe("playback", () => {
     const fast = playbackOf({ ...run, speed: 4 }, run.started_at + 100_000, 40);
     expect(fast.live).toBe(1690);
     expect(fast.at).toBe(1650);
+  });
+
+  it("holds live where a run ended, while a delayed stream plays on to it", () => {
+    // Stopped at replay second 1310: nothing beyond it exists, but a stream 40 s behind still has it to play.
+    expect(playbackOf(run, run.started_at + 30_000, 40, 1310)).toEqual({ live: 1310, at: 1290, waiting: 10 });
+    expect(playbackOf(run, run.started_at + 100_000, 40, 1310)).toEqual({ live: 1310, at: 1350, waiting: 0 });
+  });
+
+  it("says how far behind a stream is in match time, and in real time when the replay runs fast", () => {
+    expect(delayText(40, 1)).toBe("40 seconds behind live");
+    expect(delayText(40, 2)).toBe("40 seconds of match time behind live (20 s at 2×)");
+    expect(delayText(3, 4)).toBe("3 seconds of match time behind live (0.8 s at 4×)");
+  });
+
+  it("shows a delayed screen a card as it stood before VAR, for a page that loaded after the decision", () => {
+    const goal = insightFixture("goal-e0015", { shown_seq: 15 });
+    const ruledOut = {
+      ...goal,
+      flag: { reason: "Ruled out by VAR", event_id: "e0015", version: 1, seq: 17 },
+      shown_seq: 17,
+      updated_at: "2026-10-20T12:01:00Z",
+    };
+    const events = Array.from({ length: 10 }, (_, i) => eventPush(11 + i));
+    const state = runReducer(initialRunViewState, {
+      kind: "resynced",
+      pushes: [baseSnapshot(10), ...events],
+      ended: null,
+      backfillSeq: 10,
+      insights: [ruledOut], // the snapshot has only the card as it now stands
+      insightRev: 2,
+      insightPushes: [
+        { type: "insight", run_id: run.run_id, rev: 1, insight: goal },
+        { type: "insight", run_id: run.run_id, rev: 2, insight: ruledOut },
+      ],
+    });
+    // Event 15 was published at replay second 1305, the decision (17) at 1307.
+    expect(insightsAt(state, run, 1306).map((s) => s.insight.flag)).toEqual([null]);
+    expect(insightsAt(state, run, 1307).map((s) => s.insight.flag?.seq)).toEqual([17]);
   });
 
   it("folds the match up to the last event playback has reached", () => {
