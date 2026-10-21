@@ -11,6 +11,7 @@ param principalName string
 param clientIpAddress string
 param webPubSubSku string
 param translatorEnabled bool
+param translatorSku string
 param deployWriterModel bool
 
 var feedHubName = 'feed'
@@ -484,14 +485,14 @@ resource developerJudgesWithFoundry 'Microsoft.Authorization/roleAssignments@202
   }
 }
 
-// --- Translator: Spanish and French cards (free tier: 2M characters a month) ----------------------
+// --- Translator: Spanish and French cards (free tier by default: 2M characters a month) -----------
 
 resource translator 'Microsoft.CognitiveServices/accounts@2026-09-01' = if (translatorEnabled) {
   name: 'tr-footnote-${token}'
   location: location
   tags: tags
   kind: 'TextTranslation'
-  sku: { name: 'F0' }
+  sku: { name: translatorSku }
   properties: {
     customSubDomainName: 'tr-footnote-${token}'
     disableLocalAuth: true

@@ -27,8 +27,12 @@ param clientIpAddress string = ''
 @description('Web PubSub tier. Free allows 20 connections and 20,000 messages a day; changing tier costs 30-60 minutes of downtime')
 param webPubSubSku string = 'Free_F1'
 
-@description('Create Azure AI Translator (free tier) for the Spanish and French cards')
+@description('Create Azure AI Translator for the Spanish and French cards')
 param translatorEnabled bool = false
+
+@allowed(['F0', 'S1'])
+@description('Translator tier. F0 is free for 2 million characters a month, and a subscription can have only one; S1 is billed by the character')
+param translatorSku string = 'F0'
 
 @description('Create the writers\' model deployment. Azure refuses to submit one that exists again, even unchanged (error 715-123420), so set it false once the deployment is there')
 param deployWriterModel bool = true
@@ -54,6 +58,7 @@ module resources 'resources.bicep' = {
     clientIpAddress: clientIpAddress
     webPubSubSku: webPubSubSku
     translatorEnabled: translatorEnabled
+    translatorSku: translatorSku
     deployWriterModel: deployWriterModel
   }
 }

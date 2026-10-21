@@ -1,7 +1,10 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 
 # `azd up` provisions infra/main.bicep, then builds each service's image in the container registry
-# and deploys it with its container app from infra/<service>.bicep.
+# and deploys it with its container app from infra/<service>.bicep. The processor goes before the
+# agents service and the web app: it applies the migrations and creates their database roles when it
+# starts, and the agents service can't start without its role. Without `uses`, azd deploys in
+# alphabetical order and stops at the first failure.
 name: footnote
 infra:
   provider: bicep
@@ -29,6 +32,8 @@ services:
     project: .
     language: python
     host: containerapp
+    uses:
+      - processor
     docker:
       path: Dockerfile
       remoteBuild: true
@@ -38,6 +43,8 @@ services:
     project: frontend
     language: ts
     host: containerapp
+    uses:
+      - processor
     docker:
       path: Dockerfile
       remoteBuild: true

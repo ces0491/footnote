@@ -10,6 +10,7 @@
     "clientIpAddress": { "value": "${CLIENT_IP_ADDRESS=}" },
     "webPubSubSku": { "value": "${WEBPUBSUB_SKU=Free_F1}" },
     "translatorEnabled": { "value": "${TRANSLATOR_ENABLED=false}" },
+    "translatorSku": { "value": "${TRANSLATOR_SKU=F0}" },
     "deployWriterModel": { "value": "${DEPLOY_WRITER_MODEL=true}" }
   }
 }
