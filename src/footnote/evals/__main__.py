@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
 import logging
 import sys
@@ -74,7 +75,7 @@ async def live(only: list[str], record: bool, report: bool, deadline: float, jud
         from footnote.evals.groundedness import Groundedness
 
         await judge_groundedness(results, Groundedness(endpoint, model))
-    show(results)
+    # Kept before anything is printed: the model's output is paid for.
     if record:
         recording = {
             "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -89,9 +90,12 @@ async def live(only: list[str], record: bool, report: bool, deadline: float, jud
             recording["cases"] = kept["cases"] | recording["cases"]
         RECORDING.parent.mkdir(parents=True, exist_ok=True)
         RECORDING.write_text(json.dumps(recording, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"recorded in {RECORDING.relative_to(ROOT)}")
     if report:
         write_report(REPORT, results, json.loads(RECORDING.read_text(encoding="utf-8")))
+    show(results)
+    if record:
+        print(f"recorded in {RECORDING.relative_to(ROOT)}")
+    if report:
         print(f"report in {REPORT.relative_to(ROOT)}")
     return 0 if all(r.passed for r in results) else 1
 
@@ -126,6 +130,9 @@ def main() -> int:
     replay_parser = commands.add_parser("replay", help="evaluate the recorded output with today's code")
     replay_parser.add_argument("--report", action="store_true", help="write docs/evaluations.md from the replay")
     args = parser.parse_args()
+    # A card can hold a character the console's code page lacks (a non-breaking hyphen on Windows).
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(errors="replace")
     # Before the match tools' server is built, which would otherwise log every request.
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s %(message)s")
     if sys.platform == "win32":
