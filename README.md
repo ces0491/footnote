@@ -45,8 +45,7 @@ Built so far:
   match tools, never type a figure (code fills each one in), and code checks
   every draft; a draft that fails or comes late leaves the template on screen,
   saying why. A recap writer tells the story of the match at half-time and
-  full time, and writes the catch-up for a fan joining mid-match, with the
-  score hidden until they ask for it. How it works:
+  full time, and writes the catch-up for a fan joining mid-match. How it works:
   [docs/insights.md](docs/insights.md).
 - **Evaluations of the agents.** Every card the showcase asks of the agents is
   drafted against the deployed model and evaluated in code and with Azure AI
@@ -71,9 +70,9 @@ Built so far:
   decision, with the offside margin up close. What a card carries, and when it
   may show, is the overlay contract: [docs/overlay.md](docs/overlay.md).
 - **Spanish and French.** The agents service has Azure AI Translator render each
-  card fans see, with the names kept as they are, and code checks every figure
-  and name came through before a translation is shown; Lucía, joining from
-  Madrid at 60', reads the catch-up and the cards in Spanish.
+  card fans see, with the names kept as they are, and code checks every figure,
+  name and score line came through before a translation is shown; Lucía,
+  joining from Madrid at 60', reads the catch-up and the cards in Spanish.
 - **The described feed.** Tom, a blind fan, follows the match in words: lines
   from templates over each event (where the ball is, the passes, the build-up,
   every graphic as it airs), spoken by the phone's screen reader at a chosen
@@ -89,7 +88,7 @@ app.
 
 ```sh
 uv sync
-uv run pytest -m "not slow"                      # tests, under a minute
+uv run pytest -m "not slow"                      # tests, a minute or two
 uv run python -m footnote.generator showcase     # rebuild the committed showcase match in data/
 ```
 
@@ -122,12 +121,14 @@ recording matches them, CI fails.
 ## Deploying to Azure
 
 Needs the [Azure Developer CLI](https://aka.ms/azd) and the Azure CLI, signed
-in to the subscription. Register the resource providers once per subscription:
+in to the subscription with the right to create resources and assign roles
+(Owner, or Contributor with User Access Administrator): the Bicep gives each
+service its roles. Register the resource providers once per subscription:
 
 ```sh
 for p in Microsoft.App Microsoft.ContainerRegistry Microsoft.EventHub Microsoft.DBforPostgreSQL \
          Microsoft.SignalRService Microsoft.Storage Microsoft.OperationalInsights Microsoft.Insights \
-         Microsoft.CognitiveServices; do
+         Microsoft.AlertsManagement Microsoft.CognitiveServices; do
   az provider register --namespace "$p"
 done
 ```
@@ -143,10 +144,15 @@ azd up
 `azd up` provisions [infra/main.bicep](infra/main.bicep), including a Foundry
 project with a Global Standard deployment of gpt-5-mini (the subscription needs
 100K tokens a minute of that model's quota), builds the four images in the
-container registry (no local Docker needed) and deploys each container app from
-`infra/<service>.bicep`. It prints the web app's URL. For the cards in Spanish
+container registry (no local Docker needed, except on a subscription running on
+free credits, where the registry's builds are paused) and deploys each container
+app from `infra/<service>.bicep`, the processor first: it creates the other
+services' database roles. It prints the web app's URL. For the cards in Spanish
 and French, run `azd env set TRANSLATOR_ENABLED true` first: it adds Azure AI
-Translator on its free tier; without it the cards stay in English. Azure refuses
+Translator on its free tier; without it the cards stay in English. A
+subscription can have only one free Translator, so where it has one already, also
+run `azd env set TRANSLATOR_SKU S1` for the Standard tier, billed by the
+character. Azure refuses
 to submit the model deployment a second time, even unchanged (error 715-123420,
 "unusual activity"), so once it exists run `azd env set DEPLOY_WRITER_MODEL false`
 before provisioning again. To check the deployed pipeline end to end, as a

@@ -48,16 +48,19 @@ that starts mid-match adds one more, the catch-up, which an agent drafts too.
 Moments found in a run's backfill (before the point the replay jumped to) are kept as history:
 they appear in the run's snapshot for catch-up, but no agent drafts them and they never reach the
 shortlist. The catch-up sums them up for the replay's viewers ("What you missed", docs/audience.md,
-P7): it is found at the backfill's last message, it is live, and it leaves the score out, which the
-viewer asks for. A recap's facts give the goals as they stand, with VAR's and the provider's changes
-applied; a recap's writer reads the rest of the story through `get_story` (below).
+P7): it is found at the backfill's last message, it is live, and it tells what happened, leaving the
+score line to the scoreboard beside it. A recap's facts give the goals as they stand, with VAR's and
+the provider's changes applied; a recap's writer reads the rest of the story through `get_story`
+(below).
 
 ## Ranking
 
 A rank is the topic's base, raised by what the match-state model and the numbers say about the
 moment. The producer's shortlist shows the three strongest insights still current (each has a
 shelf life after its moment, from two minutes for a sprint to ten for a correction), each with
-its reason.
+its reason. The half-time recap stays until two minutes into the second half: a replay's break
+lasts half a minute, too short for a producer approving by hand while an agent's draft is on its
+way.
 
 - **Goals.** +0.10 against the run of play, +0.05 if it equalises or takes the lead, +0.03 from
   the 80th minute. Against the run of play means that, over the ten minutes before the move (the
@@ -104,7 +107,8 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   "Adeyani" alone), so words from two names can't make a third. A sentence's first word is held to
   this only when it is part of a name: an ordinary word in capitals can't be told from an unknown
   name without a dictionary. Filled in, the headline and every sentence start with a capital or a
-  figure, so "{moment.overturned} on-field decision" ("stands on-field decision") is refused;
+  figure, so "{moment.overturned} on-field decision" ("stands on-field decision") is refused, and VAR
+  is in capitals ("Var: No penalty" is refused);
 - every sentence cites an event the writer was shown or uses a fact, and when the facts rest on
   events the card links to at least one (the card's evidence is the cited events plus those behind
   each fact used);
@@ -112,16 +116,33 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   in three and 360, filled in; a recap, which tells the story of a half, gets three sentences and
   400 characters for its casual line; no betting language, exclamation marks, links or emoji;
 - a count shows its noun once: a fact's display carries it ("44 passes", "2 shots on target"), so
-  "{key} passes" or "{key} on target" is refused;
+  "{key} passes", "{key} shots", "{key} on target" or "{key} completed passes" is refused, and so is
+  a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
+  "at", a count of times follows what happened ("there were 7 times" is refused), and a score line,
+  which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry");
+- the ball changing hands counts both sides losing it, so a card can't say one side forced it;
+- wording a writer would only have copied from the tools is refused: "shown as" from a fact's
+  description, the model's name ("state model"), a count of times followed by a noun ("7 times
+  changes of possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading
+  such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a recap
+  "the last 5 minutes" from a spell's own wording, which meant the minutes before that spell;
+- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance");
+- a long text fact, such as the provider's reason, goes in one line, not both;
+- a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out, its
+  player or its minute: a recap's goals are the ones that stand, so the decision can't be pinned on
+  one of them;
+- a card that says who a goal is credited to also says who it was credited to before, when its
+  facts include a correction: "later credited to Femi Adeyani" alone reads as if it always had been;
 - a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
   can't pass the checks above in disguise (a circled digit, a fraction sign, a zero-width space
   inside "two", a look-alike letter from another alphabet, a name in small capitals).
 
-The checks catch figures and names a writer made up. A name from the match given to the wrong
-player, or a sentence that describes the facts unfairly, passes them: that is what the evaluations
-of the agents' output measure ([evaluations.md](evaluations.md)).
+The checks catch figures and names a writer made up, and a goal ruled out pinned on one that stands.
+Any other name from the match given to the wrong player, or a sentence that describes the facts
+unfairly, passes them. The evaluations of the agents' output catch some of that
+([evaluations.md](evaluations.md)), and reading the cards catches the rest.
 
 ## The agents
 
@@ -157,7 +178,8 @@ processor's own code, so the writer sees the match as viewers had it at that mom
 later. A function middleware logs each call; the facts and events the calls returned are all the
 checker lets the draft use, and the log is kept with the run. Besides `check`, the checker sends
 back a draft whose casual line is the template's word for word: it would add nothing, and the
-template's wording stands anyway.
+template's wording stands anyway. A recap keeps its template's heading ("Final score: Saltmarsh 1–2
+Kingsferry", "What you missed, up to 59'"), the graphic's fixed one, whatever the writer put there.
 
 **Limits and fallbacks.** The template stays, and the insight's `agent_note` says why, when:
 
@@ -169,10 +191,13 @@ template's wording stands anyway.
 - today's 150 agent runs (UTC) are used up, a ceiling on what the model can cost.
 
 **Reuse.** Every replay is the same match, so the same moment makes the same job. A job's key is
-the match, the insight, its facts, the model, and the prompt, tools and writer versions. An
-accepted draft is stored under its key and reused by later replays, after the same checks run
-again on the facts its writer was shown; its provenance says it was reused and names the agent
-run that wrote it.
+the match, the insight, its facts, the model and its reasoning effort, and the prompt, tools and
+writer versions, each with a fingerprint of the code behind it (`src/footnote/agents/versions.py`),
+so a change to what the writers are told or shown can't reuse drafts written before it. An accepted
+draft is stored under its key and reused by later replays, after today's checks run again on the
+facts its writer was shown; its provenance says it was reused and names the agent run that wrote
+it. A kept draft that fails today's checks is drafted again, and the fresh draft replaces it, as a
+producer's redraft does.
 
 **What each run records** (`agent_runs`): outcome, attempts, input, output and reasoning tokens,
 latency, the problems a rejected draft had and the tool calls made. Each agent version's
@@ -180,12 +205,9 @@ provenance names the model, prompt version, tools used and that the checks passe
 
 **Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 20
 in all, against the deployed model, and evaluates them in code and with Azure AI Evaluation's
-groundedness evaluator; CI replays the recorded run on every push ([evaluations.md](evaluations.md)).
-In the run recorded on 21 October 2026 (reasoning effort low) all 20 were accepted, 5 after a
-revision, in a median of 13 seconds, using a median of about 6,200 input and 850 output tokens. At
-the list prices (US$0.25 a million input tokens, US$2.00 a million output) the 20 cost US$0.075,
-under US$0.004 a card. 16 passed every evaluation; the other 4 repeated a figure in both lines, kept
-too close to the template, or, in one case, misread who had been on top before a goal.
+groundedness evaluator; CI replays the recorded run on every push. The recorded run, each card in
+it, its timings, tokens and cost at list prices (US$0.25 a million input tokens, US$2.00 a million
+output) are in [evaluations.md](evaluations.md).
 
 ## The producer's desk
 
@@ -210,7 +232,9 @@ processor and the agents do. The desk is reachable only inside the Container App
   version of its own (`source: producer`), and is never cached for later replays. An agent's draft
   that used figures from beyond the moment's facts is edited from the template's wording.
 - **Redraft.** The insight joins the agents' queue afresh, with no claims against it and past the
-  cache of earlier replays. A card on air with wording the producer approved is withdrawn first.
+  cache of earlier replays; an accepted redraft replaces the draft later replays reuse, so a
+  producer can mend a cached card that reads wrong. A card on air with wording the producer
+  approved is withdrawn first.
   Each card gets at most five agent runs and each replay thirty, its first drafts and corrections'
   included, so one producer can't spend the agents' daily runs; past that, the producer edits.
 
@@ -218,8 +242,9 @@ processor and the agents do. The desk is reachable only inside the Container App
 
 The agents and the templates write English; Azure AI Translator renders each card in Spanish and
 French (`src/footnote/agents/translator.py`). The agents service translates the version of each
-live card viewers see, every few seconds and whenever the processor finds new cards, one request for
-a batch of them. The English is prepared for the Translator first
+card viewers see, the live cards first and then the history a catch-up lists, every few seconds and
+whenever the processor finds new cards, one request for a batch of them. The English is prepared for
+the Translator first
 (`src/footnote/insights/translation.py`):
 
 - Every name in the match (players' full names and surnames, clubs' names) goes as a dictionary
@@ -229,20 +254,33 @@ a batch of them. The English is prepared for the Translator first
 - Minutes are written out: "6'" goes as "minute 6", since the Translator reads "6'" as six feet.
 - A headline goes with a full stop, taken off again after: without one, "Femi Adeyani scores" comes
   back as "Femi Adeyani puntuaciones".
-- Two words it gets wrong are said another way: "spell" as "period", "the provider" as "the data
-  provider".
+- English it got wrong, or gave word for word, is said another way: "spell" as "period" (it came
+  back as a magic spell), "the provider" as "the data provider", "made the last pass" as "played the
+  final pass" ("hizo el último adelantamiento", an overtaking), "neither side" as "neither team",
+  "left the boot" as "left the foot", and a few more.
 
-Code then checks each translation against its English: the same figures, a decimal comma read as a
-point, every name, no part empty. A small number may come back as a word ("1 shot" as "un tiro",
-"minute 2" as "el segundo minuto"); a figure that changed, or one the English doesn't have, fails. A
-translation that passes joins the card and the card is pushed again; one that fails is kept with its
-problems and never shown, and the viewer reads the English. Translations are kept under a hash of
-the English and reused, so a replay after the first calls the Translator only for wording it hasn't
-met, such as a producer's edit. The producer sees which languages each card is ready in.
+What comes back has the Translator's known slips put right: a word that is never the football one
+("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" for a
+pass), its article changed with it, and a word put inside a score line ("Saltmarsh 1–1 en
+Kingsferry"). Code then checks each translation against its English: the same figures, a decimal
+comma read as a point, every name, each score line whole (a name either side of the score, so "1–1
+pour Saltmarsh Kingsferry" fails), no part empty. A small number may come back as a word ("1 shot"
+as "un tiro", "minute 2" as "el segundo minuto"); a figure in digits that changed, or one the
+English doesn't have, fails. Apart from score lines, the check counts the figures and names rather
+than placing them, so names swapped between roles, a number word the English doesn't have, or "un"
+standing in for a dropped 1 would get through. A translation that passes joins the card and the card
+is pushed again; one that fails is kept with its problems and never shown, and the viewer reads the
+English. When a card is reworded, by an agent's draft or a producer's edit, a page keeps showing the
+earlier wording's translation until the new one's arrives; a card a correction restated shows the
+English, marked, until its own translation does. Translated wording carries its language for screen
+readers. Translations are kept under a hash of the English and reused, so a replay after the first
+calls the Translator only for wording it hasn't met, such as a producer's edit. The producer sees
+which languages each card is ready in.
 
-The check covers the figures and the names. The words around them are the Translator's, and it
-still picks a wrong one at times: "penalización" for a penalty, "Tiempo completo" for full time,
-which is why the full-time recap is headed "Final score".
+The words around the figures and names are the Translator's. The templates are worded so it gets
+them right, each rewording noted beside it in the code with the slip it avoids: the full-time recap
+is headed "Final score" because "Full time" came back as "Tiempo completo". An agent's wording can
+still meet a slip no rule above knows.
 
 ## VAR and corrections
 
@@ -255,8 +293,12 @@ which is why the full-time recap is headed "Final score".
   from it is restated: a new template version with the corrected facts, which the agents draft
   again. A correction insight tells viewers what changed and names the insight it corrects. In the
   showcase match, the 81st-minute goal first recorded as a Penhallow own goal is restated at 84' as
-  Adeyani's, and its correction notice ranks 0.95. A restated card the producer had approved by
-  hand waits for their approval again; the console lists it under corrections, beside the notice.
+  Adeyani's, and its correction notice ranks 0.95. The notice gives the new credit first and the
+  old one in a sentence of its own ("It was originally recorded as Jory Penhallow's own goal"):
+  after "not", or in a bracket, the old credit read aloud, and in translation, as if it were the new
+  scorer's. The provider's reason is given once, in the analyst line. A restated card the producer
+  had approved by hand waits for their approval again; the console lists it under corrections, with
+  the wording they are approving and its evidence, beside the notice.
 
 A restated insight is a fresh job: its wait for a worker and its claims count from the
 restatement. A draft still being written from the old facts is cancelled when a worker claims the
@@ -271,7 +313,8 @@ browser applies revisions in order and fetches the snapshot after a gap
 (`frontend/src/lib/live/run-reducer.ts`). The snapshot carries every insight with the revision they
 are as of. Every push is stored too (`insight_pushes`), and a page fetches the ones after the last
 revision it has, so one that loads late, or misses pushes, still has each card's earlier states.
-Insights the backfill passed reach viewers through the snapshot only.
+Insights the backfill passed reach viewers through the snapshot, and are pushed only when their
+translations arrive.
 
 Each change also names the feed message behind it (`shown_seq`), and a fan's browser shows a
 card's state only once their stream reaches that message: a goal VAR ruled out stays a goal on a

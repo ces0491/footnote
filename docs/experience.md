@@ -76,7 +76,7 @@ Each card shows its reason and its evidence, and opening the evidence lists the
 events. A card starts as the template version and swaps to the agent's version
 when it arrives, marked either way. Nothing airs without Approve (P3), and Approve
 waits for an agent's draft that is on its way, so what airs is the wording Nadia
-saw.
+saw. A lower third approved after its moment goes on air from the approval.
 
 ### Fan view, casual
 
@@ -138,14 +138,18 @@ DESCRIBED FEED     Detail: Standard ▾   Pace: Normal ▾   [Pause]
 ```
 
 Lines come from templates over the event data, so they say only what the events
-contain, and each graphic is read out as it airs. The detail levels are key
-moments only (goals, shots, VAR, cards, the clock), standard (adds the
-build-up: changes of possession, passes and runs that take the ball forward,
-crosses, fouls and set pieces) and full (every pass and run). The device's screen
-reader speaks the feed through a live region at the pace the listener picks:
-when lines back up, in a fast replay or after a pause, it says the key moments
-among them and the latest line rather than the backlog (P8). A listener hears
-the score with every goal, so the catch-up doesn't hide it for them.
+contain, and each graphic is read out once, as it airs, in the viewer's language
+and marked as such for the screen reader. The detail levels are key moments only
+(goals, shots, VAR, cards, substitutions, corrections, the clock), standard (adds
+the build-up: changes of possession in open play, passes and runs that take the
+ball forward, crosses, fouls and set pieces other than throw-ins) and full (every
+pass and run, throw-ins, tackles, interceptions, clearances and blocks). The
+device's screen reader speaks the feed through a live region at the pace the
+listener picks. Up to three lines waiting are said together, so a pass and the
+shot it sets up are heard as one; when more back up in a fast replay, it says
+the key moments among them, each with the line that led up to it, and the latest
+line, and after a pause every key moment that waited and the latest line, rather
+than the whole backlog (P8).
 
 ### Catch-up
 
@@ -157,13 +161,14 @@ out a Saltmarsh goal for offside. Varlan levelled at 52' and Saltmarsh
 have controlled the game since.
 Before you joined   23'      Femi Adeyani scores
                     33'      VAR: No goal
-                    44'–49'  Saltmarsh pinning Kingsferry back
+                    44'      Saltmarsh pinning Kingsferry back
                     52'      Teo Varlan scores
-[Show score]   [Back to the match]
+[Back to the match]
 ```
 
-The recap agent writes it from the match's moments when the replay reaches its starting point, and
-leaves the score out: the scoreboard hides the score too until the viewer asks for it.
+The recap agent writes it from the match's moments when the replay reaches its starting point. It
+tells what happened, goals included, and leaves the score line to the scoreboard beside it. A fan
+reading in Spanish or French gets it, and the moments under it, in their language.
 
 ### Settings
 
@@ -178,7 +183,8 @@ because a goal came from Kingsferry's first transition after a long Saltmarsh
 control spell. Nadia gets the card at once with the template wording, the agent
 version replaces it a few seconds later, and Nadia approves it for air. Sam's
 stream is 40 s behind, so the overlay and the "why it matters" card wait until
-the goal appears on Sam's screen; by then the agent's version is ready. Priya
+the goal appears on Sam's screen, or until Nadia approves the card if that comes
+later, and carry the wording she approved. Priya
 sees the same moment with the key pass's difficulty. Tom hears the build-up as
 it happens on the event feed and the goal line straight after.
 
@@ -199,9 +205,9 @@ moments and who has had the ball.
 **52', Varlan equalises.** Shot speed tag on the overlay. Priya's player line
 updates. Sam's "who's on top" bar moves with the shift in control.
 
-**60', Lucía joins.** Lucía opens the app in Spanish, gets "what you missed"
-with the score hidden, reveals it, goes back to the match, and from then on gets
-Spanish versions of every card. Numbers, minutes and names in them are checked
+**60', Lucía joins.** Lucía opens the app in Spanish, reads "what you missed"
+in Spanish, goes back to the match, and from then on gets Spanish versions of
+every card. Numbers, minutes and names in them are checked
 against the English source.
 
 **63'–68', chaos.** The state model detects the match losing its shape: rapid
@@ -262,9 +268,10 @@ Under two minutes, recorded from the deployed app.
 1. Open the live URL and pick who to watch as: Nadia the producer, or one of the
    ready-made fans. Starting as Nadia means approving each graphic by hand; a
    fan's replay approves them as they're found.
-2. Start the showcase match from a jump point: 23', 31', 60' or 81'.
+2. Start the showcase match from a jump point: 23', 31', 60' or 81'. The start
+   page says what happens at each and who to watch it as.
 3. Switch between Nadia and the fans mid-match to see the same moment change: Sam
    gets it 40 seconds of match time after Nadia's console does, which is 20
-   seconds at 2×.
+   seconds at 2×, or as Nadia approves it if that comes later.
 4. Open any card's evidence to see the events behind it, and in the console the
    agents' runs on it.

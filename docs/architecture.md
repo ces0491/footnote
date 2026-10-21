@@ -31,7 +31,11 @@ web app (Next.js) ◀── snapshot, stored pushes, tracking, evidence, client 
 
 All four run in one Container Apps environment on the Consumption profile. The model is a Global
 Standard deployment of gpt-5-mini in a Foundry project, created by the same Bicep. Images are built in the
-container registry by `azd deploy` (remote build), so deploying needs no local Docker.
+container registry by `azd deploy` (remote build), so deploying needs no local Docker, except on a
+subscription running on free credits, where the registry's builds are paused and azd builds locally.
+azd deploys the processor before the agents service and the web app (`uses` in `azure.yaml`): the
+processor creates their database roles when it starts, and the agents service can't start without its
+role.
 
 ## A replay
 
@@ -59,9 +63,11 @@ stores the run's state view only once the backfill is in, so a snapshot fetched 
 is still being written has no view yet, where it would otherwise show the score from minutes before
 the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped (by the
 viewer, or by their next replay), expired (two hours), evicted (a seventh concurrent run replaces
-the oldest) or failed. A finished run's `run_end` comes 30 seconds after its last message: the
+the oldest) or failed. A finished run's `run_end` comes 60 seconds after its last message: the
 full-time recap is found at the final whistle, and the agents give up a job once its run has ended,
-when pages also stop listening, so its draft needs the run still open to reach them.
+when the translator and the producer's desk stop too and pages stop listening, so its draft, its
+translations and, in a replay the producer approves by hand, its approval need the run still open to
+reach them.
 
 **What the processor works out.** Beside the counts, each run's state carries what the models in
 `src/footnote/interpret` read from the feed and the tracking ([models.md](models.md)): each pass's
@@ -246,11 +252,14 @@ workspace-based, so the traces are kept in the Log Analytics workspace, under it
 - **Each batch translated is a trace**, `translate cards`: how many cards were waiting, how many
   went to the Translator rather than coming from the cache, and how many translations failed the
   check.
+- Every span is kept. The distro's default samples five spans a second, which drops model and tool
+  calls from a card's trace when a replay's first cards come together.
 - Prompts and replies stay out of the spans. The service sends traces only: its logs stay in the
-  container logs, and it sends no metrics.
+  container logs, and it sends no metrics, the exporter's own statistics included.
 
-A replay from 81' to full time at 4× on 21 October made five card traces (four drafts reused, one
-drafted) and 18 translation batches: 93 spans, 102 KB, and 4 KB of span events. In the workspace,
+A replay from 81' to full time at 4× on 21 October, under the default sampler, made five card traces
+(four drafts reused, one drafted) and 18 translation batches: 93 spans, 102 KB, and 4 KB of span
+events. Keeping every span sends more, against a daily cap of 0.2 GB. In the workspace,
 `AppDependencies | where Name == "draft card"` lists the jobs, and a trace's `OperationId` finds the
 rest of it.
 
@@ -275,7 +284,7 @@ managed identity with these roles:
 | agents | Cognitive Services User | the Translator, to translate the cards |
 | agents | Web PubSub Service Owner | the Web PubSub resource, to push the versions it writes |
 | agents | Monitoring Metrics Publisher | Application Insights, to send its traces |
-| agents | `select` on the match tables; `insert` on `insight_versions`, `insight_pushes`, `agent_cache`, `card_translations` and `translation_cache`; `insert` and `update` on `agent_runs`; `update` of the agent and status columns of `insights`, of `runs.insight_rev` and of `runs.producer` | granted by the processor at start-up |
+| agents | `select` on the match tables; `insert` on `insight_versions`, `insight_pushes`, `card_translations` and `translation_cache`; `insert` and `update` on `agent_runs` and `agent_cache`; `update` of `insights`' agent and status columns, its version, `redraft`, `queued_at` and `updated_at`, of `runs.insight_rev` and of `runs.producer` | granted by the processor at start-up |
 | all four | AcrPull | the container registry |
 
 The processor grants each database role exactly what its list says, revoking whatever an earlier
@@ -284,9 +293,11 @@ version granted on those tables first, in one transaction.
 The browser's Web PubSub token joins one run's group and carries no roles, so a viewer can't
 publish or join another group, and the web app issues one only for a run the processor has recorded.
 The deploying user gets data-plane roles on Event Hubs, the checkpoint container, Web PubSub,
-Application Insights and Foundry for local development (on the account as well as the project,
-since the evaluations' judge calls the account's OpenAI endpoint), and becomes a Postgres
-administrator when `AZURE_PRINCIPAL_NAME` is set.
+Application Insights, the Translator and Foundry for local development (on the account as well as
+the project, since the evaluations' judge calls the account's OpenAI endpoint), and becomes a
+Postgres administrator when `AZURE_PRINCIPAL_NAME` is set. Deploying needs the right to create the
+resources and to assign roles on the subscription (Owner, or Contributor with User Access
+Administrator), since the Bicep assigns every one of these roles.
 
 The match tools listen on 127.0.0.1 inside the agents container, so nothing outside it can reach
 them. The producer's desk listens on the container's internal ingress, which only apps in the
@@ -312,9 +323,9 @@ dollars, for 20 October to 10 November (22 days):
 | Storage | Standard LRS, hot: the processor's checkpoints | $0.05 per 10,000 writes or lists | $5–6 |
 | Web PubSub | Free | $0 | $0 |
 | Container Apps, the agents service from 20 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
-| Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–13 |
+| Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–14 |
 | Azure AI Translator | Free (F0): 2 million characters a month | $0 | $0 |
-| **Total** | | | **$47–69** |
+| **Total** | | | **$47–70** |
 
 Storage is billed by operation, and nearly all of them are the processor's partition ownership:
 every 5–6 seconds it lists the ownership blobs and renews its claim on both partitions, three
@@ -323,10 +334,14 @@ checkpoint write per publishing step, 1,364 for a whole match.
 
 The overlay contract, the producer's desk and the fan view add no resource. Translation uses the
 Translator's free tier of 2 million characters a month: the showcase's 36 template cards come to
-5,226 characters and its agent drafts to a few hundred each, every version is billed once for each
-of the two languages, and replays after the first reuse the translations they have met. The tier
-also limits the rate, to about 33,300 characters a minute; the worker sends ten cards a request and
-backs off when refused, and none of the 18 batches in the replay from 81' above was refused.
+5,335 characters of English and 13,502 as sent for each language, since the Translator bills the
+markup that marks the names too ([Translator FAQ](https://learn.microsoft.com/en-us/azure/ai-services/translator/translator-faq)).
+Agent drafts add a few hundred characters each, every version is billed once for each of the two
+languages, the history a catch-up lists is translated as well, and replays after the first reuse the
+translations they have met. The tier also limits the rate, to about 33,300 characters a minute; the
+worker sends ten cards a request and backs off when refused, and none of the 18 batches in the replay
+from 81' above was refused. A subscription can have only one free Translator: `azd env set
+TRANSLATOR_SKU S1` makes it the Standard tier, billed by the character, where one exists already.
 Application Insights has no charge of its own: its traces are ingestion into the workspace, 105 KB
 for that replay, under the same free 5 GB and daily cap. In Postgres the pushes
 kept for delayed viewers take about 1.1 KB an event, around 2 MB for a replay from kick-off; the
@@ -334,13 +349,15 @@ insight pushes kept beside them, about fifty a replay, the largest 2,310 bytes; 
 7 MB once. The server's 32 GB holds them all. A viewer's pitch view fetches 960 bytes of
 tracking per second of match, about 6 MB for a whole match at any speed.
 
-The model costs nothing until it is called. A card measured at under $0.004 (insights.md), and a
-full match has 16 cards to draft (the restated goal twice), so a replay from kick-off costs about
-$0.06 the first time and close to nothing after, because later replays reuse the accepted drafts,
-catch-ups included. The ceiling is the daily cap on agent runs (`AGENT_DAILY_RUNS`, 150): under
-$0.60 a day, $13 over the 21 days if every day reached it. An evaluation run (evaluations.md) drafts
-20 cards outside the cap, $0.075 at list prices in the recorded run, plus the judge's 20 calls; it is
-run by hand when the agents' instructions or tools change.
+The model costs nothing until it is called. A card cost $0.004 on average in the recorded
+evaluation run, and $0.008 at most, for the full-time recap, which reads the whole story
+([evaluations.md](evaluations.md)). A full match has 16 cards to draft (the restated goal twice),
+so a replay from kick-off costs about $0.06 the first time and close to nothing after, because later
+replays reuse the accepted drafts, catch-ups included. A change to what the agents are told or shown
+changes the versions in the cache key, so the next replays draft afresh. The ceiling is the daily cap
+on agent runs (`AGENT_DAILY_RUNS`, 150): about $0.65 a day at that average, about $14 over the 21
+days if every day reached it. An evaluation run drafts 20 cards outside the cap, about $0.09 at list
+prices, plus the judge's calls; it is run by hand after such a change.
 
 Web PubSub's Free tier allows 20 concurrent connections and 20,000 outbound messages a day, counted
 in 2 KB units. A viewer watching a whole match at any speed receives about 2,000: one per event, the

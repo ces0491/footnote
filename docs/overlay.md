@@ -47,14 +47,17 @@ screen shows the moment (P4).
 - **On screen.** A lower third or a full card stays on screen for `duration` seconds of match time.
   A side-panel card has no duration: it stays in the panel.
 - **The producer's decisions** don't move `shown_at`. An approval given after the moment shows the
-  item at once to a viewer already past it. A kill or a withdrawal applies at once too: a viewer
-  past the moment loses the item, and one not there yet never gets it.
+  item at once to a viewer already past it: in the panel, and a lower third goes on screen from the
+  approval, taking its turn as any graphic does (Placement and motion, below). A full card keeps its
+  time from the moment, so a recap approved late stays in the panel rather than covering play. A
+  kill or a withdrawal applies at once too: a viewer past the moment loses the item, and one not
+  there yet never gets it.
 - A correction issued during a break carries the clock of the whistle before it, so an item it
   changes has the whistle as its `shown_at`, and a client shows that state as soon as it arrives.
 - The catch-up of a replay that starts mid-match (`topic: "catch_up"`) names the backfill's last
   message as its `shown_seq`, so a client shows it from the replay's start. It sums up the history
-  items and is live itself. Its wording leaves the score out, and the reference renderer hides the
-  scoreboard's score while it is open, until the viewer asks for it.
+  items and is live itself. Its wording tells what happened and leaves the score line to the
+  scoreboard beside it.
 
 The web app also holds the match itself to each viewer's playback: it serves the event pushes it
 stored, each with the replay second it was published at, and the tracking for the pitch view only up
@@ -102,22 +105,26 @@ corrected, or struck through with the reason.
 ## Languages
 
 Cards are written in English. The agents service has Azure AI Translator render the version of each
-live card viewers see in Spanish and French, with the names given as dictionary entries so they
-come back as they are, and code checks that every figure and name came through
-([insights.md](insights.md#translation)). A translation that passes joins the item's
-`translations` and the item is pushed again, with a new
-`updated_at`, so a client keeps it as a new state of the card. A client shows a language's wording
-once it is there and the English until then; a translation that failed the check never reaches the
-item, so its readers get the English. The reference renderer marks a card it shows in English to a
-viewer who chose another language.
+card viewers see in Spanish and French, the live ones first and then the history a catch-up lists,
+with the names given as dictionary entries so they come back as they are, and code checks that
+every figure and name came through ([insights.md](insights.md#translation)). A translation that
+passes joins the item's `translations` and the item is pushed again, with a new `updated_at`, so a
+client keeps it as a new state of the card. A client shows a language's wording once it is there
+and the English until then. When a card is reworded with the same facts (an agent's draft, a
+producer's edit), the reference renderer keeps showing the earlier wording's translation until the
+new one's arrives; a card a correction restated shows the English until its own translation does. A
+translation that failed the check never reaches the item, so its readers get the English. The
+reference renderer marks in the panel a card it shows in English to a viewer who chose another
+language, and marks translated wording with its language for screen readers.
 
 ## Placement and motion
 
 - **Lower third**: moments, rule calls and corrections. **Full card**: half-time and full-time
   recaps. **Side panel**: segments, stats, player tags and the catch-up, which is for a fan's own
   screen rather than the world feed.
-- The reference renderer runs one graphic in each place at a time, in the order they showed, the
-  stronger first when two show together. One that would wait more than twice its own time on screen
+- The reference renderer runs one graphic in each place at a time, in the order they may show (a
+  lower third the producer approved late, from its approval), the stronger first when two show
+  together. One that would wait more than twice its own time on screen
   is stale by then and is dropped. It keeps each graphic up for at least four seconds of wall time,
   so a graphic stays readable in a replay at 2× or 4×.
 - `motion: "animated"` (moments) may animate on and off. Calm mode keeps every graphic still, as
