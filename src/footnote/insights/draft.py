@@ -24,7 +24,12 @@ and so do the agents.
 - the text is plain: no markup, no characters a reader can't see, no number characters other than
   the digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
   can't get past the checks above in disguise (a circled digit, a fraction sign, a zero-width space
-  inside "two", a Greek omicron in it, a name in small capitals).
+  inside "two", a Greek omicron in it, a name in small capitals);
+- a card uses no fact its topic withholds: the catch-up for a viewer joining mid-match leaves the
+  score out until the viewer asks for it.
+
+How much a card may say depends on its topic (`limits_for`): a recap tells the story of a half and
+gets more room than a moment's card.
 
 The checks catch figures and names a writer made up. A real name from the match given to the wrong
 player, or a sentence that reads the facts unfairly, passes them: that is for the evaluations of the
@@ -36,6 +41,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,6 +54,38 @@ CASUAL_CHARS = 240
 ANALYST_CHARS = 360
 CASUAL_SENTENCES = (1, 2)
 ANALYST_SENTENCES = (1, 3)
+
+
+@dataclass(frozen=True)
+class Limits:
+    """How much a card may say, and the facts its wording must leave out."""
+
+    casual_sentences: tuple[int, int] = CASUAL_SENTENCES
+    casual_chars: int = CASUAL_CHARS
+    analyst_sentences: tuple[int, int] = ANALYST_SENTENCES
+    analyst_chars: int = ANALYST_CHARS
+    withheld: tuple[str, ...] = ()  # fact keys, as shell-style patterns
+    withheld_because: str = ""
+
+
+CARD = Limits()
+# A recap tells the story of the match so far, so its casual line gets more room than a moment's.
+RECAP_CHARS = 400
+RECAP = Limits(casual_sentences=(1, 3), casual_chars=RECAP_CHARS)
+# The catch-up for a viewer joining mid-match leaves the score out: the viewer chooses when to see it
+# (docs/experience.md, "Catch-up").
+CATCH_UP = Limits(
+    casual_sentences=(1, 3),
+    casual_chars=RECAP_CHARS,
+    withheld=("score.*", "*.score_line"),
+    withheld_because="the catch-up leaves the score out until the viewer asks for it",
+)
+LIMITS = {"half_time": RECAP, "full_time": RECAP, "catch_up": CATCH_UP}
+
+
+def limits_for(topic: str) -> Limits:
+    return LIMITS.get(topic, CARD)
+
 
 _DIGIT = re.compile(r"\d")
 _NUMBER_WORD = re.compile(
@@ -153,6 +191,11 @@ def fill(text: str, facts: Facts) -> str:
     return PLACEHOLDER.sub(lambda m: facts[m.group(1)].display, text)
 
 
+def same_words(a: str, b: str) -> bool:
+    """Whether two lines say the same words, whatever their punctuation and capitals."""
+    return re.sub(r"\W+", " ", a).strip().lower() == re.sub(r"\W+", " ", b).strip().lower()
+
+
 def _sentences(draft: Draft) -> list[Sentence]:
     return [*draft.casual, *draft.analyst]
 
@@ -240,6 +283,31 @@ def _figure_problems(where: str, own: str) -> list[str]:
     return problems
 
 
+_NEXT_WORD = re.compile(r"\s+([^\W\d_]+)")
+
+
+def _singular(word: str) -> str:
+    word = word.lower()
+    return word[:-2] if word.endswith("es") else word[:-1] if word.endswith("s") else word
+
+
+def _doubled_nouns(where: str, text: str, facts: Facts) -> list[str]:
+    """A count's display carries its noun ("44 passes"), so "{key} passes" would show it twice."""
+    problems = []
+    for m in PLACEHOLDER.finditer(text):
+        fact = facts.get(m.group(1))
+        after = _NEXT_WORD.match(text, m.end())
+        if fact is None or after is None:
+            continue
+        shown = fact.display.split()
+        if len(shown) > 1 and shown[-1].isalpha() and _singular(shown[-1]) == _singular(after.group(1)):
+            problems.append(
+                f"{where}: '{{{m.group(1)}}} {after.group(1)}' shows as '{fact.display} {after.group(1)}': the"
+                f" fact already shows its noun, so leave out '{after.group(1)}'"
+            )
+    return problems
+
+
 def _latin(letter: str) -> bool:
     return any(low <= ord(letter) <= high for low, high in _LATIN_LETTERS)
 
@@ -279,13 +347,17 @@ def _name_problems(where: str, own: str, names: Names) -> list[str]:
     return problems
 
 
-def _text_problems(where: str, text: str, facts: Facts, names: Names) -> list[str]:
+def _text_problems(where: str, text: str, facts: Facts, names: Names, limits: Limits) -> list[str]:
     problems = []
     unknown = [key for key in placeholders(text) if key not in facts]
     if unknown:
         problems.append(
             f"{where}: unknown fact {', '.join('{' + k + '}' for k in unknown)}; use only keys the tools returned"
         )
+    withheld = [k for k in placeholders(text) if any(fnmatchcase(k, pattern) for pattern in limits.withheld)]
+    if withheld:
+        problems.append(f"{where}: uses {', '.join('{' + k + '}' for k in withheld)}; {limits.withheld_because}")
+    problems += _doubled_nouns(where, text, facts)
     own = _own_words(text)
     if "{" in own or "}" in own:
         problems.append(f"{where}: a brace that isn't a whole placeholder; write placeholders as {{key}}")
@@ -303,16 +375,17 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names) -> list[st
     return problems
 
 
-def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str]) -> list[str]:
+def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits: Limits = CARD) -> list[str]:
     """What is wrong with the draft, or nothing.
 
-    `facts` are the facts the writer was given and `events` the IDs of the events it was shown.
+    `facts` are the facts the writer was given and `events` the IDs of the events it was shown;
+    `limits` are the card's topic's (`limits_for`).
     """
     names = names_in(facts)
-    problems = _text_problems("headline", draft.headline, facts, names)
+    problems = _text_problems("headline", draft.headline, facts, names, limits)
     for part, sentences, (least, most) in (
-        ("casual", draft.casual, CASUAL_SENTENCES),
-        ("analyst", draft.analyst, ANALYST_SENTENCES),
+        ("casual", draft.casual, limits.casual_sentences),
+        ("analyst", draft.analyst, limits.analyst_sentences),
     ):
         if not least <= len(sentences) <= most:
             problems.append(f"{part}: {len(sentences)} sentences; write {least} to {most}")
@@ -321,7 +394,7 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str]) -> list
             if not sentence.text.strip():
                 problems.append(f"{where}: empty")
                 continue
-            problems += _text_problems(where, sentence.text, facts, names)
+            problems += _text_problems(where, sentence.text, facts, names, limits)
             unseen = [e for e in sentence.events if e not in events]
             if unseen:
                 problems.append(f"{where}: cites {', '.join(unseen)}, which no tool returned")
@@ -332,8 +405,8 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str]) -> list
     card = render(draft, facts)
     for part, value, limit in (
         ("headline", card.headline, HEADLINE_CHARS),
-        ("casual", card.casual, CASUAL_CHARS),
-        ("analyst", card.analyst, ANALYST_CHARS),
+        ("casual", card.casual, limits.casual_chars),
+        ("analyst", card.analyst, limits.analyst_chars),
     ):
         if not value:
             problems.append(f"{part}: empty")

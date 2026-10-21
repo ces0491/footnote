@@ -203,16 +203,27 @@ def control(f: Facts) -> Draft:
     )
 
 
+def _recap_figures() -> list[Sentence]:
+    return [
+        _s("{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}."),
+        _s("{recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}."),
+    ]
+
+
 def recap(f: Facts) -> Draft:
-    return Draft(
-        headline="{recap.label}: {recap.score_line}",
-        casual=[_s("{recap.score_line} at {recap.when}.", *_event(f, "recap.score_line"))],
-        analyst=[
-            _s(
-                "Possession {recap.home_possession} to {recap.away_possession}; shots {recap.home_shots} to {recap.away_shots}."
-            ),
-        ],
-    )
+    casual = [_s("{recap.score_line} at {recap.when}.", *_event(f, "recap.score_line"))]
+    if "recap.goals" in f:
+        casual.append(_s("Goals: {recap.goals}."))
+    return Draft(headline="{recap.label}: {recap.score_line}", casual=casual, analyst=_recap_figures())
+
+
+def catch_up(f: Facts) -> Draft:
+    """What a viewer joining mid-match missed. The score stays out: the viewer asks for it."""
+    if "recap.goals" in f:
+        casual = [_s("Goals so far: {recap.goals}.")]
+    else:
+        casual = [_s("No goals so far.", *_event(f, "recap.to"))]
+    return Draft(headline="What you missed, up to {recap.to}", casual=casual, analyst=_recap_figures())
 
 
 def correction(f: Facts) -> Draft:
@@ -245,6 +256,7 @@ TEMPLATES: dict[str, Callable[[Facts], Draft]] = {
     "control": control,
     "half_time": recap,
     "full_time": recap,
+    "catch_up": catch_up,
     "correction": correction,
 }
 

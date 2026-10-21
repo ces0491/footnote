@@ -23,6 +23,7 @@ from footnote.insights.facts import Fact, Facts
 from footnote.live.timeline import PERIOD_SECONDS
 
 if TYPE_CHECKING:
+    from footnote.insights.book import Insight
     from footnote.live.state import RunState
 
 # Topic -> kind. Kinds are what the overlay contract names (docs/experience.md).
@@ -43,6 +44,7 @@ KIND = {
     "distance": "player_tag",
     "half_time": "recap",
     "full_time": "recap",
+    "catch_up": "recap",
     "correction": "correction",
 }
 
@@ -50,6 +52,7 @@ BASE_RANK = {
     "correction": 0.95,
     "half_time": 0.90,
     "full_time": 0.90,
+    "catch_up": 0.85,
     "goal": 0.80,
     "own_goal": 0.80,
     "penalty": 0.80,
@@ -66,8 +69,23 @@ BASE_RANK = {
     "distance": 0.25,
 }
 
-# Topics an agent drafts; the rest keep their template. Agents go where wording adds something.
-AGENT_TOPICS = frozenset({"goal", "own_goal", "penalty", "red_card", "var_decision", "pressure", "chaos", "correction"})
+# Topics an agent drafts; the rest keep their template. Agents go where wording adds something: a
+# recap's template can list the goals, but only a writer can tell the story of the half.
+AGENT_TOPICS = frozenset(
+    {
+        "goal",
+        "own_goal",
+        "penalty",
+        "red_card",
+        "var_decision",
+        "pressure",
+        "chaos",
+        "correction",
+        "half_time",
+        "full_time",
+        "catch_up",
+    }
+)
 
 # How long, in match seconds, an insight stays on the shortlist after its moment.
 SHELF_SECONDS = {
@@ -87,10 +105,13 @@ SHELF_SECONDS = {
     "distance": 120,
     "half_time": 600,
     "full_time": 600,
+    "catch_up": 300,
     "correction": 600,
 }
 
 PLACEMENT = {"moment": "lower_third", "rule_call": "lower_third", "correction": "lower_third", "recap": "full_card"}
+# The catch-up is for a fan's own screen, not the world feed's.
+PLACEMENT_BY_TOPIC = {"catch_up": "side_panel"}
 # Kinds that wait for the next stoppage, so live play stays uncluttered (docs/audience.md, P5).
 HOLD_FOR_STOPPAGE = frozenset({"segment", "stat"})
 # Seconds of match time a graphic stays on screen once shown, by placement. A side-panel card stays
@@ -653,21 +674,10 @@ class MomentFinder:
     # --- recaps --------------------------------------------------------------------------------
 
     def _recap(self, m: dict, state: RunState, topic: str) -> Found:
-        events = (m["event_id"],)
-        teams = state.stats.view()["teams"]
-        home, away = self.meta["home"]["id"], self.meta["away"]["id"]
         f: Facts = {
             "recap.label": F.text("Half-time" if topic == "half_time" else "Full time", "which break this is"),
             "recap.when": F.text("half-time" if topic == "half_time" else "full time", "the break, in a sentence"),
-            "recap.score_line": F.text(self.score_line(m["score"]), "the score", events),
-            "recap.home_possession": F.share(
-                teams[home]["possession"] or 0.0, f"{self.club(home)}'s share of the passes"
-            ),
-            "recap.away_possession": F.share(
-                teams[away]["possession"] or 0.0, f"{self.club(away)}'s share of the passes"
-            ),
-            "recap.home_shots": F.count(teams[home]["shots"], f"shots by {self.club(home)}"),
-            "recap.away_shots": F.count(teams[away]["shots"], f"shots by {self.club(away)}"),
+            **self._recap_facts(m, state),
         }
         return Found(
             insight_id="ht" if topic == "half_time" else "ft",
@@ -676,9 +686,56 @@ class MomentFinder:
             at=_at(m),
             rank=BASE_RANK[topic],
             reason="Half-time recap" if topic == "half_time" else "Full-time recap",
-            evidence=[m["event_id"]],
+            evidence=[m["event_id"], *_goal_events(f)],
             facts=f,
         )
+
+    def catch_up(self, m: dict, state: RunState) -> Found:
+        """What a viewer joining at this message has missed, for a replay that starts mid-match: the
+        recap's facts as of the message, with the minute they join at."""
+        events = (m["event_id"],)
+        f: Facts = {
+            "recap.to": F.minute(m["minute"], m["added_minute"], "the minute the viewer joins at", events),
+            **self._recap_facts(m, state),
+        }
+        return Found(
+            insight_id="catchup",
+            topic="catch_up",
+            seq=m["seq"],
+            at=_at(m),
+            rank=BASE_RANK["catch_up"],
+            reason=f"Catch-up for viewers joining at {F.minute_label(m['minute'], m['added_minute'])}",
+            evidence=[m["event_id"], *_goal_events(f)],
+            facts=f,
+        )
+
+    def _recap_facts(self, m: dict, state: RunState) -> Facts:
+        """What every recap may state: the score, the goals as they stand, and each club's share of the
+        passes and its shots."""
+        events = (m["event_id"],)
+        teams = state.stats.view()["teams"]
+        home, away = self.meta["home"]["id"], self.meta["away"]["id"]
+        f: Facts = {
+            "recap.score_line": F.text(self.score_line(m.get("score") or state.stats.score), "the score", events),
+            "recap.home_club": F.text(self.club(home), "the home club"),
+            "recap.away_club": F.text(self.club(away), "the away club"),
+            "recap.home_possession": F.share(
+                teams[home]["possession"] or 0.0, f"{self.club(home)}'s share of the passes"
+            ),
+            "recap.away_possession": F.share(
+                teams[away]["possession"] or 0.0, f"{self.club(away)}'s share of the passes"
+            ),
+            "recap.home_shots": _count_of(teams[home]["shots"], "shot", f"shots by {self.club(home)}"),
+            "recap.away_shots": _count_of(teams[away]["shots"], "shot", f"shots by {self.club(away)}"),
+        }
+        goals = _goals_standing(state)
+        if goals:
+            f["recap.goals"] = F.text(
+                ", ".join(_goal_text(g.facts, g.topic == "own_goal") for g in goals),
+                "the goals so far as they stand: scorer, the club the goal counts for, and minute",
+                tuple(e for g in goals for e in g.facts["moment.scorer"].events),
+            )
+        return f
 
     # --- corrections ---------------------------------------------------------------------------
 
@@ -710,6 +767,28 @@ class MomentFinder:
             facts=f,
             corrects=corrects,
         )
+
+
+def _goals_standing(state: RunState) -> list[Insight]:
+    """The goals so far as they stand, in match order: from the run's goal insights, which a correction
+    restates (an own goal credited to the scorer after all) and which VAR undoes (a goal ruled out)."""
+    if state.book is None:
+        return []
+    goals = [
+        i
+        for i in state.book.insights.values()
+        if i.topic in ("goal", "own_goal") and (i.flag is None or i.flag["seq"] == i.seq)
+    ]
+    return sorted(goals, key=lambda i: (i.at["period"], i.at["t"]))
+
+
+def _goal_text(f: Facts, own_goal: bool) -> str:
+    club = f["moment.club"].display
+    return f"{f['moment.scorer'].display} ({'own goal, ' if own_goal else ''}{club}) {f['moment.minute'].display}"
+
+
+def _goal_events(f: Facts) -> list[str]:
+    return list(f["recap.goals"].events) if "recap.goals" in f else []
 
 
 def _minute_of(period: int, second: float) -> tuple[int, int | None]:

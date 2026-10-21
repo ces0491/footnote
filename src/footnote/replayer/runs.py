@@ -21,6 +21,10 @@ log = logging.getLogger(__name__)
 MAX_RUNS = 6  # concurrent replays; Web PubSub's free tier allows 20 connections in all
 RUN_TTL = 2 * 60 * 60.0  # wall seconds; a full match at normal speed fits
 START_DELAY = 2.0  # wall seconds between the request and the first live message, for the backfill
+# Wall seconds between a finished run's last message and its run_end. The full-time recap is found at
+# the final whistle and an agent drafts it in seconds to tens of seconds; once the run has ended, the
+# agents give its jobs up and pages stop listening, so the draft has this long to reach them.
+FINISH_LINGER = 30.0
 
 
 @dataclass
@@ -44,6 +48,7 @@ class RunManager:
         max_runs: int = MAX_RUNS,
         ttl: float = RUN_TTL,
         start_delay: float = START_DELAY,
+        finish_linger: float = FINISH_LINGER,
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -53,6 +58,7 @@ class RunManager:
         self.max_runs = max_runs
         self.ttl = ttl
         self.start_delay = start_delay
+        self.finish_linger = finish_linger
         self.clock = clock
         self.sleep = sleep
         self.runs: dict[str, ActiveRun] = {}
@@ -132,6 +138,8 @@ class RunManager:
                     reason = "expired"
                     break
                 await self.publisher.send(run_id, [Envelope(m) for m in step.messages])
+            if reason == "finished" and self.finish_linger > 0:
+                await self.sleep(self.finish_linger)
         except asyncio.CancelledError:
             reason = run.stop_reason or "stopped"
             raise

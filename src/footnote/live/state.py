@@ -85,7 +85,9 @@ class RunState:
         if m["type"] in KEY_EVENT_TYPES:
             self.key_events.append(client_event(m))
         if self.book is not None:
-            self.book.observe(m, self, live=m["seq"] > self.backfill_seq)
+            # A replay from kick-off has only the match information in its backfill: nothing to catch up on.
+            opens = m["seq"] == self.backfill_seq and self.phase != "pre_match"
+            self.book.observe(m, self, live=m["seq"] > self.backfill_seq, opens=opens)
         return True
 
     def insight_changes(self) -> list[Change]:

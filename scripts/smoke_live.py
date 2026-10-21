@@ -15,6 +15,8 @@ For insights it checks that folding the insight pushes into the joined snapshot 
 the store ends with, and reports how many cards the agents drafted, how long their drafts took to
 replace the template's as this machine received them, and which fell back and why. It waits
 `--settle` seconds after the run ends before the final snapshot, so drafts still in flight land.
+It also times the template overlay: from the replayer publishing the feed message behind each
+processor insight push (its `shown_seq`) to this machine receiving the push.
 
 For delivery held to a viewer's playback it checks that the pushes the web app serves from the store
 are the ones that were pushed, starting from the backfill's snapshot, and that the tracking for the
@@ -122,15 +124,23 @@ def report_insights(joined: dict, final: dict, timed: list[tuple[dict, float]], 
     stored = {i["insight_id"]: i for i in final.get("insights", []) if i["live"]}
     held = {i["insight_id"]: i for i in joined.get("insights", [])}
     rev = joined.get("insight_rev", 0)
-    # Timed from the template version a draft replaced: a restated insight's clock starts again.
+    # Timed from the template version a draft replaced: a restated insight's clock starts again. A
+    # version's later pushes (its translations arriving, say) aren't another draft.
     template_at: dict[str, float] = {}
     to_agent: list[float] = []
+    timed_versions: set[tuple[str, int]] = set()
     for m, arrived in pushes:
         insight = m["insight"]
+        version = (insight["insight_id"], insight["version"])
         if insight["source"] == "template":
             template_at[insight["insight_id"]] = arrived
-        elif not insight["provenance"].get("cached") and insight["insight_id"] in template_at:
+        elif (
+            not insight["provenance"].get("cached")
+            and insight["insight_id"] in template_at
+            and version not in timed_versions
+        ):
             to_agent.append(arrived - template_at[insight["insight_id"]])
+            timed_versions.add(version)
     for m, _ in sorted(pushes, key=lambda p: p[0]["rev"]):
         if m["rev"] > rev:
             held[m["insight"]["insight_id"]] = m["insight"]
@@ -155,6 +165,47 @@ def report_insights(joined: dict, final: dict, timed: list[tuple[dict, float]], 
     for insight in stored.values():
         if insight["agent_state"] == "fallback":
             print(f"  fell back: {insight['insight_id']}: {insight['agent_note']}")
+
+
+def report_overlay_latency(received: list[tuple[dict, float]], started_at: float) -> None:
+    """The template overlay: from the replayer publishing the feed message behind a processor insight
+    push to this machine receiving the push.
+
+    The processor pushes an insight change straight after the events of the batch that caused it,
+    with the template's wording; only its pushes carry timing (the agents' and the desk's come later,
+    by design). An insight's first push is the card arriving, found at its `shown_seq`. A later one
+    is VAR or a correction flagging or restating it, or a decision ending it early, which doesn't move
+    `shown_seq`: it is timed from the last event that arrived before it, the batch's.
+    """
+    published = {
+        m["seq"]: m["timing"]["published_at"]
+        for m, _ in received
+        if m["type"] == "event" and m.get("timing", {}).get("published_at")
+    }
+    first: list[float] = []
+    later: list[float] = []
+    early: list[float] = []
+    seen: set[str] = set()
+    last_event: float | None = None
+    for m, arrived in received:
+        if m["type"] == "event":
+            last_event = published.get(m["seq"], last_event)
+            continue
+        if m["type"] != "insight" or not m.get("timing", {}).get("processed_at"):
+            continue
+        insight = m["insight"]
+        known = insight["insight_id"] in seen
+        seen.add(insight["insight_id"])
+        sent = last_event if known else published.get(insight["shown_seq"])
+        if sent is None:
+            continue
+        latency = arrived - sent
+        (later if known else first).append(latency)
+        if sent - started_at < 10_000:
+            early.append(latency)
+    print(summary("template overlay, publish to receipt: new cards", first))
+    print(summary("  changes to cards (VAR, corrections)", later))
+    print(summary("  in the first 10 s, while the backfill is processed", early))
 
 
 def report_latency(received: list[tuple[dict, float]], started_at: float) -> None:
@@ -290,6 +341,7 @@ async def main(base: str, minute: int, speed: int, timeout: float, settle: float
     print(f"state timeline: {len(view.get('state_timeline') or [])} spells")
     print(f"stored pushes: {len(kept)}; tracking frames at the start and a minute beyond: {gate}")
     report_latency(timed, run["started_at"])
+    report_overlay_latency(timed, run["started_at"])
     report_insights(joined, final, timed, failures)
     for failure in failures:
         print(f"FAIL {failure}")
@@ -302,6 +354,7 @@ if __name__ == "__main__":
     parser.add_argument("--minute", type=int, default=81)
     parser.add_argument("--speed", type=int, default=4, choices=(1, 2, 4))
     parser.add_argument("--timeout", type=float, default=1800.0, help="seconds to wait for the run to end")
-    parser.add_argument("--settle", type=float, default=40.0, help="seconds to wait after the end for agent drafts")
+    # The replayer already waits after the last message before ending the run (FINISH_LINGER).
+    parser.add_argument("--settle", type=float, default=15.0, help="seconds to wait after the end for agent drafts")
     args = parser.parse_args()
     sys.exit(asyncio.run(main(args.url.rstrip("/"), args.minute, args.speed, args.timeout, args.settle)))

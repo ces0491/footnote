@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from footnote.db.connect import Pool
 from footnote.db.insights import AGENT_CHANNEL, Connection, next_rev, push_insights
-from footnote.insights.draft import Draft, check, render
+from footnote.insights.draft import Draft, check, limits_for, render
 from footnote.insights.facts import facts_from_json
 from footnote.live.contract import VIEWER_PATTERN
 
@@ -80,6 +80,7 @@ class Push(Protocol):
 
 @dataclass(frozen=True)
 class _Insight:
+    topic: str
     status: str
     status_by: str | None
     agent_state: str
@@ -105,7 +106,7 @@ async def _insight(conn: Connection, run_id: str, insight_id: str) -> _Insight:
     # The row is locked on its own: a lock that waits on another writer's new version would, with a
     # join to the versions, recheck the join against the old version and find no row.
     cur = await conn.execute(
-        "select status, status_by, agent_state, live, facts, facts_version, evidence, version"
+        "select topic, status, status_by, agent_state, live, facts, facts_version, evidence, version"
         " from insights where run_id = %s and insight_id = %s for update",
         (run_id, insight_id),
     )
@@ -121,6 +122,7 @@ async def _insight(conn: Connection, run_id: str, insight_id: str) -> _Insight:
     )
     version = await cur.fetchone()
     return _Insight(
+        row["topic"],
         row["status"],
         row["status_by"],
         row["agent_state"],
@@ -208,7 +210,7 @@ class Desk:
             raise Refused(409, "An agent is drafting it; wait for its draft before editing.")
         facts = facts_from_json(insight.facts)
         events = {*insight.evidence, *insight.card_evidence, *(e for f in facts.values() for e in f.events)}
-        problems = check(draft, facts, events)
+        problems = check(draft, facts, events, limits_for(insight.topic))
         if problems:
             raise Refused(422, "The edit didn't pass the checks.", problems)
         cur = await conn.execute(

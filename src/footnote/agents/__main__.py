@@ -3,7 +3,8 @@
 One process serves the match tools over MCP on localhost (footnote.tools) and runs the worker that
 drafts cards with them (worker.py). It wakes on the processor's notifications on the
 `footnote_agents` channel and also looks for jobs every few seconds, in case one was missed. It
-also serves the producer's desk (desk.py) to the web app, inside the Container Apps environment.
+also serves the producer's desk (desk.py) to the web app, inside the Container Apps environment,
+and, given a Translator, translates the cards viewers see into Spanish and French (translator.py).
 
 Settings come from the environment (set by infra/agents.bicep in Azure):
 
@@ -14,6 +15,7 @@ Settings come from the environment (set by infra/agents.bicep in Azure):
     AGENT_DEADLINE_SECONDS, AGENT_DAILY_RUNS, AGENT_CONCURRENCY, AGENT_REASONING_EFFORT   optional
     MCP_PORT                                  the match tools' local port, 8100 unless set
     DESK_PORT                                 the producer's desk, 8080 unless set
+    TRANSLATOR_ENDPOINT                       Azure AI Translator; cards stay in English without it
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import os
 import signal
 import sys
 
+import aiohttp
 import psycopg
 import uvicorn
 from agent_framework_foundry import FoundryChatClient
@@ -34,9 +37,11 @@ from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 from footnote import cloud
 from footnote.agents.desk import Desk, create_app
 from footnote.agents.store import AgentStore, PostgresSource
+from footnote.agents.translator import AzureTranslator, TranslationStore, TranslationWorker
 from footnote.agents.worker import Settings, Worker
 from footnote.db.connect import TOKEN_SCOPE, conninfo, entra_pool
 from footnote.db.insights import AGENT_CHANNEL
+from footnote.insights.translation import names_of
 from footnote.live.analysis import Analysis
 from footnote.live.match import SHOWCASE_MATCH_ID, load_match
 from footnote.processor.push import WebPubSubPush
@@ -57,8 +62,8 @@ def settings() -> Settings:
     )
 
 
-async def listen(credential: AsyncTokenCredential, wake: asyncio.Event) -> None:
-    """Wake the worker on each notification, reconnecting if the connection drops."""
+async def listen(credential: AsyncTokenCredential, *wakes: asyncio.Event) -> None:
+    """Wake the workers on each notification, reconnecting if the connection drops."""
     while True:
         try:
             token = await credential.get_token(TOKEN_SCOPE)
@@ -66,7 +71,8 @@ async def listen(credential: AsyncTokenCredential, wake: asyncio.Event) -> None:
                 await conn.execute(f"listen {AGENT_CHANNEL}")
                 log.info("listening on %s", AGENT_CHANNEL)
                 async for _ in conn.notifies():
-                    wake.set()
+                    for wake in wakes:
+                        wake.set()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -95,10 +101,19 @@ async def main() -> None:
     )
     push = WebPubSubPush(webpubsub)
     worker = Worker(AgentStore(pool), push, client, f"http://127.0.0.1:{port}/mcp", settings())
-    wake = asyncio.Event()
+    wake, wake_translator = asyncio.Event(), asyncio.Event()
     desk_port = int(os.environ.get("DESK_PORT", "8080"))
     desk = uvicorn.Server(
         uvicorn.Config(create_app(Desk(pool, push)), host="0.0.0.0", port=desk_port, log_level="warning")
+    )
+    translator_endpoint = os.environ.get("TRANSLATOR_ENDPOINT", "")
+    http = aiohttp.ClientSession()
+    translations = (
+        TranslationWorker(
+            TranslationStore(pool), push, AzureTranslator(translator_endpoint, credential, http), names_of(match.meta)
+        )
+        if translator_endpoint
+        else None
     )
 
     stop = asyncio.Event()
@@ -108,14 +123,17 @@ async def main() -> None:
             loop.add_signal_handler(sig, stop.set)
 
     log.info("drafting with %s; match tools on port %d, the desk on %d", worker.settings.model, port, desk_port)
-    async with webpubsub:
+    log.info("translating cards: %s", "yes" if translations else "no Translator configured")
+    async with webpubsub, http:
         tasks = [
             asyncio.create_task(mcp.serve(), name="mcp"),
             asyncio.create_task(desk.serve(), name="desk"),
-            asyncio.create_task(listen(credential, wake), name="listen"),
+            asyncio.create_task(listen(credential, wake, wake_translator), name="listen"),
             asyncio.create_task(worker.run(wake), name="worker"),
             asyncio.create_task(stop.wait(), name="stop"),
         ]
+        if translations is not None:
+            tasks.append(asyncio.create_task(translations.run(wake_translator), name="translator"))
         try:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:

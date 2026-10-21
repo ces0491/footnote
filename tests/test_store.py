@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator
 
@@ -22,10 +23,12 @@ from psycopg_pool import AsyncConnectionPool
 
 from footnote.agents.desk import REDRAFT_CARD_RUNS, REDRAFT_REPLAY_RUNS, Desk, Refused
 from footnote.agents.store import AgentStore, PostgresSource
+from footnote.agents.translator import TranslationStore, TranslationWorker
 from footnote.db.connect import Pool
 from footnote.db.migrate import migrate
 from footnote.insights.draft import Draft, Sentence
 from footnote.insights.facts import Fact
+from footnote.insights.translation import names_of
 from footnote.live import pitch
 from footnote.live.analysis import Analysis
 from footnote.live.contract import KIND_CONTROL, KIND_FEED, wire
@@ -149,7 +152,14 @@ async def _agents_fall_back(pool: Pool) -> list[dict]:
 async def test_migrations_apply_once(pool: Pool) -> None:
     assert await migrate(pool) == []
     row = await _one(pool, "select array_agg(version order by version) as v from schema_migrations")
-    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at", "0004_overlay", "0005_insight_pushes"]
+    assert row["v"] == [
+        "0001_runs",
+        "0002_insights",
+        "0003_queued_at",
+        "0004_overlay",
+        "0005_insight_pushes",
+        "0006_translations",
+    ]
 
 
 async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcase: Match, analysis: Analysis) -> None:
@@ -166,6 +176,23 @@ async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcas
     )
     assert early == {"live": False, "agent_state": "off"}
     assert "goal-e0391" not in {m["insight"]["insight_id"] for m in pushed}
+
+    # The catch-up for viewers joining at 81': live, approved like any card, pushed with the backfill's
+    # end, and the agents' to draft.
+    catch_up = await _one(
+        pool,
+        "select i.live, i.agent_state, i.status, i.placement, i.seq = (r.descriptor ->> 'backfill_seq')::int as at_start"
+        " from insights i join runs r using (run_id) where i.run_id = %s and i.insight_id = 'catchup'",
+        RUN_ID,
+    )
+    assert catch_up == {
+        "live": True,
+        "agent_state": "pending",
+        "status": "approved",
+        "placement": "side_panel",
+        "at_start": True,
+    }
+    assert pushed[0]["insight"]["insight_id"] == "catchup"
 
     # The 81st-minute goal: the template's version, then the restated one after the correction.
     goal = await _one(
@@ -195,14 +222,18 @@ async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcas
 
 
 async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, analysis: Analysis) -> None:
-    """From 81', two moments want an agent: the restated goal and the correction notice."""
+    """From 81', four moments want an agent: the catch-up for viewers joining there, the restated
+    goal, the correction notice and the full-time recap."""
     await _play(pool, showcase, analysis, end=False)
     agents = AgentStore(pool)
+    catch_up = await agents.claim(1, 60)
     first = await agents.claim(1, 60)
     second = await agents.claim(10, 60)
-    assert [c.insight_id for c in first] == ["goal-e1586"]  # oldest first
-    assert [c.insight_id for c in second] == ["correction-e1586-v2"]
-    assert await agents.claim(10, 60) == []  # both are being drafted
+    assert [c.insight_id for c in catch_up] == ["catchup"]  # oldest first: queued at the backfill's end
+    assert catch_up[0].kind == "recap" and catch_up[0].topic == "catch_up"
+    assert [c.insight_id for c in first] == ["goal-e1586"]
+    assert [c.insight_id for c in second] == ["correction-e1586-v2", "ft"]
+    assert await agents.claim(10, 60) == []  # all four are being drafted
     goal, correction = first[0], second[0]
     assert goal.claims == 1 and goal.match_id == showcase.match_id
     assert goal.facts_version == 2 and goal.facts["moment.scorer"]["display"] == "Femi Adeyani"
@@ -236,10 +267,11 @@ async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, a
     assert await agents.publish(goal, draft, facts, {"source": "agent"}) is None
     assert await agents.fall_back(goal, "x") is None
 
-    # The replay ends: whatever is still waiting is dropped.
+    # The replay ends: whatever is still waiting is dropped, the drafts still being written included
+    # (the catch-up and the recap).
     async with pool.connection() as conn:
         await conn.execute("update runs set status = 'finished' where run_id = %s", (RUN_ID,))
-    assert await agents.drop_ended() == 1
+    assert await agents.drop_ended() == 3
     assert await agents.claim(10, 60) == []
 
 
@@ -615,6 +647,73 @@ async def test_a_desk_action_that_waits_on_another_writer_still_finds_the_card(
             assert not acting.done()  # waiting for the row lock
         approved = await acting
     assert approved["insight"]["status"] == "approved" and approved["insight"]["version"] == row["version"] + 1
+
+
+class Mirror:
+    """A translator that hands each text back marked with its language, names and figures kept; in
+    French, if asked, it drops the figures, as a bad translation might."""
+
+    def __init__(self, drop_french_figures: bool = False, fail: bool = False) -> None:
+        self.drop = drop_french_figures
+        self.fail = fail
+        self.calls = 0
+
+    async def translate(self, texts: list[str], languages: tuple[str, ...]) -> list[dict[str, str]]:
+        self.calls += 1
+        if self.fail:
+            raise ConnectionError("Translator unavailable")
+        return [
+            {lang: (re.sub(r"\d", "", t) if self.drop and lang == "fr" else t) + f" [{lang}]" for lang in languages}
+            for t in texts
+        ]
+
+
+async def test_cards_are_translated_checked_and_pushed_again(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    await _play(pool, showcase, analysis, end=False)
+    push = Pushed()
+    store = TranslationStore(pool)
+    worker = TranslationWorker(store, push, Mirror(drop_french_figures=True), names_of(showcase.meta), batch=50)
+    before = await _one(pool, "select updated_at from insights where insight_id = 'goal-e1586'")
+    assert await worker.drain() > 0
+
+    # Spanish passed the check and is on the item; French lost its figures, so it is kept with its
+    # problems and never shown.
+    doc = (
+        await _one(pool, "select to_jsonb(c) - 'run_id' as doc from insight_cards c where insight_id = 'goal-e1586'")
+    )["doc"]
+    OverlayItem.model_validate(doc)
+    assert set(doc["translations"]) == {"es"}
+    assert doc["translations"]["es"]["casual"] == doc["card"]["casual"] + " [es]"
+    failed = await _one(
+        pool, "select problems from card_translations where insight_id = 'goal-e1586' and lang = 'fr' and card is null"
+    )
+    assert any("figures" in p for p in failed["problems"])
+    # The card is pushed again with its translations, as a new state a page keeps.
+    pushed = [m for m in push.sent if m["insight"]["insight_id"] == "goal-e1586"]
+    assert pushed and pushed[-1]["insight"]["translations"]["es"]
+    assert pushed[-1]["insight"]["updated_at"] != before["updated_at"].isoformat()
+    revs = [m["rev"] for m in push.sent]
+    assert revs == sorted(revs) and len(set(revs)) == len(revs)
+    assert max(len(wire(m).encode()) for m in push.sent) <= 4096  # two of Web PubSub's billing units
+
+    # Nothing is left to translate; translated again, the same wording comes from the cache.
+    assert await worker.drain() == 0
+    async with pool.connection() as conn:
+        await conn.execute("delete from card_translations")
+    offline = Mirror(fail=True)
+    again = TranslationWorker(store, Pushed(), offline, names_of(showcase.meta), batch=50)
+    assert await again.drain() > 0 and offline.calls == 0
+
+
+async def test_a_failing_translator_leaves_the_cards_to_try_again(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    await _play(pool, showcase, analysis, end=False)
+    worker = TranslationWorker(TranslationStore(pool), Pushed(), Mirror(fail=True), names_of(showcase.meta))
+    with pytest.raises(ConnectionError):
+        await worker.drain()
+    assert (await _one(pool, "select count(*) as n from card_translations"))["n"] == 0
+    assert len(await TranslationStore(pool).pending(50)) > 0
 
 
 async def test_the_tracking_is_stored_once_per_file(pool: Pool, showcase: Match) -> None:

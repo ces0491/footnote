@@ -38,7 +38,7 @@ from agent_framework import SupportsChatGetResponse
 from footnote.agents.prompts import PROMPT_VERSION
 from footnote.agents.store import MAX_CLAIMS, Cached, Claim
 from footnote.agents.writer import WRITER_VERSION, Drafted, Job, draft
-from footnote.insights.draft import Draft, check
+from footnote.insights.draft import Draft, check, limits_for
 from footnote.insights.facts import Facts
 from footnote.tools.server import TOOLS_VERSION
 
@@ -172,7 +172,7 @@ class Worker:
 
         agent_run_id = uuid.uuid4().hex
         await self.store.start_run(agent_run_id, claim, key, settings.model, PROMPT_VERSION)
-        job = Job(claim.run_id, claim.insight_id, claim.kind, claim.facts_version)
+        job = Job(claim.run_id, claim.insight_id, claim.kind, claim.topic, claim.facts_version)
         try:
             drafted = await asyncio.wait_for(
                 draft(job, self.client, self.mcp_url, settings.options), timeout=settings.deadline_seconds
@@ -240,7 +240,7 @@ class Worker:
 
     async def _from_cache(self, claim: Claim, key: str) -> bool:
         hit = await self.store.cached(key)
-        if hit is None or check(hit.draft, hit.facts, hit.events):
+        if hit is None or check(hit.draft, hit.facts, hit.events, limits_for(claim.topic)):
             return False
         provenance = {
             "source": "agent",

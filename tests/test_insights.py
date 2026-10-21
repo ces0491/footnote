@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from footnote.insights.book import Insight
-from footnote.insights.draft import Draft, Sentence, check, render
-from footnote.insights.facts import NBSP, Fact, duration, minute, share, speed
+from footnote.insights.draft import CARD, CATCH_UP, RECAP, Draft, Sentence, check, limits_for, render
+from footnote.insights.facts import NBSP, Fact, duration, minute, share, speed, text
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
@@ -37,12 +37,21 @@ def _as_of(showcase: Match, analysis: Analysis, seq: int) -> RunState:
     return RunState.rebuild(showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed[:seq], analysis)
 
 
-def test_every_template_passes_the_checks(showcase: Match, final: RunState) -> None:
+def _from(showcase: Match, analysis: Analysis, backfill_seq: int) -> RunState:
+    """The whole match as a replay that jumped in after `backfill_seq` sees it."""
+    state = RunState(showcase.match_id, showcase.home_id, showcase.away_id, analysis, backfill_seq)
+    for m in showcase.feed:
+        state.apply(m)
+    return state
+
+
+def test_every_template_passes_the_checks(showcase: Match, analysis: Analysis, final: RunState) -> None:
     events = {m["event_id"] for m in showcase.feed}
-    insights = _insights(final)
+    insights = dict(_insights(final))
     assert len(insights) > 20
+    insights["catchup"] = _insights(_from(showcase, analysis, 1137))["catchup"]  # a replay from 60'
     for insight in insights.values():
-        assert check(insight.template, insight.facts, events) == [], insight.insight_id
+        assert check(insight.template, insight.facts, events, limits_for(insight.topic)) == [], insight.insight_id
         assert set(insight.evidence) <= events
 
 
@@ -137,15 +146,73 @@ def test_the_amended_goal_is_restated_and_a_correction_cites_it(final: RunState)
 
 
 def test_insights_the_backfill_passed_are_history(showcase: Match, analysis: Analysis) -> None:
-    backfill_seq = 1500
-    state = RunState(showcase.match_id, showcase.home_id, showcase.away_id, analysis, backfill_seq)
-    for m in showcase.feed:
-        state.apply(m)
-    insights = _insights(state)
+    insights = _insights(_from(showcase, analysis, 1500))
     assert not insights["goal-e0391"].live and not insights["goal-e0391"].agent
     assert insights["correction-e1586-v2"].live and insights["correction-e1586-v2"].agent
     # The 81' goal came after the backfill: live, and drafted again once the correction restates it.
     assert insights["goal-e1586"].live and insights["goal-e1586"].agent
+
+
+def test_recaps_give_the_goals_as_they_stand(final: RunState) -> None:
+    insights = _insights(final)
+    half_time, full_time = insights["ht"], insights["ft"]
+    assert half_time.facts["recap.goals"].display == "Femi Adeyani (Kingsferry) 23'"
+    # VAR ruled out Dellow's 31st-minute goal; the 81st-minute own goal was credited to Adeyani at 84'.
+    assert full_time.facts["recap.goals"].display == (
+        "Femi Adeyani (Kingsferry) 23', Teo Varlan (Saltmarsh) 52', Femi Adeyani (Kingsferry) 81'"
+    )
+    assert full_time.facts["recap.goals"].events == ("e0391", "e1029", "e1586")
+    assert {"e0391", "e1029", "e1586"} <= set(full_time.evidence)
+    assert half_time.agent and full_time.agent and full_time.placement == "full_card"
+    assert full_time.card().casual.startswith("Saltmarsh 1" + chr(0x2013) + "2 Kingsferry at full time.")
+
+
+@pytest.mark.parametrize(
+    ("backfill_seq", "joined_at", "goals"),
+    [(361, "22'", None), (1137, "59'", "Femi Adeyani (Kingsferry) 23', Teo Varlan (Saltmarsh) 52'")],
+)
+def test_a_replay_that_starts_mid_match_gets_a_catch_up(
+    showcase: Match, analysis: Analysis, backfill_seq: int, joined_at: str, goals: str | None
+) -> None:
+    catch_up = _insights(_from(showcase, analysis, backfill_seq))["catchup"]
+    # For the replay's own viewers, so it is live and drafted, though it sums up history.
+    assert catch_up.live and catch_up.agent and catch_up.seq == backfill_seq
+    assert catch_up.kind == "recap" and catch_up.placement == "side_panel" and catch_up.duration is None
+    assert catch_up.facts["recap.to"].display == joined_at
+    assert (catch_up.facts["recap.goals"].display if "recap.goals" in catch_up.facts else None) == goals
+    card = catch_up.card()
+    assert card.headline == f"What you missed, up to {joined_at}"
+    # The score stays out of the wording until the viewer asks for it.
+    assert not any("score" in key for key in card.facts)
+
+
+@pytest.mark.parametrize("backfill_seq", [0, 1])
+def test_a_replay_from_kick_off_has_nothing_to_catch_up_on(
+    showcase: Match, analysis: Analysis, backfill_seq: int
+) -> None:
+    # A jump to 1' backfills only the match information (seq 1); a replay can also start before it.
+    assert "catchup" not in _insights(_from(showcase, analysis, backfill_seq))
+
+
+def test_a_catch_up_leaves_the_score_out_and_recaps_get_more_room() -> None:
+    facts = {
+        **FACTS,
+        "recap.score_line": text("Saltmarsh 1-1 Kingsferry", "the score", ("e0391",)),
+        "story.4.score_line": text("Saltmarsh 0-1 Kingsferry", "the score after the goal", ("e0391",)),
+    }
+    for key in ("recap.score_line", "story.4.score_line"):
+        draft = _draft("{player.kin-07.name} scores and it is {" + key + "}.")
+        assert check(draft, facts, EVENTS, CARD) == []
+        problems = check(draft, facts, EVENTS, CATCH_UP)
+        assert any("leaves the score out until the viewer asks for it" in p for p in problems), problems
+    told = Draft(
+        headline="Half-time",
+        casual=[Sentence(text="{player.kin-07.name} scores at {moment.minute}.", events=["e0391"])] * 3,
+        analyst=[Sentence(text="At {moment.minute}.", events=[])],
+    )
+    assert any("casual: 3 sentences" in p for p in check(told, FACTS, EVENTS, CARD))
+    assert check(told, FACTS, EVENTS, RECAP) == []
+    assert limits_for("half_time") is RECAP and limits_for("catch_up") is CATCH_UP and limits_for("goal") is CARD
 
 
 def test_a_rebuilt_run_finds_the_same_insights(showcase: Match, analysis: Analysis, final: RunState) -> None:
@@ -274,6 +341,22 @@ def test_every_sentence_must_rest_on_an_event_or_a_fact_and_cite_only_what_it_wa
     assert any("rests on nothing" in p for p in check(_draft("A fine goal.", events=[]), FACTS, EVENTS))
     unseen = check(_draft("{player.kin-07.name} scores.", events=["e9999"]), FACTS, EVENTS)
     assert any("e9999" in p and "no tool returned" in p for p in unseen)
+
+
+def test_a_count_shows_its_noun_once() -> None:
+    facts = {
+        **FACTS,
+        "teams.SAL.shots": Fact(3, "3 shots", "shots by Saltmarsh"),
+        "segment.changes": Fact(5, "5 times", "x"),
+    }
+    for casual, word in (
+        ("{teams.SAL.name} have had {teams.SAL.shots} shots.", "shots"),
+        ("The ball changed hands {segment.changes} times.", "times"),
+        ("{teams.SAL.name} managed {teams.SAL.shots} shot.", "shot"),
+    ):
+        problems = check(_draft(casual), facts, EVENTS)
+        assert any(f"leave out '{word}'" in p for p in problems), problems
+    assert check(_draft("{teams.SAL.name} have had {teams.SAL.shots} on goal."), facts, EVENTS) == []
 
 
 def test_length_limits_apply_to_the_filled_in_text() -> None:

@@ -24,6 +24,7 @@ from agent_framework import (
 from agent_framework.exceptions import ToolExecutionException
 from agent_framework.observability import ChatTelemetryLayer
 
+from footnote.agents.prompts import RECAP_WRITER, instructions, writer_name
 from footnote.agents.store import Cached, Claim
 from footnote.agents.worker import Settings, Worker, cache_key
 from footnote.agents.writer import Job, draft
@@ -32,6 +33,7 @@ from footnote.insights.facts import Facts
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
+from footnote.tools import server as tools
 from footnote.tools.scope import Scopes
 from footnote.tools.server import build_server
 
@@ -49,11 +51,23 @@ def analysis(showcase: Match) -> Analysis:
     return Analysis.load(showcase)
 
 
-@pytest.fixture(scope="module")
-def rows(showcase: Match, analysis: Analysis) -> dict[str, dict]:
-    state = RunState.rebuild(showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed, analysis)
+def _rows(showcase: Match, analysis: Analysis, backfill_seq: int = 0) -> dict[str, dict]:
+    state = RunState.rebuild(
+        showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed, analysis, backfill_seq
+    )
     assert state.book is not None
     return {i.insight_id: i.record() for i in state.book.insights.values()}
+
+
+@pytest.fixture(scope="module")
+def rows(showcase: Match, analysis: Analysis) -> dict[str, dict]:
+    return _rows(showcase, analysis)
+
+
+@pytest.fixture(scope="module")
+def rows_from_60(showcase: Match, analysis: Analysis) -> dict[str, dict]:
+    """A replay that jumped in at 60': it has a catch-up."""
+    return _rows(showcase, analysis, backfill_seq=1137)
 
 
 class Source:
@@ -136,7 +150,7 @@ async def test_a_draft_that_fails_a_check_is_revised(
 ) -> None:
     client = Scripted(TYPED_FIGURE, GOOD)
     async with match_tools(showcase, analysis, rows) as url:
-        drafted = await draft(Job(RUN, GOAL, "moment", 1), client, url, {})
+        drafted = await draft(Job(RUN, GOAL, "moment", "goal", 1), client, url, {})
     assert drafted.outcome.accepted and drafted.outcome.attempts == 2
     assert "typed as digits" in client.prompts[-1]  # the revision prompt names the problem
     assert [c["name"] for c in drafted.log.calls] == ["get_moment", "get_match_stats"]
@@ -149,7 +163,7 @@ async def test_a_draft_that_fails_a_check_is_revised(
 
 async def test_a_draft_that_fails_twice_is_rejected(showcase: Match, analysis: Analysis, rows: dict[str, dict]) -> None:
     async with match_tools(showcase, analysis, rows) as url:
-        drafted = await draft(Job(RUN, GOAL, "moment", 1), Scripted(TYPED_FIGURE, INVENTED_NAME), url, {})
+        drafted = await draft(Job(RUN, GOAL, "moment", "goal", 1), Scripted(TYPED_FIGURE, INVENTED_NAME), url, {})
     assert not drafted.outcome.accepted and drafted.outcome.attempts == 2
     assert any("'Riverton' isn't a name" in p for p in drafted.outcome.problems)
 
@@ -179,12 +193,94 @@ async def test_concurrent_drafts_on_one_client_keep_their_own_tool_logs(
     client = ReadsThenDrafts()
     async with match_tools(showcase, analysis, rows) as url:
         goal, var = await asyncio.gather(
-            draft(Job(RUN, GOAL, "moment", 1), client, url, {}),
-            draft(Job(RUN, "var-e0534", "rule_call", 1), client, url, {}),
+            draft(Job(RUN, GOAL, "moment", "goal", 1), client, url, {}),
+            draft(Job(RUN, "var-e0534", "rule_call", "var_decision", 1), client, url, {}),
         )
     for drafted, minute in ((goal, "23'"), (var, "33'")):
         assert drafted.outcome.accepted and [c["name"] for c in drafted.log.calls] == ["get_moment"]
         assert drafted.log.facts["moment.minute"].display == minute
+
+
+class TellsTheStory(FunctionInvocationLayer, ChatMiddlewareLayer, ChatTelemetryLayer, BaseChatClient):
+    """A recap writer: reads the recap and the story for each new job, then gives the drafts it was
+    handed, in order."""
+
+    def __init__(self, *drafts: dict) -> None:
+        super().__init__()
+        self.drafts = list(drafts)
+        self.prompts: list[str] = []
+
+    async def _inner_get_response(self, *, messages: Any, stream: bool, options: Any, **kwargs: Any) -> ChatResponse:
+        self.prompts.append(str(messages[-1].text))
+        if self.prompts[-1].startswith("Write the card"):
+            calls = [
+                Content.from_function_call(call_id="c1", name="get_moment", arguments="{}"),
+                Content.from_function_call(call_id="c2", name="get_story", arguments="{}"),
+            ]
+            return ChatResponse(messages=[Message("assistant", calls)])
+        return ChatResponse(messages=[Message("assistant", [json.dumps(self.drafts.pop(0))])])
+
+
+async def _story(showcase: Match, analysis: Analysis, rows: dict[str, dict], insight_id: str) -> dict:
+    """What get_story gives the writer for this insight: the story's numbering comes from the match."""
+    scope = await Scopes(Source(rows, showcase.feed), showcase, analysis).get(RUN, insight_id)
+    return json.loads(tools.story(scope))
+
+
+def _goal_keys(story: dict) -> list[str]:
+    return [f"story.{m['moment']}" for m in story["moments"] if m["topic"] in ("goal", "own_goal")]
+
+
+async def test_a_recap_is_told_from_the_story_with_room_to_tell_it(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
+    first, second, third = _goal_keys(await _story(showcase, analysis, rows, "ft"))
+    told = {
+        "headline": "{recap.label}: {recap.score_line}",
+        "casual": [
+            {"text": f"{{{first}.club}} opened the scoring through {{{first}.scorer}}.", "events": []},
+            {"text": f"{{{second}.scorer}} levelled for {{{second}.club}} from distance.", "events": []},
+            {"text": f"{{{third}.scorer}} settled it late on the break.", "events": []},
+        ],
+        "analyst": [{"text": "{recap.home_club} had {recap.home_possession} of the passes.", "events": []}],
+    }
+    client = TellsTheStory(told)
+    async with match_tools(showcase, analysis, rows) as url:
+        drafted = await draft(Job(RUN, "ft", "recap", "full_time", 1), client, url, {})
+    # Three sentences: more than a moment's card may take, as a recap may.
+    assert drafted.outcome.accepted and drafted.outcome.attempts == 1, drafted.outcome.problems
+    assert [c["name"] for c in drafted.log.calls] == ["get_moment", "get_story"]
+    assert drafted.outcome.draft is not None
+    card = render(drafted.outcome.draft, drafted.log.facts)
+    assert card.casual.startswith("Kingsferry opened the scoring through Femi Adeyani")
+    assert "Teo Varlan levelled for Saltmarsh" in card.casual and "Femi Adeyani settled it" in card.casual
+    assert {"e0391", "e1029", "e1586"} <= set(card.evidence)
+    assert instructions("recap") is RECAP_WRITER and writer_name("recap") == "recap_writer"
+
+
+async def test_a_catch_up_that_gives_the_score_away_is_revised(
+    showcase: Match, analysis: Analysis, rows_from_60: dict[str, dict]
+) -> None:
+    first, second = _goal_keys(await _story(showcase, analysis, rows_from_60, "catchup"))
+    analyst = [{"text": "{recap.home_club} have had {recap.home_possession} of the passes.", "events": []}]
+    tells = {
+        "headline": "What you missed",
+        "casual": [{"text": "It is {recap.score_line}.", "events": []}],
+        "analyst": analyst,
+    }
+    keeps_it = {
+        "headline": "What you missed",
+        "casual": [
+            {"text": f"{{{first}.scorer}} put {{{first}.club}} ahead on the break.", "events": []},
+            {"text": f"{{{second}.scorer}} answered from distance.", "events": []},
+        ],
+        "analyst": analyst,
+    }
+    client = TellsTheStory(tells, keeps_it)
+    async with match_tools(showcase, analysis, rows_from_60) as url:
+        drafted = await draft(Job(RUN, "catchup", "recap", "catch_up", 1), client, url, {})
+    assert drafted.outcome.accepted and drafted.outcome.attempts == 2
+    assert "leaves the score out until the viewer asks for it" in client.prompts[-1]
 
 
 class Store:

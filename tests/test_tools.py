@@ -26,10 +26,13 @@ def analysis(showcase: Match) -> Analysis:
 
 
 class MemorySource:
-    """Insight rows from folding the showcase feed, and the feed itself, as the store would give them."""
+    """Insight rows from folding the showcase feed, and the feed itself, as the store would give them;
+    for a replay that jumped in after `backfill_seq`, if one is given."""
 
-    def __init__(self, showcase: Match, analysis: Analysis) -> None:
-        state = RunState.rebuild(showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed, analysis)
+    def __init__(self, showcase: Match, analysis: Analysis, backfill_seq: int = 0) -> None:
+        state = RunState.rebuild(
+            showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed, analysis, backfill_seq
+        )
         assert state.book is not None
         self.rows = {i.insight_id: i.record() for i in state.book.insights.values()}
         self.messages = showcase.feed
@@ -114,6 +117,40 @@ async def test_recent_events_and_lineups(source: MemorySource, showcase: Match, 
     kin = next(c for c in squads["clubs"] if c["club"] == "Kingsferry")
     status = {p["player_id"]: p["status"] for p in kin["players"]}
     assert status["kin-03"] == "substituted off" and status["kin-17"] == "on the pitch"
+
+
+async def test_the_story_tells_the_match_as_it_stands(
+    source: MemorySource, showcase: Match, analysis: Analysis
+) -> None:
+    told = json.loads(tools.story(await _scope(source, showcase, analysis, "ft")))
+    moments, facts = told["moments"], told["facts"]
+    goals = [m for m in moments if m["topic"] in ("goal", "own_goal")]
+    # Dellow's 31st-minute goal was ruled out: the VAR decision tells it. The 81st-minute goal is
+    # Adeyani's, as corrected at 84', and says it was corrected.
+    assert [g["minute"] for g in goals] == ["23'", "52'", "81'"]
+    scorers = [facts[f"story.{g['moment']}.scorer"]["display"] for g in goals]
+    assert scorers == ["Femi Adeyani", "Teo Varlan", "Femi Adeyani"]
+    assert goals[2]["corrected"].startswith("The provider amended the goal")
+    decision = next(m for m in moments if m["topic"] == "var_decision")
+    assert decision["minute"] == "33'" and "e0532" in decision["events"]
+    assert {m["topic"] for m in moments} >= {"control", "pressure", "chaos", "correction"}
+    # Each moment's facts have keys of their own, and its wording uses them.
+    n = goals[0]["moment"]
+    assert goals[0]["headline"] == f"{{story.{n}.scorer}} scores"
+    assert "(goal at 23')" in facts[f"story.{n}.scorer"]["about"]
+    assert set(told["events"]) >= {e for m in moments for e in m["events"]}
+    assert [m["moment"] for m in moments] == list(range(1, len(moments) + 1))
+
+
+async def test_a_catch_up_story_ends_where_the_viewer_joins(showcase: Match, analysis: Analysis) -> None:
+    source = MemorySource(showcase, analysis, backfill_seq=1137)  # a replay from 60'
+    scope = await _scope(source, showcase, analysis, "catchup")
+    assert scope.state.seq == 1137
+    told = json.loads(tools.story(scope))
+    assert told["moments"][-1]["minute"] == "57'"
+    assert [m["minute"] for m in told["moments"] if m["topic"] == "goal"] == ["23'", "52'"]
+    moment = json.loads(tools.moment(scope))
+    assert moment["topic"] == "catch_up" and moment["template"]["headline"] == "What you missed, up to {recap.to}"
 
 
 async def test_scopes_fold_once_per_moment(source: MemorySource, showcase: Match, analysis: Analysis) -> None:

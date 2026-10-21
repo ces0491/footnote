@@ -12,7 +12,7 @@ from footnote.live.match import Match, load_match
 from footnote.live.timeline import Timeline
 from footnote.replayer.app import create_app
 from footnote.replayer.publish import Envelope
-from footnote.replayer.runs import RunManager
+from footnote.replayer.runs import FINISH_LINGER, RunManager
 from footnote.replayer.schedule import plan
 
 
@@ -90,7 +90,35 @@ async def test_a_run_publishes_start_backfill_events_on_time_and_end(showcase: M
             continue
         due = started_at + (timeline.replay_seconds(envelope.body["ts"]) - run["start_replay"]) / 4.0
         assert at == pytest.approx(due, abs=1e-6)
+    # The run stays open a little after the final whistle, so the full-time recap's draft reaches it.
+    last_feed_at = max(at for at, _, e in publisher.sent if e.kind != KIND_CONTROL)
+    assert publisher.sent[-1][0] == pytest.approx(last_feed_at + FINISH_LINGER)
     assert manager.runs == {}
+
+
+class Lingers(FakeTime):
+    """Fake time, except that the wait after a run's last message lasts until the run is stopped."""
+
+    LINGER = 123.25
+
+    async def sleep(self, seconds: float) -> None:
+        if seconds == self.LINGER:
+            await asyncio.Event().wait()
+        await super().sleep(seconds)
+
+
+async def test_a_run_stopped_after_its_last_message_ends_as_stopped(showcase: Match, timeline: Timeline) -> None:
+    fake = Lingers()
+    publisher = RecordingPublisher()
+    manager = RunManager(
+        showcase, timeline, publisher, finish_linger=Lingers.LINGER, clock=fake.clock, sleep=fake.sleep
+    )
+    run = await manager.start(start_minute=90, speed=4.0)
+    last = showcase.feed[-1]["seq"]
+    while not any(e.body.get("seq") == last for _, _, e in publisher.sent):
+        await asyncio.sleep(0)
+    assert await manager.stop(run["run_id"])
+    assert publisher.sent[-1][2].body == {"type": "run_end", "run_id": run["run_id"], "reason": "stopped"}
 
 
 async def test_stopping_a_run_publishes_run_end(showcase: Match, timeline: Timeline) -> None:

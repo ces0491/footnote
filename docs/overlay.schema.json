@@ -284,6 +284,31 @@
       ],
       "title": "Provenance",
       "type": "object"
+    },
+    "Translation": {
+      "additionalProperties": false,
+      "description": "The item's wording in another language: Azure AI Translator's, checked by code to keep every\nfigure and name of the English.",
+      "properties": {
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "casual": {
+          "title": "Casual",
+          "type": "string"
+        },
+        "analyst": {
+          "title": "Analyst",
+          "type": "string"
+        }
+      },
+      "required": [
+        "headline",
+        "casual",
+        "analyst"
+      ],
+      "title": "Translation",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -449,6 +474,20 @@
     },
     "card": {
       "$ref": "#/$defs/Card"
+    },
+    "translations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Translation"
+      },
+      "description": "The wording in Spanish and French, once translated and checked; a language not here shows the English",
+      "propertyNames": {
+        "enum": [
+          "es",
+          "fr"
+        ]
+      },
+      "title": "Translations",
+      "type": "object"
     },
     "fields": {
       "additionalProperties": {

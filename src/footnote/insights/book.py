@@ -10,6 +10,9 @@ messages can change it:
   the event is restated with the corrected facts, as a new version the agents draft again; and a
   correction insight tells viewers what changed (docs/audience.md, P2).
 
+A replay that starts mid-match gets one more insight at the end of its backfill: the catch-up on
+what its viewers missed (docs/audience.md, P7). It is live, unlike the history it sums up.
+
 `InsightBook.observe` runs once per message, after the run's state has applied it, and keeps what
 changed for the processor to store and push (`changes`). The store numbers the versions, because
 the agents add theirs to the same insights (footnote.agents).
@@ -28,6 +31,7 @@ from footnote.insights.moments import (
     DURATION,
     HOLD_FOR_STOPPAGE,
     PLACEMENT,
+    PLACEMENT_BY_TOPIC,
     Found,
     MomentFinder,
 )
@@ -81,7 +85,7 @@ class Insight:
 
     @property
     def placement(self) -> str:
-        return PLACEMENT.get(self.kind, "side_panel")
+        return PLACEMENT_BY_TOPIC.get(self.topic) or PLACEMENT.get(self.kind, "side_panel")
 
     @property
     def hold(self) -> str | None:
@@ -144,14 +148,20 @@ class InsightBook:
     def for_match(cls, meta: dict) -> InsightBook:
         return cls(MomentFinder(meta))
 
-    def observe(self, m: dict, state: RunState, live: bool) -> None:
+    def observe(self, m: dict, state: RunState, live: bool, opens: bool = False) -> None:
+        """Take in one message. `opens` marks the last message of the backfill of a replay that
+        starts mid-match: its viewers get a catch-up on the match so far."""
         changes: list[Change] = []
         if m["type"] == "amendment":
             changes += self._amend(m, live)
-        for found in self.finder.observe(m, state):
+        found_now = self.finder.observe(m, state)
+        if opens:
+            found_now.append(self.finder.catch_up(m, state))
+        for found in found_now:
             if found.insight_id in self.insights:
                 continue
-            insight = Insight.start(found, live)
+            # The catch-up is for the run's own viewers, so it is live although its message isn't.
+            insight = Insight.start(found, live or found.topic == "catch_up")
             self.insights[insight.insight_id] = insight
             changes.append(Change(insight, "new"))
         if m["type"] == "var_check" and m["status"] == "complete":

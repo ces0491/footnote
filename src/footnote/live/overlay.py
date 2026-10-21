@@ -49,6 +49,15 @@ class Card(_Strict):
     facts: list[str] = Field(description="The fact keys the wording used")
 
 
+class Translation(_Strict):
+    """The item's wording in another language: Azure AI Translator's, checked by code to keep every
+    figure and name of the English."""
+
+    headline: str
+    casual: str
+    analyst: str
+
+
 class Provenance(_Strict):
     """Where the wording came from and what was checked."""
 
@@ -96,6 +105,10 @@ class OverlayItem(_Strict):
     version: int = Field(description="The version of the wording viewers see")
     source: Literal["template", "agent", "producer"]
     card: Card
+    translations: dict[Literal["es", "fr"], Translation] = Field(
+        default_factory=dict,
+        description="The wording in Spanish and French, once translated and checked; a language not here shows the English",
+    )
     fields: dict[str, str] = Field(description="Each fact's text by key, for graphics systems filling a template")
     provenance: Provenance
     # Status

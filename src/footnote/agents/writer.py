@@ -32,8 +32,8 @@ from agent_framework import (
 )
 from pydantic import ValidationError
 
-from footnote.agents.prompts import first_prompt, instructions, revision_prompt
-from footnote.insights.draft import Draft, check
+from footnote.agents.prompts import first_prompt, instructions, revision_prompt, writer_name
+from footnote.insights.draft import Draft, check, limits_for, render, same_words
 from footnote.insights.facts import Facts, facts_from_json
 from footnote.tools.scope import INSIGHT_HEADER, RUN_HEADER
 
@@ -41,8 +41,9 @@ MAX_ATTEMPTS = 2
 
 # Part of the agents' cache key (worker.py): change it when the drafting around the model changes in
 # a way that could change a draft or the facts it is checked against. 2026-10-20.2: tool logs no
-# longer mix between concurrent jobs (ToolLog).
-WRITER_VERSION = "2026-10-20.2"
+# longer mix between concurrent jobs (ToolLog). 2026-10-21.1: limits by topic (recaps), and a draft
+# that repeats the template's casual line is sent back.
+WRITER_VERSION = "2026-10-21.1"
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class Job:
     run_id: str
     insight_id: str
     kind: str
+    topic: str
     facts_version: int
 
 
@@ -58,11 +60,13 @@ class Job:
 # concurrent jobs on one client would otherwise share the first job's log.
 @dataclass(eq=False)
 class ToolLog(FunctionMiddleware):
-    """Every match-tool call in one job, and the facts and events the calls returned."""
+    """Every match-tool call in one job, the facts and events the calls returned, and the template's
+    wording of the moment, from get_moment."""
 
     calls: list[dict] = field(default_factory=list)
     facts: Facts = field(default_factory=dict)
     events: set[str] = field(default_factory=set)
+    template: Draft | None = None
 
     async def process(self, context: FunctionInvocationContext, call_next: Any) -> None:
         await call_next()
@@ -76,6 +80,8 @@ class ToolLog(FunctionMiddleware):
             if isinstance(body, dict):
                 self.facts |= facts_from_json(body.get("facts", {}))
                 self.events |= set(body.get("events", []))
+                if context.function.name == "get_moment" and isinstance(body.get("template"), dict):
+                    self.template = Draft.model_validate(body["template"])
 
     @property
     def read_the_moment(self) -> bool:
@@ -177,13 +183,30 @@ class Checker(Executor):
         if attempt.draft is not None:
             if not self.log.read_the_moment:
                 problems.append("call get_moment first: the card has to be about the moment it was asked for")
-            problems += check(attempt.draft, self.log.facts, self.log.events)
+            problems += check(attempt.draft, self.log.facts, self.log.events, limits_for(attempt.job.topic))
+            if not problems and self._repeats_the_template(attempt.draft):
+                problems.append(
+                    "casual: it repeats the template's line, which stands anyway; say in your own words what"
+                    " the moment means for the match, from the reason it was picked"
+                )
         if not problems:
             await ctx.yield_output(Outcome(True, attempt.draft, [], attempt.number))
         elif attempt.number < self.max_attempts:
             await ctx.send_message(Revise(attempt.job, attempt.number + 1, problems))
         else:
             await ctx.yield_output(Outcome(False, attempt.draft, problems, attempt.number))
+
+    def _repeats_the_template(self, draft: Draft) -> bool:
+        """Whether the casual line is the template's, word for word: an agent's card that adds
+        nothing is no reason to replace the template's."""
+        template = self.log.template
+        if template is None:
+            return False
+        try:
+            theirs = render(template, self.log.facts).casual
+        except KeyError:
+            return False
+        return same_words(render(draft, self.log.facts).casual, theirs)
 
 
 @dataclass
@@ -214,9 +237,7 @@ async def draft(
         load_prompts=False,
         request_timeout=20,
     )
-    agent = Agent(
-        client, instructions(job.kind), name="moment_writer" if job.kind != "correction" else "correction_writer"
-    )
+    agent = Agent(client, instructions(job.kind), name=writer_name(job.kind))
     async with tools:
         writer = Writer(agent, tools, log, options, usage)
         checker = Checker(log, max_attempts)

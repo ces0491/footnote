@@ -1,8 +1,9 @@
 """The match tools' MCP server.
 
-Seven read-only tools, each answering for the scope its request names (scope.py):
+Eight read-only tools, each answering for the scope its request names (scope.py):
 
     get_moment         what happened, why it was picked, its facts and the template's wording
+    get_story          the moments of the match so far, in order, each with its facts: for recaps
     get_match_stats    the score and each club's counts, shares and figures from the models
     get_match_state    the match-state model: the state now, and who was on top over recent minutes
     get_player         one player's passing, distance, speed, shots and goals
@@ -24,6 +25,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from footnote.insights import facts as F
+from footnote.insights.draft import PLACEHOLDER
 from footnote.insights.facts import Fact, Facts, facts_to_json
 from footnote.interpret.state import LABELS
 from footnote.live.state import KEY_EVENT_TYPES
@@ -36,14 +38,22 @@ INSTRUCTIONS = (
 )
 
 # Part of the agents' cache key (agents/worker.py): change it whenever a tool's output changes, so
-# replays stop reusing drafts written from the old output.
-TOOLS_VERSION = "2026-10-20.1"
+# replays stop reusing drafts written from the old output. 2026-10-21.1: get_story.
+TOOLS_VERSION = "2026-10-21.1"
 
 # Read-only, and about a closed world: the match as stored.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
 
 MAX_EVENTS = 12
 MAX_MINUTES = 45
+
+# The moments a recap tells: what changed the match, and the spells when one side was on top.
+# Stats and tags have their own cards and stay out of the story.
+STORY_TOPICS = frozenset(
+    {"goal", "own_goal", "penalty", "red_card", "var_decision", "pressure", "chaos", "control", "correction"}
+)
+MAX_STORY = 24  # the latest moments, if a match ever has more
+STORY_EVENTS = 4  # events cited for each moment
 
 _TYPE = {
     "pass": "pass",
@@ -100,6 +110,52 @@ def moment(scope: Scope) -> str:
         flag=row["flag"],
         template=row["template"],
     )
+
+
+def story(scope: Scope) -> str:
+    """The match's moments up to the scope's, in order, each with its facts under its own keys.
+
+    The moments are the run's insights as they stand at the scope's seq: a goal VAR ruled out is left
+    out (the VAR decision tells it), and a goal a correction restated carries the corrected facts.
+    Each moment's facts are renamed from `moment.scorer` to `story.<n>.scorer`, so two goals' scorers
+    don't share a key, and its template's wording is given with the renamed placeholders. A fact keeps
+    only the events its moment cites, which is what a recap links to; the rest would only lengthen
+    what the writer reads.
+    """
+    book = scope.state.book
+    if book is None:
+        return _result({}, moments=[], note="The match has no moments yet.")
+    told = [i for i in book.insights.values() if i.topic in STORY_TOPICS and (i.flag is None or i.flag["seq"] == i.seq)]
+    told.sort(key=lambda i: (i.at["period"], i.at["t"], i.seq))
+    f: Facts = {}
+    moments, cited = [], []
+    for n, insight in enumerate(told[-MAX_STORY:], start=1):
+        minute = F.minute_label(insight.at["minute"], insight.at["added_minute"])
+        what = f"{insight.topic.replace('_', ' ')} at {minute}"
+        events = insight.evidence[:STORY_EVENTS]
+        keys = {key: f"story.{n}.{key.split('.', 1)[1]}" for key in insight.facts}
+        for key, fact in insight.facts.items():
+            kept = tuple(e for e in fact.events if e in events)
+            f[keys[key]] = Fact(fact.value, fact.display, f"{fact.about} ({what})", kept)
+        template = insight.template
+        cited += events
+        moment = {
+            "moment": n,
+            "minute": minute,
+            "topic": insight.topic,
+            "reason": insight.reason,
+            "headline": _renamed(template.headline, keys),
+            "line": " ".join(_renamed(s.text, keys) for s in template.casual),
+            "events": events,
+        }
+        if insight.flag is not None:
+            moment["corrected"] = insight.flag["reason"]
+        moments.append(moment)
+    return _result(f, list(dict.fromkeys(cited)), moments=moments)
+
+
+def _renamed(text: str, keys: dict[str, str]) -> str:
+    return PLACEHOLDER.sub(lambda m: "{" + keys.get(m.group(1), m.group(1)) + "}", text)
 
 
 def match_stats(scope: Scope) -> str:
@@ -419,6 +475,12 @@ def build_server(scopes: Scopes, *, allowed_hosts: list[str] | None = None) -> F
     )
     async def get_moment(ctx: Context) -> str:
         return await scoped(ctx, moment)
+
+    @tool(
+        description="The moments of the match so far, in order (goals, VAR decisions, red cards, spells when one side was on top, corrections), each with its facts and events. For recaps."
+    )
+    async def get_story(ctx: Context) -> str:
+        return await scoped(ctx, story)
 
     @tool(description="The score and each club's counts, shares and model figures at the moment.")
     async def get_match_stats(ctx: Context) -> str:
