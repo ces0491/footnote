@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from footnote.insights.draft import Draft, Sentence
+from footnote.insights.draft import Draft, Sentence, indefinite
 from footnote.insights.facts import Facts
 
 
@@ -39,7 +39,8 @@ def goal(f: Facts) -> Draft:
         )
     ]
     if "moment.key_pass_difficulty" in f:
-        analyst.append(_s("{moment.passer} made the last pass, difficulty {moment.key_pass_difficulty}."))
+        # "Made the last pass" came back as "realizó la última pasada" and "a effectué le dernier passage".
+        analyst.append(_s("{moment.passer} played the final pass, difficulty {moment.key_pass_difficulty}."))
     return Draft(headline="{moment.scorer} scores", casual=casual, analyst=analyst)
 
 
@@ -50,7 +51,11 @@ def own_goal(f: Facts) -> Draft:
             _s("{moment.score_line}: an own goal by {moment.scorer} at {moment.minute}.", *_event(f, "moment.scorer"))
         ],
         analyst=[
-            _s("It came from a shot by {moment.shooter} at {moment.shot_speed}.", *_event(f, "moment.shot_speed"))
+            # Named, not "it", which French made feminine ("Elle provenait d'un tir").
+            _s(
+                "The own goal came from a shot by {moment.shooter} at {moment.shot_speed}.",
+                *_event(f, "moment.shot_speed"),
+            )
         ],
     )
 
@@ -59,8 +64,12 @@ def var_started(f: Facts) -> Draft:
     if f["moment.check"].value == "goal":
         casual = [_s("VAR is checking {moment.subject}'s goal for {moment.incident}.", *_event(f, "moment.check"))]
     else:
+        # A question, not the offence: the check may find none.
         casual = [
-            _s("VAR is checking for a penalty: {moment.incident} by {moment.subject}.", *_event(f, "moment.check"))
+            _s(
+                "VAR is checking whether {moment.subject} gave away a penalty for {moment.incident}.",
+                *_event(f, "moment.check"),
+            )
         ]
     return Draft(
         headline="VAR check: {moment.incident}",
@@ -71,20 +80,27 @@ def var_started(f: Facts) -> Draft:
 
 def var_decision(f: Facts) -> Draft:
     events = _event(f, "moment.decision")
+    # "The score stays Saltmarsh 0–1 Kingsferry" came back as "0–1 para Saltmarsh y Kingsferry", and
+    # "is still" with a level score as "reste 1–1 pour Saltmarsh Kingsferry".
+    unchanged = _s("The score is unchanged: {moment.score_line}.", *events)
     if f["moment.decision"].value == "no_goal" and "moment.passer" in f:
         casual = [
             _s("{moment.subject} was offside when {moment.passer} played the pass, so the goal is ruled out.", *events),
-            _s("The score stays {moment.score_line}.", *events),
+            unchanged,
         ]
     elif f["moment.decision"].value == "no_goal":
         casual = [
             _s("The goal is ruled out for {moment.incident}.", *events),
-            _s("The score stays {moment.score_line}.", *events),
+            unchanged,
         ]
     elif f["moment.decision"].value == "no_penalty":
-        casual = [_s("No penalty after the check for {moment.incident} by {moment.subject}.", *events)]
+        # VAR found no offence, so the card doesn't write one ("handball by Uche Asatoye").
+        offence = "foul" if f["moment.incident"].value == "a foul" else "{moment.incident}"
+        casual = [_s(f"VAR found no {offence} by {{moment.subject}}, so there is no penalty.", *events)]
+    elif f["moment.decision"].value == "penalty":
+        casual = [_s("VAR gives a penalty for {moment.incident} by {moment.subject}.", *events)]
     else:
-        casual = [_s("{moment.decision_text} after the check for {moment.incident}.", *events)]
+        casual = [_s("The goal counts after the VAR check for {moment.incident}.", *events)]
     return Draft(
         headline="VAR: {moment.decision_text}",
         casual=casual,
@@ -115,13 +131,14 @@ def key_pass(f: Facts) -> Draft:
         headline="Key pass: {moment.passer}",
         casual=[
             _s(
-                "{moment.passer} set up the goal with a pass rated {moment.difficulty} for difficulty.",
+                "{moment.passer}'s pass set up the goal, difficulty {moment.difficulty}.",
                 *_event(f, "moment.difficulty"),
             )
         ],
         analyst=[
             _s(
-                "The model gave it a {moment.completion} chance of reaching {moment.receiver}.",
+                f"The model gave it {indefinite(f['moment.completion'].display)} {{moment.completion}} chance of"
+                " reaching {moment.receiver}.",
                 *_event(f, "moment.difficulty"),
             )
         ],
@@ -129,8 +146,10 @@ def key_pass(f: Facts) -> Draft:
 
 
 def hard_pass(f: Facts) -> Draft:
+    # "Of the match": "Hardest pass yet" came back as "Passe le plus difficile" and "Le passage le plus
+    # difficile".
     return Draft(
-        headline="Hardest pass yet: {moment.passer}",
+        headline="Hardest pass of the match so far: {moment.passer}",
         casual=[
             _s(
                 "{moment.passer} finds {moment.receiver} with the hardest completed pass of the match so far.",
@@ -139,7 +158,8 @@ def hard_pass(f: Facts) -> Draft:
         ],
         analyst=[
             _s(
-                "Difficulty {moment.difficulty}: a {moment.completion} chance of arriving.",
+                f"Difficulty {{moment.difficulty}}: {indefinite(f['moment.completion'].display)}"
+                " {moment.completion} chance of arriving.",
                 *_event(f, "moment.difficulty"),
             )
         ],
@@ -147,10 +167,17 @@ def hard_pass(f: Facts) -> Draft:
 
 
 def shot_speed(f: Facts) -> Draft:
+    # Headed like the hardest pass, so it can't be taken for a sprint's "hits 33.9 km/h".
     return Draft(
-        headline="{moment.shooter} hits {moment.speed}",
-        casual=[_s("The fastest shot of the match so far, from {moment.shooter}.", *_event(f, "moment.speed"))],
-        analyst=[_s("Struck from {moment.distance}; outcome: {moment.outcome}.", *_event(f, "moment.speed"))],
+        headline="Fastest shot yet: {moment.shooter}",
+        casual=[
+            # "Struck it at" came back as "lo acertó" (got it right).
+            _s(
+                "{moment.shooter}'s shot reached {moment.speed}, the fastest of the match so far.",
+                *_event(f, "moment.speed"),
+            )
+        ],
+        analyst=[_s("From {moment.distance}, the shot was {moment.outcome}.", *_event(f, "moment.speed"))],
     )
 
 
@@ -158,13 +185,17 @@ def sprint(f: Facts) -> Draft:
     return Draft(
         headline="{moment.player} hits {moment.speed}",
         casual=[_s("{moment.player} sprints at {moment.speed}, the fastest of the match so far.")],
-        analyst=[_s("Top speed in the tracking data at {moment.minute}, smoothed as tracking providers report it.")],
+        # "Smoothed as tracking providers report it" came back as "lissée au fur et à mesure que".
+        analyst=[
+            _s("Top speed in the tracking data at {moment.minute}, with the smoothing that tracking providers use.")
+        ],
     )
 
 
 def distance(f: Facts) -> Draft:
+    # "Reaches": "passes 10.0 km" read as a passing figure, and translated as "pasa a 10,0 km".
     return Draft(
-        headline="{moment.player} passes {moment.distance}",
+        headline="{moment.player} reaches {moment.distance}",
         casual=[_s("{moment.player} has covered {moment.distance}.")],
         analyst=[_s("Distance in the tracking data, reached at {moment.minute}.")],
     )
@@ -179,19 +210,26 @@ def pressure(f: Facts) -> Draft:
                 "of the last {segment.window}."
             )
         ],
-        analyst=[_s("In that time {segment.club} have had {segment.pass_share} of the passes and {segment.shots}.")],
+        analyst=[_s("{segment.club} have {segment.pass_share} of the passes in that time, and {segment.shots}.")],
     )
 
 
 def chaos(f: Facts) -> Draft:
+    # A verb in the headline: without one, Spanish put it in the past ("tenía el control"). "Lost its
+    # shape" came back word for word, and "the longest passing move is 4 passes" as "4 pasadas" and
+    # "le coup de passe le plus long".
+    if f["segment.longest_move"].value:
+        analyst = _s("In that time, neither side strung together more than {segment.longest_move}.")
+    else:
+        analyst = _s("Neither side completed a pass in that time.")
     return Draft(
-        headline="Neither side in control",
+        headline="Neither side has control",
         casual=[
             _s(
-                "The game has lost its shape: the ball has changed hands {segment.changes} in the last {segment.window}."
+                "The game has become scrappy: the ball has changed hands {segment.changes} in the last {segment.window}."
             )
         ],
-        analyst=[_s("The longest passing move in that time is {segment.longest_move}.")],
+        analyst=[analyst],
     )
 
 
@@ -199,43 +237,61 @@ def control(f: Facts) -> Draft:
     return Draft(
         headline="{segment.club} in control",
         casual=[_s("{segment.club} have controlled the game for {segment.state_share} of the last {segment.window}.")],
-        analyst=[_s("{segment.club} have made {segment.pass_share} of the passes in that time.")],
+        analyst=[_s("{segment.club} have played {segment.pass_share} of the passes in that time.")],
     )
 
 
-def _recap_figures() -> list[Sentence]:
+# A club's share of the passes, worded so the Translator keeps it a share: "have had" and "have made"
+# came back as "a réussi" (completed them) and "ha anotado" (scored them), and "passes" without the
+# shots beside them as "pasos" and "cols".
+def _recap_figures(final: bool = False) -> list[Sentence]:
+    have = "finished with" if final else "have"
     return [
-        _s("{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}."),
-        _s("{recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}."),
+        _s(f"{{recap.home_club}} {have} {{recap.home_possession}} of the passes and {{recap.home_shots}}."),
+        _s(f"{{recap.away_club}} {have} {{recap.away_possession}} of the passes and {{recap.away_shots}}."),
     ]
+
+
+def _goals(f: Facts, so_far: str = "") -> str:
+    """The goals' heading: "Goal" for one, "Goals" for more."""
+    return f"{'Goal' if f['recap.goal_count'].value == 1 else 'Goals'}{so_far}: {{recap.goals}}."
 
 
 def recap(f: Facts) -> Draft:
     casual = [_s("{recap.score_line} at {recap.when}.", *_event(f, "recap.score_line"))]
     if "recap.goals" in f:
-        casual.append(_s("Goals: {recap.goals}."))
-    return Draft(headline="{recap.label}: {recap.score_line}", casual=casual, analyst=_recap_figures())
+        casual.append(_s(_goals(f)))
+    return Draft(
+        headline="{recap.label}: {recap.score_line}",
+        casual=casual,
+        analyst=_recap_figures(final=f["recap.label"].value == "Final score"),
+    )
 
 
 def catch_up(f: Facts) -> Draft:
-    """What a viewer joining mid-match missed. The score stays out: the viewer asks for it."""
+    """What a viewer joining mid-match missed. The score line stays out: the scoreboard beside it shows it."""
     if "recap.goals" in f:
-        casual = [_s("Goals so far: {recap.goals}.")]
+        casual = [_s(_goals(f, " so far"))]
     else:
         casual = [_s("No goals so far.", *_event(f, "recap.to"))]
     return Draft(headline="What you missed, up to {recap.to}", casual=casual, analyst=_recap_figures())
 
 
 def correction(f: Facts) -> Draft:
+    """The new credit first, and the old one in a sentence of its own: after "not" or in a bracket
+    ("not Jory Penhallow (own goal)") it read aloud, and in translation, as if it were the new
+    scorer's. The reason is given once, without the kind of review it names."""
+    events = _event(f, "correction.after")
+    if "correction.own_goal_before" in f:
+        # A possessive, which needs no article before the name and kept "de Jory Penhallow" in
+        # translation, where "an own goal by" came back as "registrado por" (recorded by).
+        before = _s("It was originally recorded as {correction.before}'s own goal.", *events)
+    else:
+        before = _s("It was originally credited to {correction.before}.", *events)
     return Draft(
         headline="Corrected: {correction.after}",
-        casual=[
-            _s(
-                "Corrected: the {correction.minute} goal is now credited to {correction.after}, not {correction.before}.",
-                *_event(f, "correction.after"),
-            )
-        ],
-        analyst=[_s("The data provider's reason: {correction.reason}.", *_event(f, "correction.after"))],
+        casual=[_s("The {correction.minute} goal is now credited to {correction.after}.", *events), before],
+        analyst=[_s("The data provider's reason: {correction.why}.", *events)],
     )
 
 

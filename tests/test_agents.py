@@ -284,7 +284,9 @@ async def test_a_catch_up_that_gives_the_score_away_is_revised(
     async with match_tools(showcase, analysis, rows_from_60) as url:
         drafted = await draft(Job(RUN, "catchup", "recap", "catch_up", 1), client, url, {})
     assert drafted.outcome.accepted and drafted.outcome.attempts == 2
-    assert "leaves the score out until the viewer asks for it" in client.prompts[-1]
+    assert "leaves the score line to the scoreboard beside it" in client.prompts[-1]
+    # Whatever heading the writer put, a recap keeps the template's.
+    assert drafted.outcome.draft is not None and drafted.outcome.draft.headline == "What you missed, up to {recap.to}"
 
 
 class Store:
@@ -312,7 +314,7 @@ class Store:
         return self.entries.get(key)
 
     async def cache(self, key: str, agent_run_id: str, draft: Draft, facts: Facts, events: set[str]) -> None:
-        self.entries.setdefault(key, Cached(agent_run_id, draft, facts, frozenset(events)))
+        self.entries[key] = Cached(agent_run_id, draft, facts, frozenset(events))
 
     async def start_run(self, agent_run_id: str, claim: Claim, key: str, model: str, prompt_version: str) -> None:
         self.runs[agent_run_id] = {"insight_id": claim.insight_id, "key": key}
@@ -371,16 +373,38 @@ async def test_an_accepted_draft_is_published_and_reused(
     assert second["cached"] is True and second["agent_run_id"] == first["agent_run_id"]
     assert client.calls == 2  # one job's worth: the second came from the cache
     run = store.runs[first["agent_run_id"]]
-    assert run["outcome"] == "accepted" and run["input_tokens"] == 1000 and run["key"] == cache_key(claim, "gpt-5-mini")
+    key = cache_key(claim, "gpt-5-mini", "low")
+    assert run["outcome"] == "accepted" and run["input_tokens"] == 1000 and run["key"] == key
     assert [m["insight"]["card"]["headline"] for m in push.sent] == ["Femi Adeyani breaks the deadlock"] * 2
+    # A draft written with more reasoning is another job's.
+    assert cache_key(claim, "gpt-5-mini", "medium") != key
 
 
-async def test_a_redraft_skips_the_cache(showcase: Match, analysis: Analysis, rows: dict[str, dict]) -> None:
+async def test_a_redraft_skips_the_cache_and_replaces_what_it_kept(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
     store = Store([_claim(rows, showcase), _claim(rows, showcase, redraft=True)])
     async with match_tools(showcase, analysis, rows) as url:
         client = Scripted(GOOD, GOOD)
         await _work(store, client, url, concurrency=1)
     assert [p["cached"] for _, p in store.published] == [False, False] and client.calls == 4
+    (kept,) = store.entries.values()
+    assert kept.agent_run_id == store.published[1][1]["agent_run_id"]
+
+
+async def test_a_kept_draft_that_fails_todays_checks_is_drafted_again_and_replaced(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
+    claim = _claim(rows, showcase)
+    store = Store([claim, claim])
+    key = cache_key(claim, "gpt-5-mini", "low")
+    store.entries[key] = Cached("old-run", Draft.model_validate(TYPED_FIGURE), {}, frozenset())
+    async with match_tools(showcase, analysis, rows) as url:
+        client = Scripted(GOOD)
+        await _work(store, client, url, concurrency=1)
+    first, second = (p for _, p in store.published)
+    assert first["cached"] is False and second["cached"] is True
+    assert store.entries[key].agent_run_id == first["agent_run_id"] != "old-run"
 
 
 @pytest.mark.parametrize(

@@ -4,10 +4,12 @@
         Draft every case with the Foundry model (FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL, signed
         in through the Azure CLI), as the agents service does, and have the model judge each card's
         groundedness (needs `uv run --group evals`). --record keeps the model's output in
-        data/evals/drafts.json for replaying; --report writes docs/evaluations.md.
+        data/evals/drafts.json for replaying; --report writes docs/evaluations.md. --only with
+        --record updates those cases in a recording made with today's versions, and refuses an
+        older one: its other cases were drafted with something else.
     replay [--report]
-        Run the recorded output through today's writer workflow, checks and evaluators, as CI does;
-        --report writes docs/evaluations.md from the replay.
+        Run the recorded output through today's writer workflow, checks and evaluators, as CI does,
+        and pass as CI does; --report writes docs/evaluations.md from the replay.
 
 A live run of every case drafts about twenty cards and judges each: a few US cents at gpt-5-mini's
 list prices.
@@ -25,10 +27,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from footnote import cloud
+from footnote.agents.versions import VERSIONS
 from footnote.agents.worker import Settings
 from footnote.evals.cases import cases
 from footnote.evals.report import write_report
-from footnote.evals.run import VERSIONS, Result, judge_groundedness, replay, run, stale
+from footnote.evals.run import PASSING_SHARE, Result, judge_groundedness, passing, replay, run, stale
 from footnote.live.analysis import Analysis
 from footnote.live.match import load_match
 
@@ -59,6 +62,11 @@ def show(results: list[Result]) -> None:
 async def live(only: list[str], record: bool, report: bool, deadline: float, judge: bool) -> int:
     from agent_framework_foundry import FoundryChatClient
 
+    if record and only and RECORDING.exists():
+        older = stale(json.loads(RECORDING.read_text(encoding="utf-8")))
+        if older:
+            print(f"the recording predates {'; '.join(older)}: record every case, without --only")
+            return 2
     match = load_match()
     analysis = Analysis.load(match)
     picked = [c for c in cases(match, analysis) if not only or c.key in only]
@@ -111,7 +119,18 @@ async def replayed(report: bool) -> int:
     if report:
         write_report(REPORT, results, recording, replayed=True)
         print(f"report in {REPORT.relative_to(ROOT)}")
-    return 0 if all(r.passed for r in results) and not stale(recording) else 1
+    # As CI judges it (tests/test_evals.py): no case the model had accepted is refused today, and
+    # the share passing every evaluation clears the bar.
+    refused = [
+        r.case.key
+        for r in results
+        if recording["cases"].get(r.case.key, {}).get("outcome") == "accepted" and r.outcome != "accepted"
+    ]
+    for key in refused:
+        print(f"{key}: accepted when recorded, refused by today's checks")
+    share = passing(results)
+    print(f"{share:.0%} pass every evaluation; CI needs {PASSING_SHARE:.0%}")
+    return 0 if share >= PASSING_SHARE and not refused and not stale(recording) else 1
 
 
 def main() -> int:

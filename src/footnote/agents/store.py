@@ -113,10 +113,14 @@ class AgentStore:
         )
 
     async def cache(self, cache_key: str, agent_run_id: str, draft: Draft, facts: Facts, events: set[str]) -> None:
+        """Keep an accepted draft for later replays. A draft is only written fresh under a key that
+        has one already when the producer asked for a redraft or the kept one fails today's checks,
+        so the fresh one replaces it."""
         async with self.pool.connection() as conn:
             await conn.execute(
                 "insert into agent_cache (cache_key, agent_run_id, draft, facts, events) values (%s, %s, %s, %s, %s)"
-                " on conflict (cache_key) do nothing",
+                " on conflict (cache_key) do update set agent_run_id = excluded.agent_run_id,"
+                " draft = excluded.draft, facts = excluded.facts, events = excluded.events, created_at = now()",
                 (
                     cache_key,
                     agent_run_id,

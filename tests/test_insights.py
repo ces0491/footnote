@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from footnote.insights.book import Insight
-from footnote.insights.draft import CARD, CATCH_UP, RECAP, Draft, Sentence, check, limits_for, render
+from footnote.insights.draft import CARD, CATCH_UP, RECAP, Draft, Sentence, check, indefinite, limits_for, render
 from footnote.insights.facts import NBSP, Fact, duration, minute, share, speed, text
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
@@ -142,7 +142,14 @@ def test_the_amended_goal_is_restated_and_a_correction_cites_it(final: RunState)
     assert goal.flag is not None and goal.flag["event_id"] == "e1586" and goal.flag["version"] == 2
     correction = insights["correction-e1586-v2"]
     assert correction.kind == "correction" and correction.corrects == "goal-e1586" and correction.rank == 0.95
-    assert "Jory Penhallow (own goal)" in correction.card().casual
+    # The new credit, then the old one in a sentence of its own: after "not", or in a bracket, it read
+    # aloud as if it were the new scorer's.
+    card = correction.card()
+    assert card.casual == (
+        "The 81' goal is now credited to Femi Adeyani. It was originally recorded as Jory Penhallow's own goal."
+    )
+    assert card.analyst == "The data provider's reason: the shot was on target before the deflection."
+    assert correction.facts["correction.reason"].display.startswith("goal credit reviewed: ")
 
 
 def test_insights_the_backfill_passed_are_history(showcase: Match, analysis: Analysis) -> None:
@@ -182,7 +189,7 @@ def test_a_replay_that_starts_mid_match_gets_a_catch_up(
     assert (catch_up.facts["recap.goals"].display if "recap.goals" in catch_up.facts else None) == goals
     card = catch_up.card()
     assert card.headline == f"What you missed, up to {joined_at}"
-    # The score stays out of the wording until the viewer asks for it.
+    # The score line stays out of the wording: the scoreboard beside it shows it.
     assert not any("score" in key for key in card.facts)
 
 
@@ -204,7 +211,7 @@ def test_a_catch_up_leaves_the_score_out_and_recaps_get_more_room() -> None:
         draft = _draft("{player.kin-07.name} scores and it is {" + key + "}.")
         assert check(draft, facts, EVENTS, CARD) == []
         problems = check(draft, facts, EVENTS, CATCH_UP)
-        assert any("leaves the score out until the viewer asks for it" in p for p in problems), problems
+        assert any("leaves the score line to the scoreboard" in p for p in problems), problems
     told = Draft(
         headline="Half-time",
         casual=[Sentence(text="{player.kin-07.name} scores at {moment.minute}.", events=["e0391"])] * 3,
@@ -274,6 +281,8 @@ def test_a_clean_draft_passes_and_renders_with_the_figures_from_code() -> None:
         ("A goal for Riverton against Saltmarsh.", "'Riverton' isn't a name"),
         ("{player.kin-07.name} scores! Great.", "exclamation"),
         ("The odds on {player.kin-07.name} scoring have shortened.", "betting language"),
+        ("Var rules out the goal by {player.kin-07.name}.", "'Var' is VAR, written in capitals"),
+        ("The var check took a while for {player.kin-07.name}.", "'var' is VAR, written in capitals"),
         ("A {brace} too far.", "a brace that isn't a whole placeholder"),
         # Figures in words: scores, ordinals, football's counts, shares.
         ("{player.kin-07.name} puts Saltmarsh one-nil down.", "the number 'one' written as a word"),
@@ -326,7 +335,12 @@ def test_the_checks_let_ordinary_football_words_and_names_through(casual: str) -
 
 
 def test_a_card_must_link_to_an_event_when_its_facts_rest_on_some() -> None:
-    draft = _draft("{teams.SAL.name} have {teams.SAL.possession} of the ball.", events=[], headline="Saltmarsh on top")
+    draft = _draft(
+        "{teams.SAL.name} have {teams.SAL.possession} of the ball.",
+        "{teams.SAL.name} keep it.",
+        events=[],
+        headline="Saltmarsh on top",
+    )
     assert any("links to no event" in p for p in check(draft, FACTS, EVENTS))
     tracking_only = {"moment.speed": FACTS["moment.speed"], "teams.SAL.name": FACTS["teams.SAL.name"]}
     tag = Draft(
@@ -358,6 +372,9 @@ def test_a_count_shows_its_noun_once() -> None:
         "teams.SAL.shots": Fact(3, "3 shots", "shots by Saltmarsh"),
         "teams.SAL.on_target": Fact(2, "2 shots on target", "Saltmarsh's shots on target"),
         "segment.changes": Fact(5, "5 times", "x"),
+        "teams.SAL.passes": Fact(44, "44 passes", "passes by Saltmarsh"),
+        "player.sal-10.passes": Fact(1, "1 pass", "Varlan's passes"),
+        "teams.SAL.changes": Fact(7, "7 changes of possession", "x"),
     }
     for casual, words in (
         ("{teams.SAL.name} have had {teams.SAL.shots} shots.", "shots"),
@@ -365,11 +382,165 @@ def test_a_count_shows_its_noun_once() -> None:
         ("{teams.SAL.name} managed {teams.SAL.shots} shot.", "shot"),
         ("{teams.SAL.name} have had {teams.SAL.on_target} on target.", "on target"),
         ("{teams.SAL.name} have had {teams.SAL.on_target} shots on target.", "shots on target"),
+        # The noun's first word as well as its last, and a singular beside a plural.
+        ("{teams.SAL.name} have had {teams.SAL.on_target} shots.", "shots"),
+        ("{player.sal-10.name} has made {player.sal-10.passes} passes.", "passes"),
+        ("{teams.SAL.name} have made {teams.SAL.passes} pass after pass.", "pass"),
+        ("{teams.SAL.name} forced {teams.SAL.changes} changes.", "changes"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(f"leave out '{words}'" in p for p in problems), problems
     assert check(_draft("{teams.SAL.name} have had {teams.SAL.shots} on goal."), facts, EVENTS) == []
     assert check(_draft("{teams.SAL.name} have had {teams.SAL.on_target} in the second half."), facts, EVENTS) == []
+    assert check(_draft("{teams.SAL.name} have made {teams.SAL.passes} in their own half."), facts, EVENTS) == []
+
+
+def test_a_goal_ruled_out_is_named_by_its_var_decision() -> None:
+    facts = {
+        **FACTS,
+        "story.4.scorer": Fact("Femi Adeyani", "Femi Adeyani", "who put the ball in the net", ("e0391",)),
+        "story.4.minute": minute(23, None, "minute of the goal", ("e0391",)),
+        "story.5.subject": Fact("Marco Dellow", "Marco Dellow", "the player the check is about", ("e0534",)),
+        "story.5.minute": minute(33, None, "minute of the decision", ("e0534",)),
+        "story.5.decision": Fact("no_goal", "No goal", "the decision"),
+    }
+    events = EVENTS | {"e0534"}
+    # As a live catch-up had it: VAR's decision pinned on the goal that stood.
+    wrong = _draft("{story.4.scorer} scored at {story.4.minute}, a goal later ruled out by VAR for offside.")
+    problems = check(wrong, facts, events)
+    assert any("without the facts of the VAR decision" in p and "{story.5.subject}" in p for p in problems), problems
+    assert check(_draft("VAR ruled out a goal by {story.5.subject} at {story.5.minute}."), facts, events) == []
+    assert (
+        check(_draft("After {story.4.scorer} scored, a goal was disallowed at {story.5.minute}."), facts, events) == []
+    )
+    nothing = check(_draft("{player.kin-07.name} had a goal chalked off."), FACTS, EVENTS)
+    assert any("no VAR decision in the facts ruled one out" in p for p in nothing), nothing
+
+
+def test_wording_copied_from_the_tools_is_refused() -> None:
+    """Each slip came from a live or recorded agent card."""
+    facts = {
+        **FACTS,
+        "segment.changes": Fact(7, "7 times", "how often the ball changed hands"),
+        "segment.window": duration(300, "the stretch"),
+        "moment.decision_text": text("No penalty", "the decision", ("e0391",)),
+        "correction.reason": text("goal credit reviewed: the shot was on target before the deflection", "why"),
+    }
+    for casual, problem in (
+        ("{teams.SAL.name} had {teams.SAL.possession} of that stretch shown as on top.", "'shown as' is the tools'"),
+        ("The match-state model marked chaos for {teams.SAL.possession}.", "'match-state model' is the tools'"),
+        ("{teams.SAL.name} forced {segment.changes} changes of possession.", "the fact says how often"),
+        ("{teams.SAL.name} controlled a {segment.window} spell.", "write 'a spell of {segment.window}'"),
+        ("The check for {player.kin-07.name} ended {moment.decision_text}.", "is a heading ('No penalty')"),
+    ):
+        problems = check(_draft(casual), facts, EVENTS)
+        assert any(problem in p for p in problems), (casual, problems)
+    # Said the way the facts mean it, each passes.
+    for casual in (
+        "The ball changed hands {segment.changes} in that stretch.",
+        "{teams.SAL.name} pinned them back for a spell of {segment.window}.",
+        "VAR's decision: {moment.decision_text}.",
+    ):
+        assert check(_draft(casual), facts, EVENTS) == [], casual
+    # The provider's reason, once.
+    twice = _draft("{player.kin-07.name} scores: {correction.reason}.", "The reason: {correction.reason}.")
+    assert any("{correction.reason} is in both lines" in p for p in check(twice, facts, EVENTS))
+
+
+def test_slips_from_the_recorded_cards_are_refused() -> None:
+    """Each slip came from the evaluations' recorded cards."""
+    facts = {
+        **FACTS,
+        "segment.window": duration(180, "the stretch"),
+        "story.1.state_share": share(0.74, "share of that stretch Saltmarsh spent in control"),
+        "story.5.decision_text": text("No goal", "the decision", ("e0391",)),
+        "story.15.after": text("Femi Adeyani", "who it is credited to now", ("e0391",)),
+        "story.15.before": text("Jory Penhallow", "who it was credited to before", ("e0391",)),
+        "player.sal-02.name": Fact("Jory Penhallow", "Jory Penhallow", "player"),
+        "story.3.window": duration(300, "the stretch"),
+        "story.3.start_minute": minute(17, None, "when the stretch began"),
+        "recap.goals": text("Femi Adeyani (Kingsferry) 23'", "the goals so far", ("e0391",)),
+        "story.15.own_goal_before": text("own goal", "it was originally recorded as an own goal", ("e0391",)),
+        "moment.completion": share(0.82, "the model's chance the pass arrived"),
+        "segment.longest_move": Fact(31, "31 passes", "longest run of completed passes", ("e0391",)),
+        "segment.changes": Fact(7, "7 times", "how often the ball changed hands", ("e0391",)),
+        "moment.score_line": text("Saltmarsh 1–2 Kingsferry", "the score after the goal", ("e0391",)),
+    }
+    for casual, problem in (
+        ("A goal was checked by VAR and {story.5.decision_text}.", "{story.5.decision_text} is a heading"),
+        ("{recap.goals} was the only goal before the break.", "{recap.goals} is the template's list"),
+        ("Saltmarsh were in control for 74% of the last {story.3.window}.", "from {story.3.start_minute}"),
+        ("It was recorded as a {story.15.own_goal_before} by {story.15.before}.", "'a own' once filled in"),
+        ("The model gave it a {moment.completion} chance.", "'a 82%' once filled in"),
+        ("They strung together {segment.longest_move} completed passes.", "leave out 'completed passes'"),
+        ("The spell began {moment.minute}.", "write 'began at {moment.minute}'"),
+        ("They had the ball, there were {segment.changes}.", "say what happened before it"),
+        ("Kingsferry lead {moment.score_line} late on.", "a club named twice"),
+        ("Saltmarsh pressed, forcing the ball to change hands {segment.changes}.", "no side forced it"),
+        ("{teams.SAL.name} were in control for {story.1.state_share} of a {segment.window}.", "leave out 'a'"),
+        ("Chaos held for {story.1.state_share} of that {segment.window}.", "write 'those {segment.window}'"),
+        ("The goal was later credited to {story.15.after}.", "give {story.15.before} too"),
+    ):
+        problems = check(_draft(casual), facts, EVENTS)
+        assert any(problem in p for p in problems), (casual, problems)
+    # Said the way the facts mean it, each passes.
+    for casual in (
+        "{teams.SAL.name} were in control for {story.1.state_share} of {segment.window}.",
+        "{teams.SAL.name} had a {story.1.state_share} share of that stretch.",
+        "The goal was credited to {story.15.before}, then to {story.15.after}.",
+        "It was originally an own goal by Penhallow, and is now credited to {story.15.after}.",
+        "Goals so far: {recap.goals}.",
+        "The model gave it an {moment.completion} chance, a useful pass.",
+        "They strung together {segment.longest_move} and kept the ball.",
+        "The ball changed hands {segment.changes} as Saltmarsh pressed.",
+        "{moment.score_line}: Kingsferry lead late on.",
+        "The spell began at {moment.minute}, and Adeyani's late {moment.minute} strike counts.",
+    ):
+        assert check(_draft(casual), facts, EVENTS) == [], casual
+    # One piece of advice for "a 3 minutes spell": the spell's own.
+    spell = check(_draft("Saltmarsh pressed for a {segment.window} spell."), facts, EVENTS)
+    assert any("write 'a spell of {segment.window}'" in p for p in spell)
+    assert not any("leave out 'a'" in p for p in spell)
+    # Templates choose the article by how the figure is read.
+    assert [indefinite(d) for d in ("8%", "80%", "11%", "18%", "5%", "58%", "110%", "1%")] == (["an"] * 4 + ["a"] * 4)
+
+
+def test_template_cards_read_as_a_viewer_and_a_translator_need(
+    showcase: Match, analysis: Analysis, final: RunState
+) -> None:
+    insights = _insights(final)
+    distance = next(i for i in insights.values() if i.topic == "distance")
+    assert " reaches " in distance.card().headline  # "passes 10.0 km" read as a passing figure
+    shot = next(i for i in insights.values() if i.topic == "shot_speed").card()
+    assert shot.headline.startswith("Fastest shot yet: ") and shot.analyst.startswith("From ")
+    assert "outcome:" not in shot.analyst
+    started, decided = insights["var-e1455"].card(), insights["var-e1456"].card()
+    # A question while VAR checks, and no offence once it found none.
+    assert started.casual == "VAR is checking whether Uche Asatoye gave away a penalty for handball."
+    assert decided.casual == "VAR found no handball by Uche Asatoye, so there is no penalty."
+    # Wording the Translator keeps: the score line whole, a pass a pass, an own goal named.
+    assert insights["var-e0534"].card().casual.endswith(" The score is unchanged: Saltmarsh 0–1 Kingsferry.")
+    assert "Javi Ferrano played the final pass, difficulty 0.42." in insights["goal-e0391"].card().analyst
+    assert insights["hardpass-e0066"].card().headline == "Hardest pass of the match so far: Harvey Pellbrook"
+    assert insights["chaos-2-1108"].card().analyst == ("In that time, neither side strung together more than 4 passes.")
+    own_goal = _insights(_as_of(showcase, analysis, 1600))["goal-e1586"].card()  # before the correction
+    assert own_goal.analyst.startswith("The own goal came from a shot by Femi Adeyani at ")
+    # A goal VAR ruled out says what it would have done: "denies Saltmarsh an equaliser" rests on a fact.
+    assert insights["var-e0534"].facts["moment.situation"].value == "equalise"
+    assert "moment.situation" not in insights["var-e1456"].facts
+    # A club's share of the passes, as the Translator keeps it a share.
+    assert "have played" in insights["control-sal-1-82"].card().analyst
+    assert insights["ft"].card().analyst.startswith("Saltmarsh finished with ")
+    # One goal is a goal.
+    assert "Goal: Femi Adeyani (Kingsferry) 23'" in insights["ht"].card().casual
+    assert "Goals: " in insights["ft"].card().casual
+    assert "Goal so far: " in _insights(_from(showcase, analysis, 493))["catchup"].card().casual
+
+
+def test_the_half_time_recap_stays_on_the_shortlist_into_the_second_half(final: RunState) -> None:
+    """A replay's break is half a minute: a producer approving by hand needs longer."""
+    until = _insights(final)["ht"].until
+    assert until["period"] == 2 and until["t"] > 0
 
 
 def test_length_limits_apply_to_the_filled_in_text() -> None:

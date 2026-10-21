@@ -3,7 +3,7 @@ came through (footnote.insights.translation)."""
 
 from __future__ import annotations
 
-from footnote.insights.translation import check, figures, names_of, prepare, protect, read_back, unprotect
+from footnote.insights.translation import check, figures, mend, names_of, prepare, protect, read_back, unprotect
 from footnote.live.match import load_match
 
 NAMES = ["Femi Adeyani", "Kingsferry", "Saltmarsh", "Adeyani", "Varlan"]
@@ -30,13 +30,96 @@ def test_names_become_dictionary_entries_and_minutes_are_written_out() -> None:
 
 def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
     marked = protect("Long spells on top, then a spell under pressure. The provider's reason: a deflection.", [])
-    assert marked == "Long periods on top, then a period under pressure. The data provider's reason: a deflection."
+    assert marked == (
+        "Long periods dominating, then a period under pressure. The data provider's reason: a deflection."
+    )
     assert protect("Later the provider corrected it; the data provider's reason stands.", []) == (
         "Later the data provider corrected it; the data provider's reason stands."
     )
     assert protect("Spellbrook was smoothed as tracking providers report it.", []) == (
         "Spellbrook was smoothed as tracking providers report it."
     )
+    # "The shot was on target" came back as "el disparo iba a darlo"; shots on target stay as they are.
+    assert protect("The shot was on target before the deflection, one of 5 shots on target.", []) == (
+        "The shot was heading into the goal before the deflection, one of 5 shots on target."
+    )
+    assert protect("VAR found no handball, so the decision stands. The shot was off target.", []) == (
+        "VAR saw no handball, so the decision is upheld. The shot missed the goal."
+    )
+    assert protect("It left the boot fast. Varlan made the last pass; Neither side has control.", []) == (
+        "It left the foot fast. Varlan played the final pass; Neither team has control."
+    )
+    assert protect("Varlan levels, having levelled once: Saltmarsh on top, on top of the game.", []) == (
+        "Varlan equalises, having equalised once: Saltmarsh dominating, dominating the game."
+    )
+
+
+def test_the_translators_known_slips_are_put_right() -> None:
+    card = {"headline": "VAR: No penalty", "casual": "The score stays Saltmarsh 1–1 Kingsferry.", "analyst": "x"}
+    spanish = {
+        "headline": "VAR: Sin penalización",
+        "casual": "El marcador sigue Saltmarsh 1–1 en Kingsferry.",
+        "analyst": "x",
+    }
+    assert mend(card, spanish, NAMES, "es") == {
+        "headline": "VAR: Sin penalti",
+        "casual": "El marcador sigue Saltmarsh 1–1 Kingsferry.",
+        "analyst": "x",
+    }
+    french = {
+        "headline": "Pénalité pour Saltmarsh",
+        "casual": "La VAR a vu une pénalité, à Saltmarsh 1–1 contre Kingsferry.",
+        "analyst": "x",
+    }
+    assert mend(card, french, NAMES, "fr") == {
+        "headline": "Penalty pour Saltmarsh",
+        "casual": "La VAR a vu un penalty, à Saltmarsh 1–1 Kingsferry.",
+        "analyst": "x",
+    }
+    # A score put before the clubs goes back between them.
+    for broken, lang in (
+        ("El marcador se mantiene 1–1 para Saltmarsh y Kingsferry.", "es"),
+        ("Le score reste 1–1 pour Saltmarsh Kingsferry.", "fr"),
+    ):
+        assert "Saltmarsh 1–1 Kingsferry" in mend(card, {**card, "casual": broken}, NAMES, lang)["casual"]
+    # A word next to a score the English doesn't have whole stays: "won 2–1 at Kingsferry".
+    away = {"headline": "", "casual": "Saltmarsh won 2–1 at Kingsferry.", "analyst": ""}
+    assert mend(away, {**away, "casual": "Saltmarsh ganó 2–1 en Kingsferry."}, NAMES, "es")["casual"] == (
+        "Saltmarsh ganó 2–1 en Kingsferry."
+    )
+    # A handball is never the sport, and a pass never a "pasada".
+    handball = {"headline": "VAR check: handball", "casual": "The goal is ruled out for handball.", "analyst": ""}
+    assert mend(
+        handball,
+        {
+            "headline": "Comprobación VAR: balonmano",
+            "casual": "El gol queda anulado por balonmano. Varlan realizó la última pasada, una pasada de 4 pasadas.",
+            "analyst": "",
+        },
+        NAMES,
+        "es",
+    ) == {
+        "headline": "Comprobación VAR: mano",
+        "casual": "El gol queda anulado por mano. Varlan realizó el último pase, un pase de 4 pases.",
+        "analyst": "",
+    }
+    assert mend(
+        handball,
+        {"headline": "Contrôle VAR : handball", "casual": "Le but est annulé pour un handball.", "analyst": ""},
+        NAMES,
+        "fr",
+    ) == {"headline": "Contrôle VAR : main", "casual": "Le but est annulé pour une main.", "analyst": ""}
+
+
+def test_a_score_line_must_come_through_whole() -> None:
+    english = {"headline": "", "casual": "The score is unchanged: Saltmarsh 1–1 Kingsferry.", "analyst": ""}
+    kept = {**english, "casual": "El marcador no ha cambiado: Saltmarsh 1–1 Kingsferry."}
+    assert check(english, kept, NAMES, "es") == []
+    # Same figures and names, but read as a score for both clubs.
+    broken = {**english, "casual": "Le score reste 1–1 pour Saltmarsh Kingsferry."}
+    assert check(english, broken, NAMES, "fr") == [
+        "casual: the score line 'Saltmarsh 1–1 Kingsferry' is broken up in the translation"
+    ]
 
 
 def test_a_headline_goes_with_a_full_stop_that_comes_off_again() -> None:

@@ -42,8 +42,14 @@ MAX_ATTEMPTS = 2
 # Part of the agents' cache key (worker.py): change it when the drafting around the model changes in
 # a way that could change a draft or the facts it is checked against. 2026-10-20.2: tool logs no
 # longer mix between concurrent jobs (ToolLog). 2026-10-21.1: limits by topic (recaps), and a draft
-# that repeats the template's casual line is sent back.
-WRITER_VERSION = "2026-10-21.1"
+# that repeats the template's casual line is sent back. 2026-10-21.2: a recap keeps the template's
+# heading.
+WRITER_VERSION = "2026-10-21.2"
+
+# A recap's heading is its graphic's fixed one ("Half-time: Saltmarsh 0–1 Kingsferry", "What you
+# missed, up to 59'"), so the template's stands whatever the writer puts there: one headed the
+# full-time recap "Insight ft.", from the job it was given.
+RECAP_TOPICS = frozenset({"half_time", "full_time", "catch_up"})
 
 
 @dataclass(frozen=True)
@@ -180,21 +186,24 @@ class Checker(Executor):
     @handler
     async def check(self, attempt: Attempt, ctx: WorkflowContext[Revise, Outcome]) -> None:
         problems = list(attempt.problems)
-        if attempt.draft is not None:
+        draft = attempt.draft
+        if draft is not None and attempt.job.topic in RECAP_TOPICS and self.log.template is not None:
+            draft = draft.model_copy(update={"headline": self.log.template.headline})
+        if draft is not None:
             if not self.log.read_the_moment:
                 problems.append("call get_moment first: the card has to be about the moment it was asked for")
-            problems += check(attempt.draft, self.log.facts, self.log.events, limits_for(attempt.job.topic))
-            if not problems and self._repeats_the_template(attempt.draft):
+            problems += check(draft, self.log.facts, self.log.events, limits_for(attempt.job.topic))
+            if not problems and self._repeats_the_template(draft):
                 problems.append(
                     "casual: it repeats the template's line, which stands anyway; say in your own words what"
                     " the moment means for the match, from the reason it was picked"
                 )
         if not problems:
-            await ctx.yield_output(Outcome(True, attempt.draft, [], attempt.number))
+            await ctx.yield_output(Outcome(True, draft, [], attempt.number))
         elif attempt.number < self.max_attempts:
             await ctx.send_message(Revise(attempt.job, attempt.number + 1, problems))
         else:
-            await ctx.yield_output(Outcome(False, attempt.draft, problems, attempt.number))
+            await ctx.yield_output(Outcome(False, draft, problems, attempt.number))
 
     def _repeats_the_template(self, draft: Draft) -> bool:
         """Whether the casual line is the template's, word for word: an agent's card that adds

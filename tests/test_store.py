@@ -334,9 +334,10 @@ async def test_the_run_log_cache_and_daily_count(pool: Pool, showcase: Match, an
     draft = Draft(headline="h", casual=[Sentence(text="c", events=[])], analyst=[Sentence(text="a", events=[])])
     facts = {"moment.minute": Fact(81, "81'", "minute", ("e1586",))}
     await agents.cache("key-1", "run-1", draft, facts, {"e1586"})
-    await agents.cache("key-1", "run-2", draft, facts, {"e1586"})  # first one wins
+    # Written again only for a redraft, or when the kept one fails today's checks: the fresh one wins.
+    await agents.cache("key-1", "run-2", draft, facts, {"e1586"})
     hit = await agents.cached("key-1")
-    assert hit is not None and hit.agent_run_id == "run-1" and hit.facts == facts and hit.events == {"e1586"}
+    assert hit is not None and hit.agent_run_id == "run-2" and hit.facts == facts and hit.events == {"e1586"}
     assert await agents.cached("key-2") is None
 
 
@@ -674,7 +675,19 @@ async def test_cards_are_translated_checked_and_pushed_again(pool: Pool, showcas
     store = TranslationStore(pool)
     worker = TranslationWorker(store, push, Mirror(drop_french_figures=True), names_of(showcase.meta), batch=50)
     before = await _one(pool, "select updated_at from insights where insight_id = 'goal-e1586'")
+    # The live cards wait first, then the history a catch-up lists (the replay starts at 81').
+    waiting = [
+        (await _one(pool, "select live from insights where run_id = %s and insight_id = %s", RUN_ID, p.insight_id))[
+            "live"
+        ]
+        for p in await store.pending(100)
+    ]
+    assert waiting == sorted(waiting, reverse=True) and True in waiting and False in waiting
     assert await worker.drain() > 0
+    history = (await _one(pool, "select to_jsonb(c) as doc from insight_cards c where insight_id = 'goal-e0391'"))[
+        "doc"
+    ]
+    assert history["live"] is False and set(history["translations"]) == {"es"}
 
     # Spanish passed the check and is on the item; French lost its figures, so it is kept with its
     # problems and never shown.

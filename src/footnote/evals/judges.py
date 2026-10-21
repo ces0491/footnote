@@ -5,7 +5,9 @@ can't see is whether the card is any good: whether it names who the moment is ab
 Alex Morgan's final match that didn't mention her, docs/audience.md), whether a claim it makes in
 words is one the facts support ("against the run of play", "an own goal", "ruled out"), whether it
 says more than the template already did, and whether it spends both lines on one figure. Each
-evaluator here answers one of those from the card, the draft and the facts, in code.
+evaluator here answers one of those from the card, the draft and the facts, in code, and each is a
+rough test: none of them can tell whose a claim is, so a card that gives the right words to the
+wrong player or moment passes all four. Reading the cards stays part of a review.
 """
 
 from __future__ import annotations
@@ -57,7 +59,8 @@ def _surname(name: str) -> str:
 
 
 def names_the_subject(seen: Seen, card: Card, draft: Draft) -> Verdict:
-    """The headline or the casual line names who the moment is about; a recap, every scorer."""
+    """The headline or the casual line has the surname of who the moment is about; a recap's, of
+    every scorer. It looks for the name, not at what the card says about them."""
     text = f"{card.headline} {card.casual}"
     if seen.topic in RECAPS:
         goals = seen.moment.get("recap.goals")
@@ -105,10 +108,18 @@ CLAIMS: list[tuple[str, re.Pattern[str], Callable[[Seen], bool]]] = [
     ("offside", re.compile(r"\boffside\b", re.I), lambda s: _any(s.facts, lambda k, f: f.value == "offside")),
     ("handball", re.compile(r"\bhandball\b", re.I), lambda s: _any(s.facts, lambda k, f: f.value == "handball")),
     (
+        "a penalty given",
+        re.compile(
+            r"\b(?:gives?|given|awards?|awarded)\b[^.;:]{0,30}\bpenalt|\bpenalt\w*\s+(?:is\s+|was\s+)?(?:given|awarded)\b",
+            re.I,
+        ),
+        lambda s: s.topic == "penalty" or _any(s.facts, lambda k, f: k == "decision" and f.value == "penalty"),
+    ),
+    (
         "a penalty",
         re.compile(r"\bpenalt", re.I),
         lambda s: (
-            s.topic == "penalty" or _any(s.facts, lambda k, f: k in ("check", "decision") and "penalty" in str(f.value))
+            s.topic == "penalty" or _any(s.facts, lambda k, f: k in ("check", "decision") and f.value == "penalty")
         ),
     ),
     (
@@ -143,7 +154,10 @@ def _claims(pattern: re.Pattern[str], text: str) -> bool:
 
 
 def claims_hold(seen: Seen, card: Card, draft: Draft) -> Verdict:
-    """Every claim the card makes in words rests on a fact its writer was given."""
+    """Each claim from a short list that the card makes in words (against the run of play, an
+    equaliser, an own goal, offside, handball, a penalty given or checked for, a goal ruled out, a
+    sending-off, a correction) has a fact of its kind among those its writer was given, whoever
+    that fact is about."""
     text = f"{card.headline} {card.casual} {card.analyst}"
     unsupported = [name for name, pattern, holds in CLAIMS if _claims(pattern, text) and not holds(seen)]
     note = f"says {', '.join(unsupported)} without a fact for it" if unsupported else ""
@@ -160,8 +174,8 @@ def _words(text: str) -> set[str]:
 
 
 def adds_to_the_template(seen: Seen, card: Card, draft: Draft) -> Verdict:
-    """The casual line is more than the template's in other words: most of its words are its own,
-    which is the agent's reason to be there."""
+    """Fewer than four in five of the casual line's words are in the template's casual line, so a
+    line that only rewords the template fails; one that keeps most of it and adds a clause passes."""
     plain = render(template(seen.topic, seen.moment), seen.moment)
     own = _words(card.casual)
     shared = len(own & _words(plain.casual)) / len(own) if own else 1.0
@@ -169,22 +183,22 @@ def adds_to_the_template(seen: Seen, card: Card, draft: Draft) -> Verdict:
     return Verdict("adds to the template", ok, "" if ok else f"{shared:.0%} of its words are the template's")
 
 
-# Figures that frame the others rather than say something themselves: when the moment was, and the
-# stretch a spell's figures cover.
-_FRAMES = ("minute", "window")
+def _frames(fact: Fact) -> bool:
+    """Whether a figure frames the others rather than saying something itself: a minute ("23'"), or
+    the stretch a spell's figures cover ("5 minutes")."""
+    return fact.display.endswith("'") or bool(re.match(r"\d+ (?:minutes|seconds)$", fact.display))
 
 
 def one_line_per_figure(seen: Seen, card: Card, draft: Draft) -> Verdict:
-    """No figure takes up both lines, so casual and analyst readers each get something of their own.
-    A minute or a spell's stretch may be in both: they frame the rest."""
+    """No number fact sits in both lines under the same key, so casual and analyst readers each get
+    something of their own. A minute or a spell's stretch may be in both: they frame the rest. A
+    text fact, such as a score line, isn't counted."""
     casual = {k for s in draft.casual for k in placeholders(s.text)}
     analyst = {k for s in draft.analyst for k in placeholders(s.text)}
     twice = sorted(
         k
         for k in casual & analyst
-        if k in seen.facts
-        and isinstance(seen.facts[k].value, int | float)
-        and not any(frame in k.rsplit(".", 1)[-1] for frame in _FRAMES)
+        if k in seen.facts and isinstance(seen.facts[k].value, int | float) and not _frames(seen.facts[k])
     )
     return Verdict("one line per figure", not twice, f"{', '.join(twice)} in both lines" if twice else "")
 

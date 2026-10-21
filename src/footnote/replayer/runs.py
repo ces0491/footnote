@@ -22,9 +22,11 @@ MAX_RUNS = 6  # concurrent replays; Web PubSub's free tier allows 20 connections
 RUN_TTL = 2 * 60 * 60.0  # wall seconds; a full match at normal speed fits
 START_DELAY = 2.0  # wall seconds between the request and the first live message, for the backfill
 # Wall seconds between a finished run's last message and its run_end. The full-time recap is found at
-# the final whistle and an agent drafts it in seconds to tens of seconds; once the run has ended, the
-# agents give its jobs up and pages stop listening, so the draft has this long to reach them.
-FINISH_LINGER = 30.0
+# the final whistle and an agent drafts it in seconds to tens of seconds (45 at most), then it is
+# translated and, in a replay the producer approves by hand, approved; once the run has ended, the
+# agents give its jobs up, the translator and the desk stop and pages stop listening, so all of that
+# has this long to reach them.
+FINISH_LINGER = 60.0
 
 
 @dataclass

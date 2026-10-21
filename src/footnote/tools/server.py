@@ -38,8 +38,10 @@ INSTRUCTIONS = (
 )
 
 # Part of the agents' cache key (agents/worker.py): change it whenever a tool's output changes, so
-# replays stop reusing drafts written from the old output. 2026-10-21.1: get_story.
-TOOLS_VERSION = "2026-10-21.1"
+# replays stop reusing drafts written from the old output (versions.py adds a fingerprint of this
+# file and the templates in case it isn't). 2026-10-21.1: get_story. 2026-10-21.2: the state of play
+# described in clauses, the correction's facts and the templates reworded.
+TOOLS_VERSION = "2026-10-21.2"
 
 # Read-only, and about a closed world: the match as stored.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
@@ -195,12 +197,27 @@ def match_stats(scope: Scope) -> str:
     return _result(f)
 
 
-def _state_text(label: str, scope: Scope) -> str:
+def _state_text(label: str, scope: Scope, texts: dict[str, str] = _STATE) -> str:
     state, _, side = label.partition(":")
     meta = scope.finder.meta
     club = meta[side]["short_name"] if side else ""
     other = meta["away" if side == "home" else "home"]["short_name"] if side else ""
-    return _STATE[state].format(club=club, other=other)
+    return texts[state].format(club=club, other=other)
+
+
+# A state in a clause, for the shares' descriptions: a writer may copy one, and "shown as on top"
+# came out of the last wording ("Kingsferry had 2% of that stretch shown as on top").
+_WHEN = {
+    "control": "{club} were in control",
+    "pressure": "{club} were pinning {other} back",
+    "transition": "{club} were on the break",
+    "chaos": "neither side was in control",
+    "balanced": "play was evenly balanced",
+}
+
+
+def _when(label: str, scope: Scope) -> str:
+    return _state_text(label, scope, _WHEN)
 
 
 def _label(state: str, team_id: str | None, meta: dict) -> str:
@@ -213,7 +230,7 @@ def _label(state: str, team_id: str | None, meta: dict) -> str:
 def match_state(scope: Scope, minutes: int) -> str:
     insight = scope.state.insight
     if insight is None or insight.match_state is None:
-        return _result({}, note="The match-state model has no estimate yet.")
+        return _result({}, note="There is no estimate of the state of play yet.")
     ms = insight.match_state
     meta = scope.finder.meta
     f: Facts = {
@@ -236,9 +253,7 @@ def match_state(scope: Scope, minutes: int) -> str:
         for label in LABELS:
             state, _, side = label.partition(":")
             key = f"state.last.{meta[side]['code']}.{state}" if side else f"state.last.{state}"
-            f[key] = F.share(
-                labels.count(label) / len(labels), f"share of that stretch shown as {_state_text(label, scope)}"
-            )
+            f[key] = F.share(labels.count(label) / len(labels), f"share of that stretch when {_when(label, scope)}")
     spells = []
     for i, spell in enumerate(insight.timeline[-6:]):
         f[f"state.spell.{i}.from"] = F.minute(*broadcast_minute(spell["period"], spell["start"]), "when it began")
@@ -356,7 +371,7 @@ def _event_facts(m: dict, scope: Scope) -> Facts:
             f[f"{k}.difficulty"] = F.rating(rating, "difficulty of the pass, 0 to 1", ev)
             f[f"{k}.completion_chance"] = F.share(1 - rating, "the model's chance the pass would arrive", ev)
     elif m["type"] == "shot":
-        f[f"{k}.speed"] = F.speed(float(m["speed_kmh"]), "speed of the shot", ev)
+        f[f"{k}.speed"] = F.speed(float(m["speed_kmh"]), "how fast the shot left the boot", ev)
         f[f"{k}.distance"] = F.metres(float(m["distance"]), "distance from goal", ev)
         f[f"{k}.outcome"] = F.text(str(m["outcome"]).replace("_", " "), "what became of the shot", ev)
         f[f"{k}.body_part"] = F.text(str(m["body_part"]).replace("_", " "), "what it was struck with", ev)
@@ -487,7 +502,8 @@ def build_server(scopes: Scopes, *, allowed_hosts: list[str] | None = None) -> F
         return await scoped(ctx, match_stats)
 
     @tool(
-        description="The match-state model: the state shown now and each club's share of recent minutes in each state."
+        description="The state of play as the model estimates it: the state now and each club's share of recent"
+        " minutes in each state. Cards say what the state of play was, not the model's name."
     )
     async def get_match_state(ctx: Context, minutes: int = 10) -> str:
         return await scoped(ctx, lambda s: match_state(s, minutes))

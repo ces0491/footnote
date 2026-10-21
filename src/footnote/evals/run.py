@@ -29,8 +29,9 @@ from agent_framework import (
 )
 from agent_framework.observability import ChatTelemetryLayer
 
-from footnote.agents.prompts import PROMPT_VERSION
-from footnote.agents.writer import WRITER_VERSION, Job, draft
+from footnote.agents.versions import VERSIONS
+from footnote.agents.worker import Settings
+from footnote.agents.writer import Job, draft
 from footnote.evals.cases import Case, CaseSource
 from footnote.evals.groundedness import verdict as groundedness_verdict
 from footnote.evals.judges import Verdict, evaluate
@@ -39,9 +40,11 @@ from footnote.insights.facts import Facts
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match
 from footnote.tools.scope import Scopes
-from footnote.tools.server import TOOLS_VERSION, build_server
+from footnote.tools.server import build_server
 
-VERSIONS = {"prompt": PROMPT_VERSION, "tools": TOOLS_VERSION, "writer": WRITER_VERSION}
+# The bar a recorded run must clear, in CI and in `python -m footnote.evals replay`: three cards in
+# four pass every evaluation.
+PASSING_SHARE = 0.75
 
 
 @dataclass
@@ -213,6 +216,15 @@ async def replay(match: Match, analysis: Analysis, cases: list[Case], recording:
 
 
 def stale(recording: dict) -> list[str]:
-    """What changed since the recording was made: the parts of the agents' cache key it predates."""
+    """What changed since the recording was made: the parts of the agents' cache key it predates,
+    each version with its fingerprint (agents/versions.py), and the writers' reasoning effort."""
     versions = recording.get("versions", {})
-    return [f"{k} {versions.get(k)} -> {v}" for k, v in VERSIONS.items() if versions.get(k) != v]
+    changed = [f"{k} {versions.get(k)} -> {v}" for k, v in VERSIONS.items() if versions.get(k) != v]
+    if recording.get("reasoning_effort") != Settings.reasoning_effort:
+        changed.append(f"reasoning effort {recording.get('reasoning_effort')} -> {Settings.reasoning_effort}")
+    return changed
+
+
+def passing(results: list[Result]) -> float:
+    """The share of cases accepted with every evaluation passed."""
+    return sum(r.passed for r in results) / len(results) if results else 0.0

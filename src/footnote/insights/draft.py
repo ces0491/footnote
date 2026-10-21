@@ -14,13 +14,29 @@ and so do the agents.
   stating a figure, such as "first half", "one of" and "final third", are allowed;
 - each sentence is its own entry;
 - a fact's display carries its noun ("13 shots", "2 shots on target"), so the words after its
-  placeholder don't say the noun again;
+  placeholder don't say the noun, or part of it, again ("31 passes completed passes"), and a word
+  for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
+  takes "at"; a count of times follows what happened, not a form of "be" ("there were 7 times");
+  and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
+  Kingsferry");
+- the ball changing hands counts both sides losing it, so no side "forced" it;
+- a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
+  player or its minute), so it can't pin the decision on a goal that stands;
+- a card that says who a goal is credited to also says who it was credited to before, when its
+  facts have a correction: "later credited to Femi Adeyani" alone reads as if it always had been;
+- wording a writer would only have copied from the tools is refused: "shown as" from a fact's
+  description, the model's name, a count of times followed by a noun ("7 times changes of
+  possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading fact
+  such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a
+  recap "the last {story.3.window}", which was the stretch before that spell, not before now;
+- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance");
+- a long text fact, such as the provider's reason, is given in one line, not both;
 - capitals are for names: every capitalised word except a sentence's first is a name from the facts,
   and names written next to each other must be one name as a fact gives it ("Femi Adeyani", or
   "Adeyani" alone), so words from two names can't be joined into a third. A sentence's first word
   is held to this only when it is part of a name: an ordinary word in capitals can't be told from
   an unknown name without a dictionary. Filled in, the headline and every sentence start with a
-  capital or a figure;
+  capital or a figure, and VAR is in capitals wherever it is;
 - every sentence rests on something: an event it cites, or a fact it uses; every event it cites is
   one the writer was shown; and when the facts rest on events, the card links to at least one;
 - headline and lines fit their space, with no betting language, exclamations, links or emoji;
@@ -28,15 +44,16 @@ and so do the agents.
   the digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
   can't get past the checks above in disguise (a circled digit, a fraction sign, a zero-width space
   inside "two", a Greek omicron in it, a name in small capitals);
-- a card uses no fact its topic withholds: the catch-up for a viewer joining mid-match leaves the
-  score out until the viewer asks for it.
+- a card uses no fact its topic withholds: the catch-up for a viewer joining mid-match tells what
+  happened and leaves the score line to the scoreboard beside it.
 
 How much a card may say depends on its topic (`limits_for`): a recap tells the story of a half and
 gets more room than a moment's card.
 
-The checks catch figures and names a writer made up. A real name from the match given to the wrong
-player, or a sentence that reads the facts unfairly, passes them: that is for the evaluations of the
-agents' output.
+The checks catch figures and names a writer made up, and a goal ruled out pinned on one that stands.
+Any other real name from the match given to the wrong player, or a sentence that reads the facts
+unfairly, passes them: the evaluations of the agents' output catch some of that, and reading the
+cards catches the rest (docs/evaluations.md).
 """
 
 from __future__ import annotations
@@ -75,13 +92,13 @@ CARD = Limits()
 # A recap tells the story of the match so far, so its casual line gets more room than a moment's.
 RECAP_CHARS = 400
 RECAP = Limits(casual_sentences=(1, 3), casual_chars=RECAP_CHARS)
-# The catch-up for a viewer joining mid-match leaves the score out: the viewer chooses when to see it
-# (docs/experience.md, "Catch-up").
+# The catch-up for a viewer joining mid-match tells what happened, and the scoreboard beside it shows
+# the score, so its wording leaves the score line out (docs/experience.md, "Catch-up").
 CATCH_UP = Limits(
     casual_sentences=(1, 3),
     casual_chars=RECAP_CHARS,
     withheld=("score.*", "*.score_line"),
-    withheld_because="the catch-up leaves the score out until the viewer asks for it",
+    withheld_because="the catch-up tells what happened and leaves the score line to the scoreboard beside it",
 )
 LIMITS = {"half_time": RECAP, "full_time": RECAP, "catch_up": CATCH_UP}
 
@@ -128,6 +145,8 @@ _LEAD = re.compile("[\\s(\"'" + chr(0x2018) + chr(0x201C) + "]*")
 _PLACEHOLDER_MARK = f" {chr(0xFFFC)} "
 # Capitalised words a card may use that no fact supplies.
 ALWAYS_ALLOWED = frozenset({"VAR", "I"})
+# VAR in any other casing: sentence case turned one writer's headline into "Var: No penalty".
+_VAR_MISCASED = re.compile(r"\b(?!VAR\b)[Vv][Aa][Rr]\b")
 # Where a card's letters may come from: the Latin alphabet with the accented letters names and
 # French or Spanish words need. Small capitals and look-alike letters from other alphabets are
 # outside it, so they can't stand in for a name or a number word.
@@ -291,13 +310,22 @@ _NEXT_WORDS = re.compile(r"(?:\s+[^\W\d_]+){1,4}")
 
 
 def _singular(word: str) -> str:
+    """A noun's singular, near enough to compare two: "passes" and "pass", "changes" and "change"."""
     word = word.lower()
-    return word[:-2] if word.endswith("es") else word[:-1] if word.endswith("s") else word
+    if word.endswith("ss"):
+        return word
+    if word.endswith("es") and word[:-2].endswith(("s", "x", "z", "ch", "sh")):
+        return word[:-2]
+    return word[:-1] if word.endswith("s") else word
+
+
+# Words that can come between a count and a noun of its own: "{key} and passes" isn't the noun twice.
+_LINKS = frozenset("and or but while with to from of in on at by for than as the a an their its".split())
 
 
 def _doubled_nouns(where: str, text: str, facts: Facts) -> list[str]:
-    """A count's display carries its noun ("44 passes", "2 shots on target"), so "{key} passes" or
-    "{key} on target" would show it twice."""
+    """A count's display carries its noun ("44 passes", "2 shots on target"), so "{key} passes",
+    "{key} shots", "{key} on target" or "{key} completed passes" would show it, or part of it, twice."""
     problems = []
     for m in PLACEHOLDER.finditer(text):
         fact = facts.get(m.group(1))
@@ -308,16 +336,168 @@ def _doubled_nouns(where: str, text: str, facts: Facts) -> list[str]:
         noun: list[str] = []  # the words that end the display, after its figure
         while len(shown) > 1 and len(noun) < len(shown) and shown[-1 - len(noun)].isalpha():
             noun.insert(0, shown[-1 - len(noun)])
-        after = following.group(0).split()
+        words = following.group(0).split()
+        after = [_singular(w) for w in words]
+        said = [_singular(w) for w in noun]
+        # The noun's last words ("on target") or its first ("shots" in "5 shots on target").
         for n in range(min(len(noun), len(after)), 0, -1):
-            if [_singular(w) for w in after[:n]] == [_singular(w) for w in noun[-n:]]:
-                doubled = " ".join(after[:n])
+            if after[:n] == said[-n:] or after[:n] == said[:n]:
+                doubled = " ".join(words[:n])
                 problems.append(
                     f"{where}: '{{{m.group(1)}}} {doubled}' shows as '{fact.display} {doubled}': the fact"
                     f" already shows its noun, so leave out '{doubled}'"
                 )
                 break
+        else:
+            # The noun again after a word or two of its own: "31 passes completed passes".
+            for n in (1, 2):
+                if said and len(after) > n and after[n] == said[-1] and not _LINKS & {w.lower() for w in words[:n]}:
+                    doubled = " ".join(words[: n + 1])
+                    problems.append(
+                        f"{where}: '{{{m.group(1)}}} {doubled}' shows as '{fact.display} {doubled}': the fact"
+                        f" already shows its noun, so leave out '{doubled}', or put the words before the placeholder"
+                    )
+                    break
     return problems
+
+
+# Wording a writer copied from the tools rather than wrote: a fact's description ("shown as on
+# top") and the model's name, which means nothing to a viewer and translated as "modelo de estado
+# de coincidencia" and "modèle d'État".
+_COPIED = re.compile(r"\bshown as\b|\b(?:match[- ])?state model\b", re.IGNORECASE)
+# What may follow a count of times ("7 times", "once"): it says how often, so a noun after it reads
+# as "forced 7 times changes of possession".
+_AFTER_TIMES = frozenset(
+    "in during over while as and but or since before after with within across each per so that this there"
+    " then when already now again for from on at inside to by".split()
+)
+# A spell's length before the word for it: "a 5 minutes spell".
+_SPELL_WORDS = frozenset({"spell", "spells", "period", "periods", "stretch", "burst", "run"})
+_DURATION = re.compile(r"^\d+ (?:minutes|seconds)$")
+# A count as a fact shows it, with its noun ("5 minutes", "4 passes", "no shots", "once"), after a
+# word for one thing: "74% of a 5 minutes", "51% of that 3 minutes".
+_COUNTED = re.compile(r"^(?:\d+|no) [^\W\d_]+(?: [^\W\d_]+)*$|^once$")
+_ONE_OF = frozenset({"a", "an", "that", "this", "each", "every"})
+_WORD_BEFORE = re.compile(r"([^\W\d_]+)\s+$")
+# Verbs that need "at" before a minute: "the spell began 64'", "the 3 minutes starting 46'".
+_AT_VERBS = frozenset(
+    "began begun begins beginning started starts starting ended ends ending came comes scored scores struck"
+    " strikes levelled levels equalised equalises".split()
+)
+# A count of times after a form of "be" says nothing happened: "there were 7 times".
+_BE = frozenset("is are was were be been being".split())
+# A verb before a score line, which names both clubs: "Kingsferry lead Saltmarsh 1–2 Kingsferry".
+_SCORE_VERBS = frozenset("lead leads led leading trail trails trailed trailing beat beats beating".split())
+# The ball changing hands counts both sides losing it, so no side forced it.
+_FORCED = re.compile(r"\bforc\w*\s+(?:the ball to change hands|\{[\w.]*changes\})", re.IGNORECASE)
+# A text fact long enough that giving it in both lines repeats a sentence: the provider's reason.
+_LONG_TEXT_WORDS = 6
+# Facts worded as a heading ("No penalty", "Final score"), which mid-sentence read "ended No
+# penalty": a sentence may give one only after a colon. By the fact's name, so a recap's
+# `story.5.decision_text` is one too.
+HEADING_FACTS = frozenset({"decision_text", "label"})
+# The template's list of goals, which opening a sentence read "Femi Adeyani (Kingsferry) 23' Javi
+# Ferrano played the final pass": after a colon too.
+LIST_FACTS = frozenset({"recap.goals"})
+# A spell's wording in the story is as of its moment: in a recap, "the last {story.3.window}" read
+# as the minutes before the recap.
+_STORY_LAST = re.compile(r"\b(?:the )?(?:last|past|previous|preceding) \{(story\.\d+)\.window\}", re.IGNORECASE)
+# Figures said with a vowel sound: eight, eleven, eighteen, eighty-something.
+_AN_FIGURE = re.compile(r"8|1[18](?!\d)")
+# "A" before a vowel or such a figure once filled in ("a own goal", "a 80% chance"); words spelt
+# with a vowel but said with a consonant are let be.
+_NEEDS_AN = re.compile(rf"\b(a) ((?!one\b|once\b|uni|use|usu|eu)(?:[aeiou]|{_AN_FIGURE.pattern})\S*)", re.IGNORECASE)
+
+
+def indefinite(display: str) -> str:
+    """The article before a figure as it is read: "an 8% chance", "a 5% chance"."""
+    return "an" if _AN_FIGURE.match(display) else "a"
+
+
+def _named(key: str) -> str:
+    """A fact's name without its prefix: "decision_text" for `story.5.decision_text`."""
+    return key.rsplit(".", 1)[-1]
+
+
+def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
+    """A count of times followed by a noun, a spell's length followed by the word "spell", and a
+    count after a word for one thing ("a 5 minutes")."""
+    problems = []
+    for m in PLACEHOLDER.finditer(text):
+        fact = facts.get(m.group(1))
+        if fact is None:
+            continue
+        before = _WORD_BEFORE.search(text, 0, m.start())
+        after = _NEXT_WORDS.match(text, m.end())
+        # "A {window} spell" has its own advice below: "a spell of {window}".
+        spell = after is not None and after.group(0).split()[0].lower() in _SPELL_WORDS
+        if before is not None and before.group(1).lower() in _ONE_OF and _COUNTED.match(fact.display) and not spell:
+            word = before.group(1)
+            plural = {"that": "those", "this": "these"}.get(word.lower())
+            problems.append(
+                f"{where}: '{word} {{{m.group(1)}}}' shows as '{word} {fact.display}': the fact gives its own number,"
+                + (f" so write '{plural} {{{m.group(1)}}}'" if plural else f" so leave out '{word}'")
+            )
+        if before is not None and before.group(1).lower() in _AT_VERBS and fact.display.endswith("'"):
+            problems.append(
+                f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}'; write"
+                f" '{before.group(1)} at {{{m.group(1)}}}'"
+            )
+        times = fact.display == "once" or fact.display.endswith(" times")
+        if before is not None and before.group(1).lower() in _BE and times:
+            problems.append(
+                f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}': say what"
+                f" happened before it ('the ball changed hands {{{m.group(1)}}}')"
+            )
+        if before is not None and before.group(1).lower() in _SCORE_VERBS and _named(m.group(1)) == "score_line":
+            problems.append(
+                f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}', a club"
+                f" named twice; give the score on its own ('{{{m.group(1)}}}: ...')"
+            )
+        following = _NEXT_WORDS.match(text, m.end())
+        if following is None:
+            continue
+        word = following.group(0).split()[0]
+        if (fact.display == "once" or fact.display.endswith(" times")) and word.lower() not in _AFTER_TIMES:
+            problems.append(
+                f"{where}: '{{{m.group(1)}}} {word}' shows as '{fact.display} {word}': the fact says how often,"
+                f" so say what happened before it ('the ball changed hands {{{m.group(1)}}}')"
+            )
+        elif _DURATION.match(fact.display) and word.lower() in _SPELL_WORDS:
+            problems.append(
+                f"{where}: '{{{m.group(1)}}} {word}' shows as '{fact.display} {word}'; write 'a {word} of"
+                f" {{{m.group(1)}}}'"
+            )
+    return problems
+
+
+# Words that say a goal was taken away.
+_RULED_OUT = re.compile(r"\bruled out\b|\bdisallow|\bchalked off\b|\bstruck off\b", re.IGNORECASE)
+
+
+def _ruled_out_problems(where: str, text: str, facts: Facts) -> list[str]:
+    """A sentence saying a goal was ruled out names the VAR decision that ruled it out, through that
+    decision's facts. The goals a recap is given are the ones that stand (a goal VAR ruled out is told
+    by its decision), so "{story.4.scorer} scored at {story.4.minute}, a goal later ruled out by VAR"
+    pins the wrong goal on the wrong player: it happened in a live catch-up."""
+    if not _RULED_OUT.search(_own_words(text)):
+        return []
+    decisions = sorted(
+        key.removesuffix(".decision")
+        for key, fact in facts.items()
+        if key.endswith(".decision") and fact.value == "no_goal"
+    )
+    used = placeholders(text)
+    if any(key.startswith(d + ".") for d in decisions for key in used):
+        return []
+    if not decisions:
+        return [f"{where}: says a goal was ruled out, but no VAR decision in the facts ruled one out"]
+    named = [k for d in decisions for k in (f"{d}.subject", f"{d}.minute") if k in facts]
+    return [
+        f"{where}: says a goal was ruled out without the facts of the VAR decision that ruled it out;"
+        f" name it with them ({', '.join('{' + k + '}' for k in named) or decisions[0]}), not with a goal"
+        " that stands"
+    ]
 
 
 def _latin(letter: str) -> bool:
@@ -370,7 +550,21 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names, limits: Li
     if withheld:
         problems.append(f"{where}: uses {', '.join('{' + k + '}' for k in withheld)}; {limits.withheld_because}")
     problems += _doubled_nouns(where, text, facts)
+    problems += _ruled_out_problems(where, text, facts)
+    problems += _misplaced_counts(where, text, facts)
+    for m in _STORY_LAST.finditer(text):
+        problems.append(
+            f"{where}: '{m.group(0)}' reads as the minutes before now; say when the spell was, from"
+            f" {{{m.group(1)}.start_minute}}"
+        )
+    if (forced := _FORCED.search(text)) is not None:
+        problems.append(
+            f"{where}: '{forced.group(0)}': the ball changing hands counts both sides losing it, so no side forced"
+            " it; say how often it changed hands"
+        )
     own = _own_words(text)
+    if (copied := _COPIED.search(own)) is not None:
+        problems.append(f"{where}: '{copied.group(0)}' is the tools' wording; say what it means for the match")
     if "{" in own or "}" in own:
         problems.append(f"{where}: a brace that isn't a whole placeholder; write placeholders as {{key}}")
     if _SENTENCE_BREAK.search(own.strip()):
@@ -381,6 +575,8 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names, limits: Li
         problems.append(f"{where}: betting language ('{word.group(0)}')")
     if "!" in own:
         problems.append(f"{where}: an exclamation mark; keep the tone calm")
+    if (var := _VAR_MISCASED.search(own)) is not None:
+        problems.append(f"{where}: '{var.group(0)}' is VAR, written in capitals")
     if _EMOJI.search(own) or _LINK.search(own):
         problems.append(f"{where}: emoji or a link")
     problems += _name_problems(where, own, names)
@@ -412,6 +608,29 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
                 problems.append(f"{where}: cites {', '.join(unseen)}, which no tool returned")
             if not sentence.events and not placeholders(sentence.text):
                 problems.append(f"{where}: rests on nothing; cite the events behind it or use a fact")
+            for m in PLACEHOLDER.finditer(sentence.text):
+                key = m.group(1)
+                if sentence.text[: m.start()].rstrip().endswith(":"):
+                    continue
+                if _named(key) in HEADING_FACTS:
+                    problems.append(
+                        f"{where}: {{{key}}} is a heading ('{facts[key].display}'), not words for a sentence; say it"
+                        " in your own words"
+                        if key in facts
+                        else f"{where}: {{{key}}} is a heading, not words for a sentence"
+                    )
+                elif key in LIST_FACTS:
+                    problems.append(
+                        f"{where}: {{{key}}} is the template's list, not words for a sentence; tell each goal with"
+                        " its own facts"
+                    )
+    in_both = {k for s in draft.casual for k in placeholders(s.text)} & {
+        k for s in draft.analyst for k in placeholders(s.text)
+    }
+    for key in sorted(in_both):
+        fact = facts.get(key)
+        if fact is not None and isinstance(fact.value, str) and len(fact.display.split()) >= _LONG_TEXT_WORDS:
+            problems.append(f"{{{key}}} is in both lines; give it once, in the line it suits")
     if problems:
         return problems
     # A placeholder can open a sentence with its fact's display, which may start in lower case.
@@ -424,6 +643,8 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
         lead = _LEAD.match(filled)
         if filled[lead.end() if lead else 0 :][:1].islower():
             problems.append(f"{where}: starts in lower case once filled in ('{filled[:30]}'); start with a capital")
+        if (article := _NEEDS_AN.search(filled)) is not None:
+            problems.append(f"{where}: '{article.group(0)}' once filled in; write 'an' before it")
     card = render(draft, facts)
     for part, value, limit in (
         ("headline", card.headline, HEADLINE_CHARS),
@@ -436,4 +657,23 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
             problems.append(f"{part}: {len(value)} characters once filled in; keep it to {limit}")
     if not card.evidence and any(fact.events for fact in facts.values()):
         problems.append("the card links to no event; cite the events behind it, or use a fact that rests on them")
+    problems += _credit_problems(card, facts)
     return problems
+
+
+# A goal the data provider credited afresh, told with its new credit alone ("later credited to Femi
+# Adeyani"), reads as if it had always been that player's.
+_CREDIT = re.compile(r"\bcredit", re.IGNORECASE)
+
+
+def _credit_problems(card: Card, facts: Facts) -> list[str]:
+    """A card that says who a goal is credited to also says who it was credited to before, when the
+    facts it was given have a correction (`correction.before`, or a recap's `story.<n>.before`)."""
+    text = " ".join((card.headline, card.casual, card.analyst))
+    if not _CREDIT.search(text):
+        return []
+    return [
+        f"the card says who a goal is credited to but not who it was originally credited to; give {{{key}}} too"
+        for key, fact in sorted(facts.items())
+        if _named(key) == "before" and isinstance(fact.value, str) and fact.display.split()[-1] not in text
+    ]

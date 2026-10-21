@@ -9,6 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from footnote.agents.prompts import PROMPT_VERSION
+from footnote.agents.versions import VERSIONS, fingerprint
+from footnote.agents.worker import Settings
 from footnote.evals.cases import JUMPS, cases
 from footnote.evals.groundedness import openai_endpoint, verdict
 from footnote.evals.judges import (
@@ -19,7 +22,7 @@ from footnote.evals.judges import (
     names_the_subject,
     one_line_per_figure,
 )
-from footnote.evals.run import replay, stale
+from footnote.evals.run import PASSING_SHARE, passing, replay, stale
 from footnote.insights import facts as F
 from footnote.insights.draft import Card, Draft, Sentence, render
 from footnote.insights.facts import Facts
@@ -27,8 +30,6 @@ from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 
 RECORDING = Path(__file__).resolve().parents[1] / "data" / "evals" / "drafts.json"
-# The bar the recorded run must clear: three cards in four pass every evaluation.
-PASSING_SHARE = 0.75
 
 
 @pytest.fixture(scope="module")
@@ -94,6 +95,35 @@ def test_a_claim_in_words_needs_a_fact_behind_it() -> None:
     assert _judge(claims_hold, _card("{moment.scorer} is credited after a correction."), _seen(corrected=True)).passed
 
 
+def test_a_penalty_given_needs_a_decision_that_gave_one() -> None:
+    checked = {
+        "moment.subject": F.text("Uche Asatoye", "the player the check is about", ("e1456",)),
+        "moment.check": F.text("penalty", "what VAR checked for"),
+        "moment.incident": F.text("handball", "the incident"),
+        "moment.decision": F.text("no_penalty", "the decision"),
+    }
+    seen = _seen(checked, "var_decision")
+    analyst = "The check was about {moment.incident}."
+    gives = _judge(claims_hold, _card("VAR gives a penalty for handball by {moment.subject}.", analyst), seen)
+    assert not gives.passed and "a penalty given" in gives.note
+    found = _card("VAR checked {moment.subject} for a penalty and found none.", analyst)
+    assert _judge(claims_hold, found, seen).passed
+    given = _seen({**checked, "moment.decision": F.text("penalty", "the decision")}, "var_decision")
+    assert _judge(claims_hold, _card("VAR gives a penalty for handball by {moment.subject}.", analyst), given).passed
+
+
+def test_the_recording_goes_stale_with_any_change_to_what_the_writers_see() -> None:
+    recording = {"versions": dict(VERSIONS), "reasoning_effort": Settings.reasoning_effort}
+    assert stale(recording) == []
+    # Each version carries a fingerprint of its code, so an edit that forgets the version still counts.
+    assert VERSIONS["prompt"].startswith(PROMPT_VERSION + "+")
+    older = {**recording, "versions": {**VERSIONS, "prompt": PROMPT_VERSION}}
+    assert stale(older) == [f"prompt {PROMPT_VERSION} -> {VERSIONS['prompt']}"]
+    assert stale({**recording, "reasoning_effort": "medium"}) == ["reasoning effort medium -> low"]
+    # The same code gives the same fingerprint whatever line endings the checkout has.
+    assert fingerprint(rendered=("a\r\nb",)) == fingerprint(rendered=("a\nb",)) != fingerprint(rendered=("a\nc",))
+
+
 def test_a_card_must_be_more_than_the_template_reworded() -> None:
     template = "{moment.score_line}: {moment.scorer} scores at {moment.minute}."
     copied = _judge(adds_to_the_template, _card(template))
@@ -132,8 +162,9 @@ async def test_the_recorded_run_passes_todays_checks_and_evaluations(showcase: M
     """The model's recorded output, replayed through today's writer workflow, checks and evaluators.
 
     A change to the checks, the facts or the tools that a recorded draft no longer passes fails here;
-    so does a change to the agents' instructions, tools or workflow until the evaluations are run and
-    recorded again: `uv run --group evals python -m footnote.evals live --record --report`.
+    so does a change to the agents' instructions, tools or workflow (their versions carry a
+    fingerprint of the code) until the evaluations are run and recorded again:
+    `uv run --group evals python -m footnote.evals live --record --report`.
     """
     recording = json.loads(RECORDING.read_text(encoding="utf-8"))
     assert stale(recording) == [], "record the evaluations again"
@@ -145,5 +176,4 @@ async def test_the_recorded_run_passes_todays_checks_and_evaluations(showcase: M
         if live == "accepted":
             assert result.outcome == "accepted", (result.case.key, result.problems)
             assert any(v.evaluator == "grounded" for v in result.verdicts), result.case.key
-    passing = sum(r.passed for r in results) / len(results)
-    assert passing >= PASSING_SHARE, [(r.case.key, [v for v in r.verdicts if not v.passed]) for r in results]
+    assert passing(results) >= PASSING_SHARE, [(r.case.key, [v for v in r.verdicts if not v.passed]) for r in results]

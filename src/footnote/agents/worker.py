@@ -3,9 +3,11 @@
 For each job, in order:
 
 1. The cache. Every replay is the same match, so the same moment gives the same job. A job's key is
-   the match, the insight and its facts, the model, and the prompt, tools and writer versions
-   (`cache_key`). An accepted draft is reused when the key matches, checked again against the facts
-   its writer was shown, unless the producer asked for a fresh draft.
+   the match, the insight and its facts, the model and its reasoning effort, and the prompt, tools
+   and writer versions with their fingerprints (`cache_key`, versions.py). An accepted draft is
+   reused when the key matches, checked again against the facts its writer was shown, unless the
+   producer asked for a fresh draft. A fresh draft that is accepted replaces the one kept under its
+   key: the producer's redraft, or one written because the kept draft fails today's checks.
 2. The limits. A job that waited too long for a worker, or that would take today's agent runs past
    `daily_runs`, falls back without calling the model.
 3. The workflow (writer.py), under `deadline_seconds`, long enough for one revision. An accepted
@@ -38,11 +40,11 @@ from opentelemetry import trace
 
 from footnote.agents.prompts import PROMPT_VERSION
 from footnote.agents.store import MAX_CLAIMS, Cached, Claim
-from footnote.agents.writer import WRITER_VERSION, Drafted, Job, draft
+from footnote.agents.versions import VERSIONS
+from footnote.agents.writer import Drafted, Job, draft
 from footnote.insights.draft import Draft, check, limits_for
 from footnote.insights.facts import Facts
 from footnote.telemetry import tracer
-from footnote.tools.server import TOOLS_VERSION
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +90,7 @@ def _outcome(outcome: str, **detail: str | int) -> None:
         span.set_attribute(f"footnote.{name}", value)
 
 
-def cache_key(claim: Claim, model: str) -> str:
+def cache_key(claim: Claim, model: str, effort: str) -> str:
     """What makes two jobs the same: the moment and its facts, and what drafts it."""
     payload = {
         "match": claim.match_id,
@@ -97,9 +99,8 @@ def cache_key(claim: Claim, model: str) -> str:
         "seq": claim.seq,
         "facts": claim.facts,
         "model": model,
-        "prompt": PROMPT_VERSION,
-        "tools": TOOLS_VERSION,
-        "writer": WRITER_VERSION,
+        "effort": effort,
+        **VERSIONS,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -176,7 +177,7 @@ class Worker:
 
     async def process(self, claim: Claim) -> None:
         settings = self.settings
-        key = cache_key(claim, settings.model)
+        key = cache_key(claim, settings.model, settings.reasoning_effort)
         if not claim.redraft and await self._from_cache(claim, key):
             _outcome("cached")
             return

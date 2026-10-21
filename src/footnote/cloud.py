@@ -2,7 +2,9 @@
 
 In Azure each container app runs as its own user-assigned managed identity, named by AZURE_CLIENT_ID.
 Locally the services fall back to the developer's Azure CLI sign-in, which `azd provision` grants the
-same data-plane roles. No service uses a key or a connection string.
+same data-plane roles. No service uses a key. The agents service's one connection string, for
+Application Insights, only names the resource and its endpoint: sending to it takes the service's
+token, since the resource's local authentication is off.
 """
 
 from __future__ import annotations

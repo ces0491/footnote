@@ -6,10 +6,13 @@ The agents write English, as the templates do; Azure AI Translator renders it in
 dictionary entry that translates as itself: the name comes back as it is, and the sentence is still
 built around it. (A name marked notranslate comes back too, but the Translator can't then build the
 sentence: verbs are left in the infinitive.) Each minute is written out ("minute 6"), a word it has
-got wrong is replaced ("spell" by "period"), and a headline
+got wrong is said another way ("spell" as "period"), and a headline
 is given a full stop, so "Femi Adeyani scores" reads as a sentence and not as a name and a noun
-("Femi Adeyani puntuaciones"); the stop is taken off the translation again. Code then holds
-each translation to the English it came from: the same figures, every name, nothing empty. A small
+("Femi Adeyani puntuaciones"); the stop is taken off the translation again. What comes back has the
+Translator's known slips put right (`mend`): a word that is never the football one ("penalización"
+for a penalty, "balonmano" for a handball) and a score line broken up ("0–1 para Saltmarsh y
+Kingsferry"). Code then holds each translation to the English it came from: the same figures, every
+name, each score line whole, nothing empty. A small
 number may come back as a word ("1 shot" as "un tiro", "minute 2" as "el segundo minuto"), but no
 figure may change or appear. One that fails isn't shown: the viewer reads the English
 (docs/audience.md, P2).
@@ -21,6 +24,8 @@ import html
 import re
 from collections import Counter
 
+from footnote.insights.facts import EN_DASH
+
 LANGUAGES = ("es", "fr")
 LANGUAGE_NAMES = {"es": "Spanish", "fr": "French"}
 PARTS = ("headline", "casual", "analyst")
@@ -31,13 +36,94 @@ _MINUTE = re.compile(r"(\d+(?:\+\d+)?)['’]")
 # A figure as either language writes it: "89.1", or "89,1" with a decimal comma.
 _FIGURE = re.compile(r"\d+(?:[.,]\d+)?")
 _WORD = re.compile(r"\w+")
-# English the Translator got wrong, said another way: "spell" came back as "hechizo" and "sort" (a
-# magic spell), "the provider's reason" as "la razón del técnico" and "raison du joueur", and "the
-# provider corrected" as "el asistente corrigió".
+# English the Translator got wrong, or gave word for word, said another way, each with what came back.
 _CLEARER = [
+    # "hechizo" and "sort": a magic spell.
     (re.compile(r"\bspell(s?)\b"), r"period\1"),
+    # "La razón del técnico", "raison du joueur", "el asistente corrigió".
     (re.compile(r"\b([Tt]he) provider\b"), r"\1 data provider"),
+    # "El disparo iba a darlo".
+    (re.compile(r"\bwas on target\b"), "was heading into the goal"),
+    # "Hors cible".
+    (re.compile(r"\bwas off target\b"), "missed the goal"),
+    # "VAR found no handball": "n'a pas obtenu de main", got no handball.
+    (re.compile(r"\bfound no\b"), "saw no"),
+    # "Tient toujours".
+    (re.compile(r"\bdecision stands\b"), "decision is upheld"),
+    # "A quitté la botte".
+    (re.compile(r"\bleft the boot\b"), "left the foot"),
+    # "Hizo el último adelantamiento" (an overtaking) and "le dernier passage".
+    (re.compile(r"\bmade the (?:last|final) pass\b"), "played the final pass"),
+    # "Ninguna de las partes", with "4 pasadas" after it.
+    (re.compile(r"\b([Nn])either side\b"), r"\1either team"),
+    # "Varlan levels for Saltmarsh": "sube nivel" and "monte".
+    (re.compile(r"\blevels\b"), "equalises"),
+    (re.compile(r"\blevelled\b"), "equalised"),
+    # "En la cima" (at the summit), "en cabeza" and "en tête" (in the lead).
+    (re.compile(r"\bon top of the (game|match)\b"), r"dominating the \1"),
+    (re.compile(r"\bon top\b(?! of\b)"), "dominating"),
 ]
+
+# Words the Translator gives that are never the football word, put right in its output: a penalty
+# in a short headline came back as "penalización" and "pénalité" (a penalisation), though full
+# sentences got "penalti" and "penalty"; a handball as "balonmano" and "handball" (the sport: French
+# says "main"); and a pass as "pasada". The article goes with the noun, as each language needs.
+_FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
+    "es": [
+        (re.compile(pattern), right)
+        for pattern, right in (
+            (r"\bUna penalización\b", "Un penalti"),
+            (r"\buna penalización\b", "un penalti"),
+            (r"\bLa penalización\b", "El penalti"),
+            (r"\bla penalización\b", "el penalti"),
+            (r"\bLas penalizaciones\b", "Los penaltis"),
+            (r"\blas penalizaciones\b", "los penaltis"),
+            (r"\bPenalizaciones\b", "Penaltis"),
+            (r"\bpenalizaciones\b", "penaltis"),
+            (r"\bPenalización\b", "Penalti"),
+            (r"\bpenalización\b", "penalti"),
+            (r"\bEl balonmano\b", "La mano"),
+            (r"\bel balonmano\b", "la mano"),
+            (r"\bdel balonmano\b", "de la mano"),
+            (r"\bUn balonmano\b", "Una mano"),
+            (r"\bun balonmano\b", "una mano"),
+            (r"\bBalonmano\b", "Mano"),
+            (r"\bbalonmano\b", "mano"),
+            (r"\bLa última pasada\b", "El último pase"),
+            (r"\bla última pasada\b", "el último pase"),
+            (r"\bUna pasada\b", "Un pase"),
+            (r"\buna pasada\b", "un pase"),
+            (r"\b(\d+) pasadas seguidas\b", r"\1 pases seguidos"),
+            (r"\b(\d+) pasadas\b", r"\1 pases"),
+        )
+    ],
+    "fr": [
+        (re.compile(pattern), right)
+        for pattern, right in (
+            (r"\bUne pénalité\b", "Un penalty"),
+            (r"\bune pénalité\b", "un penalty"),
+            (r"\bLa pénalité\b", "Le penalty"),
+            (r"\bla pénalité\b", "le penalty"),
+            (r"\bAucune pénalité\b", "Aucun penalty"),
+            (r"\baucune pénalité\b", "aucun penalty"),
+            (r"\bPénalités\b", "Penaltys"),
+            (r"\bpénalités\b", "penaltys"),
+            (r"\bPénalité\b", "Penalty"),
+            (r"\bpénalité\b", "penalty"),
+            (r"\bUn handball\b", "Une main"),
+            (r"\bun handball\b", "une main"),
+            (r"\bLe handball\b", "La main"),
+            (r"\ble handball\b", "la main"),
+            (r"\bdu handball\b", "de la main"),
+            (r"\bHandball\b", "Main"),
+            (r"\bhandball\b", "main"),
+        )
+    ],
+}
+# A score line the Translator broke up: a word put inside it ("Saltmarsh 1–1 en Kingsferry"), or the
+# score put before the clubs ("0–1 para Saltmarsh y Kingsferry", "1–1 pour Saltmarsh Kingsferry").
+_SCORE_WORD = r"(?:en|a|à|contre|contra|vs\.?|para|pour)"
+_LINE = re.compile(rf"^(.+) (\d+{EN_DASH}\d+) (.+)$")
 
 # The words a translation may use instead of a small number's figure, as a count or an ordinal.
 NUMBER_WORDS: dict[str, dict[str, int]] = {
@@ -126,6 +212,30 @@ def read_back(card: dict[str, str], texts: list[str]) -> dict[str, str]:
     return out
 
 
+def mend(card: dict[str, str], translated: dict[str, str], names: list[str], lang: str) -> dict[str, str]:
+    """The translation with the Translator's known slips put right: a word that is never the football
+    one, and a score line the English has whole ("Saltmarsh 1–1 Kingsferry") that came back broken up."""
+    out = {}
+    for part in PARTS:
+        text = translated.get(part, "")
+        for wrong, right in _FOOTBALL_WORDS.get(lang, []):
+            text = wrong.sub(right, text)
+        for line in _score_lines(card.get(part, ""), names) if names else []:
+            parts = _LINE.match(line)
+            assert parts is not None  # a score line always has its score between two names
+            home, score, away = (re.escape(p) for p in parts.groups())
+            text = re.sub(rf"(?<![\w]){home} {score} {_SCORE_WORD} {away}(?![\w])", line, text)
+            text = re.sub(rf"(?<![\w]){score} {_SCORE_WORD} {home} (?:y |et )?{away}(?![\w])", line, text)
+        out[part] = text
+    return out
+
+
+def _score_lines(text: str, names: list[str]) -> list[str]:
+    """Each score line in a text, a name either side of the score: "Saltmarsh 1–1 Kingsferry"."""
+    name = "|".join(re.escape(n) for n in names)
+    return re.findall(rf"(?<![\w])(?:{name}) \d+{EN_DASH}\d+ (?:{name})(?![\w])", text)
+
+
 def figures(text: str) -> list[str]:
     """The figures in a text, in order of size, a decimal comma read as a point."""
     return sorted((f.replace(",", ".") for f in _FIGURE.findall(text)), key=lambda f: (float(f), f))
@@ -159,4 +269,7 @@ def check(english: dict[str, str], translated: dict[str, str], names: list[str],
         for name in sorted(set(found.findall(source))) if found else []:
             if name not in target:
                 problems.append(f"{part}: '{name}' is missing from the translation")
+        for line in _score_lines(source, names) if names else []:
+            if line not in target:
+                problems.append(f"{part}: the score line '{line}' is broken up in the translation")
     return problems

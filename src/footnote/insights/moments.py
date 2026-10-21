@@ -108,6 +108,8 @@ SHELF_SECONDS = {
     "catch_up": 300,
     "correction": 600,
 }
+# Seconds into the second half the half-time recap stays on the shortlist (Found.until).
+HALF_TIME_RECAP_INTO_SECOND_HALF = 120
 
 PLACEMENT = {"moment": "lower_third", "rule_call": "lower_third", "correction": "lower_third", "recap": "full_card"}
 # The catch-up is for a fan's own screen, not the world feed's.
@@ -145,7 +147,8 @@ HARD_PASS_AT_LEAST = 0.80  # difficulty of a completed pass before it can be the
 SHOT_SPEED_AT_LEAST = 100.0  # km/h, for the fastest-shot card
 
 _INCIDENT = {"offside": "offside", "handball": "handball", "foul": "a foul"}
-_DECISION = {"goal": "Goal stands", "no_goal": "No goal", "penalty": "Penalty", "no_penalty": "No penalty"}
+# "The goal counts" rather than "Goal stands", which the Translator gave as "Bloqueos de gol".
+_DECISION = {"goal": "The goal counts", "no_goal": "No goal", "penalty": "Penalty", "no_penalty": "No penalty"}
 _SHOT_OUTCOME = {"goal": "scored", "saved": "saved", "blocked": "blocked", "off_target": "off target"}
 _CARD_REASON = {"foul": "a foul", "dissent": "dissent", "second_yellow": "a second yellow card"}
 
@@ -170,7 +173,11 @@ class Found:
 
     @property
     def until(self) -> dict:
-        """When it leaves the shortlist: its shelf life on from the moment, in the same period."""
+        """When it leaves the shortlist: its shelf life on from the moment, in the same period. The
+        half-time recap's runs into the second half, since a replay's break is half a minute: a
+        producer approving by hand, with an agent's draft on the way, would otherwise have no time."""
+        if self.topic == "half_time":
+            return {"period": 2, "t": float(HALF_TIME_RECAP_INTO_SECOND_HALF)}
         return {"period": self.at["period"], "t": round(self.at["t"] + SHELF_SECONDS[self.topic], 2)}
 
 
@@ -282,19 +289,7 @@ class MomentFinder:
                 key_pass = e
                 break
         shares, covered = self._on_top_before(m, state)
-        score = m["score"]
-        side = "home" if m["team_id"] == self.meta["home"]["id"] else "away"
-        scored, conceded = score[side], score["away" if side == "home" else "home"]
-        # Clubs take plural verbs: "Saltmarsh equalise".
-        situation = (
-            "equalise"
-            if scored == conceded
-            else "take the lead"
-            if scored == conceded + 1
-            else "extend the lead"
-            if scored > conceded
-            else "pull one back"
-        )
+        situation = self._situation(m)
         rank, reasons = BASE_RANK["goal"], []
         other = self.other(m["team_id"])
         if shares and shares[m["team_id"]] <= AGAINST_SCORERS_AT_MOST and shares[other] >= AGAINST_OTHERS_AT_LEAST:
@@ -342,22 +337,26 @@ class MomentFinder:
                 scorer_events,
             ),
             "moment.score_line": F.text(self.score_line(goal["score"]), "the score after the goal", scorer_events),
-            "moment.situation": F.text(context.situation, "what the goal does to the score"),
+            "moment.situation": F.text(
+                context.situation, "what the goal does to the score, said of the club ('Saltmarsh equalise')"
+            ),
         }
         shot = context.shot
         if shot is not None:
             shot_events = (shot["event_id"],)
             f["moment.shooter"] = F.text(self.name(shot["player_id"]), "who took the shot", shot_events)
-            f["moment.shot_speed"] = F.speed(float(shot["speed_kmh"]), "speed of the shot", shot_events)
+            f["moment.shot_speed"] = F.speed(float(shot["speed_kmh"]), "how fast the shot left the boot", shot_events)
             f["moment.shot_distance"] = F.metres(float(shot["distance"]), "distance of the shot from goal", shot_events)
             f["moment.play_pattern"] = F.text(
                 str(shot["play_pattern"]).replace("_", " "), "how the move started", shot_events
             )
         if context.key_pass is not None and context.key_pass_difficulty is not None:
             pass_events = (context.key_pass["event_id"],)
-            f["moment.passer"] = F.text(self.name(context.key_pass["player_id"]), "who made the last pass", pass_events)
+            f["moment.passer"] = F.text(
+                self.name(context.key_pass["player_id"]), "who played the final pass", pass_events
+            )
             f["moment.key_pass_difficulty"] = F.rating(
-                context.key_pass_difficulty, "difficulty of the last pass, 0 to 1", pass_events
+                context.key_pass_difficulty, "difficulty of the final pass, 0 to 1", pass_events
             )
         if context.shares is not None:
             other = self.other(goal["team_id"])
@@ -414,6 +413,17 @@ class MomentFinder:
             facts=f,
         )
 
+    def _situation(self, goal: dict) -> str:
+        """What a goal does to the score, from the score after it, as its club's verb ("Saltmarsh
+        equalise": clubs take plural verbs)."""
+        side = "home" if goal["team_id"] == self.meta["home"]["id"] else "away"
+        scored, conceded = goal["score"][side], goal["score"]["away" if side == "home" else "home"]
+        if scored == conceded:
+            return "equalise"
+        if scored == conceded + 1:
+            return "take the lead"
+        return "extend the lead" if scored > conceded else "pull one back"
+
     # --- rule calls, cards, penalties ----------------------------------------------------------
 
     def _var(self, m: dict, state: RunState) -> Found:
@@ -451,6 +461,12 @@ class MomentFinder:
             "was overturned" if m.get("overturned") else "stands", "what happened to the on-field decision", events
         )
         f["moment.score_line"] = F.text(self.score_line(score), "the score after the decision", events)
+        # What the decision undid, so a card can say "denies Saltmarsh an equaliser" from a fact.
+        goal = self.events.get(m.get("goal_event_id") or "")
+        if decision == "no_goal" and goal is not None and goal.get("score"):
+            f["moment.situation"] = F.text(
+                self._situation(goal), "what the goal VAR ruled out would have done, said of its club", events
+            )
         overturned = bool(m.get("overturned"))
         return Found(
             insight_id=f"var-{m['event_id']}",
@@ -545,7 +561,7 @@ class MomentFinder:
         events = (m["event_id"],)
         f: Facts = {
             "moment.shooter": F.text(self.name(m["player_id"]), "who took the shot", events),
-            "moment.speed": F.speed(speed, "speed of the shot", events),
+            "moment.speed": F.speed(speed, "how fast the shot left the boot", events),
             "moment.distance": F.metres(float(m["distance"]), "distance from goal", events),
             "moment.outcome": F.text(_SHOT_OUTCOME.get(m["outcome"], m["outcome"]), "what became of it", events),
             "moment.minute": F.minute(m["minute"], m["added_minute"], "minute of the shot", events),
@@ -624,17 +640,31 @@ class MomentFinder:
         window = [e for e in self._onball if e["period"] == period and start <= e["t"] < end]
         changes = [e for e in window if e["type"] == "possession_change"]
         key = _ids(e for e in window if e["type"] in ("shot", "possession_change"))
-        move = _longest_move(window)
+        move = _longest_move(window, team_id)
         stretch = F.duration(end - start, "the stretch of play the spell's figures cover")
+        # Said as the state of play, since a writer may copy a description: "the match-state model
+        # showed" came out as "shown as on top", and translated as "modelo de estado de coincidencia".
+        holder, other = (self.club(team_id), self.club(self.other(team_id))) if team_id else ("", "")
+        held_as = {
+            "pressure": f"share of that stretch {holder} spent pinning {other} back",
+            "chaos": "share of that stretch with neither side in control",
+            "control": f"share of that stretch {holder} spent in control",
+        }[topic]
         f: Facts = {
             "segment.window": stretch,
-            "segment.state_share": F.share(held, "share of that stretch the match-state model showed this state", key),
+            "segment.state_share": F.share(held, held_as, key),
             "segment.start_minute": F.minute(*_minute_of(period, start), "when the stretch began"),
             "segment.changes": Fact(
                 len(changes), _times(len(changes)), "how often the ball changed hands in that stretch", _ids(changes)
             ),
+            # The holder's own run, so "their longest run" holds; in chaos, either side's.
             "segment.longest_move": _count_of(
-                len(move), "pass", "longest run of completed passes by one side in that stretch", _ids(move)
+                len(move),
+                "pass",
+                f"{holder}'s longest run of completed passes in that stretch"
+                if team_id
+                else "longest run of completed passes by either side in that stretch",
+                _ids(move),
             ),
         }
         rank = BASE_RANK[topic] + 0.25 * (held - SEGMENT_RULES[topic][1])
@@ -737,6 +767,7 @@ class MomentFinder:
                 "the goals so far as they stand: scorer, the club the goal counts for, and minute",
                 tuple(e for g in goals for e in g.facts["moment.scorer"].events),
             )
+            f["recap.goal_count"] = _count_of(len(goals), "goal", "how many goals stand so far")
         return f
 
     # --- corrections ---------------------------------------------------------------------------
@@ -746,18 +777,22 @@ class MomentFinder:
         corrected = m["corrected_event"]
         events = (m["event_id"],)
         before = m["changes"].get("player_id", {}).get("before")
+        reason = str(m.get("reason", ""))
         f: Facts = {
             "correction.minute": F.minute(
                 corrected["minute"], corrected["added_minute"], "minute of the corrected event", events
             ),
             "correction.after": F.text(self.name(corrected.get("player_id")), "who it is credited to now", events),
-            "correction.before": F.text(
-                self.name(before) + (" (own goal)" if m["changes"].get("own_goal", {}).get("before") else ""),
-                "who it was credited to before",
-                events,
-            ),
-            "correction.reason": F.text(str(m.get("reason", "")), "the provider's reason, as given", events),
+            # The name alone: "not Jory Penhallow (own goal)" after the new scorer's name read, aloud and
+            # in translation, as if the new scorer's goal were the own goal.
+            "correction.before": F.text(self.name(before), "who it was credited to before", events),
+            "correction.reason": F.text(reason, "the provider's reason, as given", events),
+            # The provider's reason after the kind of review it names ("goal credit reviewed: the shot
+            # was on target"), so a card gives it without a colon inside a colon.
+            "correction.why": F.text(reason.partition(": ")[2] or reason, "why the provider changed it", events),
         }
+        if m["changes"].get("own_goal", {}).get("before"):
+            f["correction.own_goal_before"] = F.text("own goal", "it was originally recorded as an own goal", events)
         return Found(
             insight_id=f"correction-{m['event_id']}-v{m['version']}",
             topic="correction",
@@ -786,7 +821,7 @@ def _goals_standing(state: RunState) -> list[Insight]:
 
 def _goal_text(f: Facts, own_goal: bool) -> str:
     club = f["moment.club"].display
-    return f"{f['moment.scorer'].display} ({'own goal, ' if own_goal else ''}{club}) {f['moment.minute'].display}"
+    return f"{f['moment.scorer'].display} ({'own goal for ' if own_goal else ''}{club}) {f['moment.minute'].display}"
 
 
 def _goal_events(f: Facts) -> list[str]:
@@ -815,8 +850,9 @@ def _count_of(n: int, noun: str, about: str, events: tuple[str, ...] = ()) -> Fa
     return Fact(n, f"no {plural}" if n == 0 else f"1 {noun}" if n == 1 else f"{n} {plural}", about, events)
 
 
-def _longest_move(window: list[dict]) -> list[dict]:
-    """The longest run of completed passes by one side, broken by any on-ball event of the other."""
+def _longest_move(window: list[dict], team_id: str | None = None) -> list[dict]:
+    """The longest run of completed passes by one side, or by `team_id`'s, broken by any on-ball
+    event of the other."""
     best: list[dict] = []
     run: list[dict] = []
     team = None
@@ -827,6 +863,6 @@ def _longest_move(window: list[dict]) -> list[dict]:
             team, run = e["team_id"], []
         if e["type"] == "pass":
             run = [*run, e] if e["outcome"] == "complete" else []
-            if len(run) > len(best):
+            if len(run) > len(best) and team_id in (None, team):
                 best = run
     return best

@@ -1,11 +1,13 @@
-"""The agents service's translator: each live card's wording in Spanish and French.
+"""The agents service's translator: each card's wording in Spanish and French.
 
 The version of a card viewers see is translated with Azure AI Translator, the names given to it as
 dictionary entries, and checked by code (footnote.insights.translation); the run's viewers are then
 pushed the card again with its translations, which the overlay contract carries by language
 (docs/overlay.md).
-Only the current version of a live card in a running replay is translated: an agent's draft usually
-replaces the template's within seconds, and a viewer whose stream is behind gets the later one.
+Only the current version of a card in a running replay is translated, the live cards first and then
+the history a catch-up lists: an agent's draft usually replaces the template's within seconds, and a
+page shows a rewording in a viewer's language only once its translation is in, keeping the earlier
+translation meanwhile (frontend/src/lib/live/language.ts).
 
 Every replay is the same match, so the same wording comes round again: translations are kept under
 a hash of the English, the names protected and TRANSLATION_VERSION, and reused, so a replay after
@@ -28,13 +30,13 @@ from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
 from footnote.db.insights import next_rev, push_insights
-from footnote.insights.translation import LANGUAGES, PARTS, check, prepare, read_back
+from footnote.insights.translation import LANGUAGES, PARTS, check, mend, prepare, read_back
 from footnote.telemetry import tracer
 
 log = logging.getLogger(__name__)
 
 # Change it when the preparing or the check changes, so translations kept from before aren't reused.
-TRANSLATION_VERSION = "2026-10-21.5"
+TRANSLATION_VERSION = "2026-10-21.7"
 TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 TRANSLATE_PATH = "translator/text/v3.0/translate"
 
@@ -87,10 +89,10 @@ select v.run_id, v.insight_id, v.version, v.card
   from insights i
   join runs r on r.run_id = i.run_id
   join insight_versions v on v.run_id = i.run_id and v.insight_id = i.insight_id and v.version = i.version
- where r.status = 'running' and i.live and i.status <> 'killed'
+ where r.status = 'running' and i.status <> 'killed'
    and not exists (select 1 from card_translations t
                     where t.run_id = v.run_id and t.insight_id = v.insight_id and t.version = v.version)
- order by v.created_at
+ order by i.live desc, v.created_at
  limit %s
 """
 
@@ -252,7 +254,9 @@ class TranslationWorker:
             mine = out[i * len(PARTS) : (i + 1) * len(PARTS)]
             per: Results = {}
             for lang in self.languages:
-                translated = read_back(english[i], [text.get(lang, "") for text in mine])
+                translated = mend(
+                    english[i], read_back(english[i], [text.get(lang, "") for text in mine]), self.names, lang
+                )
                 problems = check(english[i], translated, self.names, lang)
                 per[lang] = {"card": None if problems else translated, "problems": problems or None}
                 if problems:

@@ -53,7 +53,7 @@ AGENT_GRANTS: dict[str, str] = {
     "insight_cards": "select",
     "insight_pushes": "insert",
     "agent_runs": "select, insert, update",
-    "agent_cache": "select, insert",
+    "agent_cache": "select, insert, update",
     "card_translations": "select, insert",
     "translation_cache": "select, insert",
 }
