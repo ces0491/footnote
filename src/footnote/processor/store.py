@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
-from footnote.db.insights import AGENT_CHANNEL, Connection, cards, insight_push, next_rev
+from footnote.db.insights import AGENT_CHANNEL, Connection, next_rev, push_insights
 from footnote.insights.book import Change, Insight
 from footnote.live.contract import ProducerMode
 from footnote.live.pitch import PitchTracking
@@ -217,7 +217,8 @@ async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
     await conn.execute(_INSERT_VERSION, _template_version(run_id, insight, version))
     record = insight.record()
     # A fresh job for the agents: it joins the queue now, with no claims against it yet. A producer
-    # approving by hand approved what the card said before, so the corrected card waits for them again.
+    # who approved the card approved what it said before, so the corrected card waits for them again.
+    # Who approved it decides, not the run's mode now: the producer may have switched since.
     await conn.execute(
         "update insights i set topic = %s, seq = %s, evidence = %s, flag = %s, facts = %s, facts_version = %s,"
         " template = %s, version = %s, agent_state = %s, agent_note = null, agent_attempts = 0,"
@@ -225,8 +226,8 @@ async def _restate(conn: Connection, run_id: str, insight: Insight) -> None:
         " status = case when was.hand then 'drafted' else i.status end,"
         " status_by = case when was.hand then 'correction' else i.status_by end,"
         " status_at = case when was.hand then now() else i.status_at end"
-        " from (select i2.status = 'approved' and r.producer = 'manual' as hand from insights i2"
-        " join runs r on r.run_id = i2.run_id where i2.run_id = %s and i2.insight_id = %s) was"
+        " from (select i2.status = 'approved' and i2.status_by = 'producer' as hand from insights i2"
+        " where i2.run_id = %s and i2.insight_id = %s) was"
         " where i.run_id = %s and i.insight_id = %s",
         (
             insight.topic,
@@ -281,8 +282,4 @@ async def write_insights(conn: Connection, run_id: str, changes: list[Change]) -
     revs = {insight_id: last - len(latest) + 1 + n for n, insight_id in enumerate(latest)}
     if any(c.insight.agent and c.what in ("new", "restated") for c in latest.values()):
         await conn.execute("select pg_notify(%s, %s)", (AGENT_CHANNEL, run_id))
-    # History (insights the backfill passed) reaches viewers through the snapshot, not pushes.
-    pushes = [
-        insight_push(run_id, revs[c["insight_id"]], c) for c in await cards(conn, run_id, list(revs)) if c["live"]
-    ]
-    return sorted(pushes, key=lambda p: p["rev"])
+    return await push_insights(conn, run_id, revs)

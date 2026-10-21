@@ -6,16 +6,19 @@ and only while it runs. Each action changes one insight, or how the run's graphi
 and an insight change bumps the run's insight revision in the same transaction and is pushed to the
 run's viewers, like every other change to an insight (footnote.db.insights).
 
-    approve   a drafted, killed or withdrawn graphic may air
+    approve   a drafted, killed or withdrawn graphic may air, once no agent is drafting it
     kill      a drafted graphic never airs
     withdraw  an approved graphic comes off air
-    redraft   an agent drafts the card afresh, past the cache of earlier replays
+    redraft   an agent drafts the card afresh, past the cache of earlier replays; a graphic the
+              producer approved comes off air first, and each card and each replay has a limit
     edit      the producer's own wording, written as a draft with placeholders for the figures; it
               passes the same checks as an agent's draft (insights/draft.py), against the moment's
               facts and the events its card already links to, and is never cached for other replays
     mode      approve each graphic automatically as it is found, or leave it to the producer
 
 A run starts in the mode its viewer chose; switching applies to the insights found from then on.
+What a producer approves is the wording they saw: an agent's draft can't land on a graphic they
+approved, because approving waits for a draft in flight and a redraft needs the graphic off air.
 
 POST /runs/{run_id}/producer                    {"viewer": ID, "mode": "auto" | "manual"}
 POST /runs/{run_id}/insights/{insight_id}       {"viewer": ID, "action": ..., "draft": for an edit}
@@ -34,7 +37,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
 from footnote.db.connect import Pool
-from footnote.db.insights import AGENT_CHANNEL, Connection, cards, insight_push, next_rev
+from footnote.db.insights import AGENT_CHANNEL, Connection, next_rev, push_insights
 from footnote.insights.draft import Draft, check, render
 from footnote.insights.facts import facts_from_json
 from footnote.live.contract import VIEWER_PATTERN
@@ -55,6 +58,10 @@ _REFUSED = {
     "kill": "Only a graphic that hasn't been approved can be killed; withdraw an approved one.",
     "withdraw": "Only an approved graphic can be withdrawn.",
 }
+# Agent runs a redraft may add: on one card (its first draft and a correction's count too), and on
+# one replay. They keep one producer from spending the agents' daily runs (AGENT_DAILY_RUNS).
+REDRAFT_CARD_RUNS = 5
+REDRAFT_REPLAY_RUNS = 30
 
 
 class Refused(Exception):
@@ -74,6 +81,7 @@ class Push(Protocol):
 @dataclass(frozen=True)
 class _Insight:
     status: str
+    status_by: str | None
     agent_state: str
     facts: dict
     facts_version: int
@@ -94,12 +102,11 @@ async def _authorize(conn: Connection, run_id: str, viewer: str) -> None:
 
 
 async def _insight(conn: Connection, run_id: str, insight_id: str) -> _Insight:
+    # The row is locked on its own: a lock that waits on another writer's new version would, with a
+    # join to the versions, recheck the join against the old version and find no row.
     cur = await conn.execute(
-        "select i.status, i.agent_state, i.live, i.facts, i.facts_version, i.evidence, i.version,"
-        " v.card -> 'evidence' as card_evidence"
-        " from insights i join insight_versions v"
-        " on v.run_id = i.run_id and v.insight_id = i.insight_id and v.version = i.version"
-        " where i.run_id = %s and i.insight_id = %s for update of i",
+        "select status, status_by, agent_state, live, facts, facts_version, evidence, version"
+        " from insights where run_id = %s and insight_id = %s for update",
         (run_id, insight_id),
     )
     row = await cur.fetchone()
@@ -107,14 +114,21 @@ async def _insight(conn: Connection, run_id: str, insight_id: str) -> _Insight:
         raise Refused(404, "There's no such graphic in this replay.")
     if not row["live"]:
         raise Refused(409, "That moment came before the replay's start, so it isn't offered for air.")
+    cur = await conn.execute(
+        "select card -> 'evidence' as card_evidence from insight_versions"
+        " where run_id = %s and insight_id = %s and version = %s",
+        (run_id, insight_id, row["version"]),
+    )
+    version = await cur.fetchone()
     return _Insight(
         row["status"],
+        row["status_by"],
         row["agent_state"],
         row["facts"],
         row["facts_version"],
         list(row["evidence"]),
         row["version"],
-        list(row["card_evidence"] or []),
+        list((version or {}).get("card_evidence") or []),
     )
 
 
@@ -139,6 +153,9 @@ class Desk:
             if action in _TO:
                 if insight.status not in _FROM[action]:
                     raise Refused(409, _REFUSED[action])
+                if action == "approve" and insight.agent_state in ("pending", "drafting"):
+                    # The draft on its way would replace the wording being approved.
+                    raise Refused(409, "An agent is drafting it; approve it once its draft is in.")
                 await conn.execute(
                     "update insights set status = %s, status_by = 'producer', status_at = now(), updated_at = now()"
                     " where run_id = %s and insight_id = %s",
@@ -151,8 +168,8 @@ class Desk:
                     raise Refused(422, "An edit needs the new wording.")
                 await self._edit(conn, key, insight, draft)
             rev = await next_rev(conn, run_id)
-            card = (await cards(conn, run_id, [insight_id]))[0]
-        message = insight_push(run_id, rev, card)
+            # The desk acts on live insights only (_insight), so there is always one push.
+            message = (await push_insights(conn, run_id, {insight_id: rev}))[0]
         log.info("run %s: producer %s %s", run_id, action, insight_id)
         try:
             await self.push.send(run_id, message)
@@ -166,6 +183,17 @@ class Desk:
             raise Refused(409, "No agent writes this kind of card; edit it instead.")
         if insight.agent_state in ("pending", "drafting"):
             raise Refused(409, "An agent is drafting it already.")
+        if insight.status == "approved" and insight.status_by == "producer":
+            raise Refused(409, "It's on air with wording you approved; withdraw it before asking for a redraft.")
+        cur = await conn.execute(
+            "select count(*) filter (where insight_id = %s) as card, count(*) as replay from agent_runs where run_id = %s",
+            (key[1], key[0]),
+        )
+        used = await cur.fetchone() or {"card": 0, "replay": 0}
+        if used["card"] >= REDRAFT_CARD_RUNS:
+            raise Refused(409, "This card has had all the agent drafts it gets; edit the wording instead.")
+        if used["replay"] >= REDRAFT_REPLAY_RUNS:
+            raise Refused(409, "This replay has used all its agent drafts; edit the wording instead.")
         # A fresh job: it joins the queue now with no claims against it, or it would count as having
         # waited since the moment and fall back at once.
         await conn.execute(

@@ -32,13 +32,14 @@ WEB_GRANTS: dict[str, str] = {
     "insights": "select",
     "insight_versions": "select",
     "insight_cards": "select",
+    "insight_pushes": "select",
     "agent_runs": "select",
     "tracking_chunks": "select",
 }
 
 # What the agents service's identity may do. It reads the match and writes only its own work and the
 # producer's: agent and producer versions, an insight's agent and status columns, the run's insight
-# revision and how its graphics are approved, its run log and its cache.
+# revision and how its graphics are approved, the pushes it sends, its run log and its cache.
 AGENT_GRANTS: dict[str, str] = {
     "matches": "select",
     "runs": "select, update (insight_rev, producer)",
@@ -49,6 +50,7 @@ AGENT_GRANTS: dict[str, str] = {
     ),
     "insight_versions": "select, insert",
     "insight_cards": "select",
+    "insight_pushes": "insert",
     "agent_runs": "select, insert, update",
     "agent_cache": "select, insert",
 }

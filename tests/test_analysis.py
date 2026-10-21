@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from footnote.interpret.state import StateModel
-from footnote.live.analysis import Analysis, timeline_after
+from footnote.live.analysis import RECENT_LEAST, RECENT_SECONDS, Analysis, timeline_after
 from footnote.live.contract import client_event, wire
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
@@ -76,6 +76,29 @@ def test_the_state_estimate_runs_its_lag_behind_the_feed(showcase: Match, analys
         assert m["t"] - lag - 1 < ms["second"] <= m["t"] - lag
         assert 0.0 <= ms["confidence"] <= 1.0
         assert ms["on_top"]["home"] + ms["on_top"]["away"] <= 1.0 + 1e-9
+
+
+def test_who_has_been_on_top_lately_is_counted_as_the_cards_count_it(showcase: Match, analysis: Analysis) -> None:
+    """The casual bar's figure: each side's share of the last five minutes in which the state shown
+    each second was its own, the measure the insights use, not a fold of the coarser timeline."""
+    state = RunState(showcase.match_id, showcase.home_id, showcase.away_id, analysis)
+    checked = 0
+    for m in showcase.feed:
+        state.apply(m)
+        ms = state.live_fields()["match_state"]
+        if ms is None:
+            continue
+        assert state.insight is not None
+        labels = state.insight.shown_between(ms["period"], ms["second"] + 1 - RECENT_SECONDS, ms["second"] + 1)
+        if len(labels) < RECENT_LEAST:
+            assert ms["recent"] is None
+            continue
+        recent = ms["recent"]
+        assert recent["home"] == round(sum(label.endswith(":home") for label in labels) / len(labels), 2)
+        assert recent["away"] == round(sum(label.endswith(":away") for label in labels) / len(labels), 2)
+        assert recent["home"] + recent["away"] <= 1.0 + 1e-9
+        checked += 1
+    assert checked > 1000
 
 
 def test_the_view_carries_the_timeline_players_and_tags(final: RunState, analysis: Analysis) -> None:

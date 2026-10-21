@@ -174,9 +174,21 @@ def test_api_starts_lists_and_stops_runs(showcase: Match) -> None:
         assert set(run["timeline"]) == {"first_half_end", "half_time"}
         assert [r["run_id"] for r in client.get("/runs").json()] == [run["run_id"]]
         assert client.get(f"/runs/{run['run_id']}").json() == run
-        assert client.delete(f"/runs/{run['run_id']}").status_code == 204
+        # Only the viewer who started it may stop it.
+        stop = f"/runs/{run['run_id']}"
+        assert client.delete(stop).status_code == 403
+        other = "11111111-2222-4333-8444-555555555555"
+        assert client.request("DELETE", stop, json={"viewer": other}).status_code == 403
+        assert client.request("DELETE", stop, json={"viewer": VIEWER}).status_code == 204
         assert client.get(f"/runs/{run['run_id']}").status_code == 404
+        assert client.request("DELETE", stop, json={"viewer": VIEWER}).status_code == 404
         assert client.get("/healthz").json() == {"status": "ok", "runs": 0}
+
+
+def test_api_lets_anyone_stop_a_run_started_without_a_viewer(showcase: Match) -> None:
+    with TestClient(create_app(showcase, RecordingPublisher())) as client:
+        run = client.post("/runs", json={"start_minute": 81, "speed": 4}).json()
+        assert client.delete(f"/runs/{run['run_id']}").status_code == 204
 
 
 @pytest.mark.parametrize(

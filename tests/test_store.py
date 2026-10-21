@@ -8,6 +8,7 @@ a Postgres service; locally any Postgres 17 will do). Skipped without it.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -19,7 +20,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from footnote.agents.desk import Desk, Refused
+from footnote.agents.desk import REDRAFT_CARD_RUNS, REDRAFT_REPLAY_RUNS, Desk, Refused
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.db.connect import Pool
 from footnote.db.migrate import migrate
@@ -134,10 +135,21 @@ async def _one(pool: Pool, query: str, *params: object) -> dict:
     return row
 
 
+async def _agents_fall_back(pool: Pool) -> list[dict]:
+    """Every job waiting for an agent ends with the template standing, as a timed-out draft would;
+    returns the pushes."""
+    agents = AgentStore(pool)
+    pushes = [
+        await agents.fall_back(c, "No agent draft within 45 s; the template stands.")
+        for c in await agents.claim(10, 60)
+    ]
+    return [p for p in pushes if p is not None]
+
+
 async def test_migrations_apply_once(pool: Pool) -> None:
     assert await migrate(pool) == []
     row = await _one(pool, "select array_agg(version order by version) as v from schema_migrations")
-    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at", "0004_overlay"]
+    assert row["v"] == ["0001_runs", "0002_insights", "0003_queued_at", "0004_overlay", "0005_insight_pushes"]
 
 
 async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcase: Match, analysis: Analysis) -> None:
@@ -381,11 +393,40 @@ async def test_a_correction_sends_an_approved_card_back_to_the_producer(
     items = _replay(showcase, 81, end=False, viewer=VIEWER, producer="manual")
     amendment = next(i for i, item in enumerate(items) if item.body.get("type") == "amendment")
     await processor.handle(items[:amendment])
+    await _agents_fall_back(pool)
     desk = Desk(pool, Pushed())
     await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
     await processor.handle(items[amendment:])
     row = await _one(pool, "select status, status_by, facts_version from insights where insight_id = 'goal-e1586'")
     assert row == {"status": "drafted", "status_by": "correction", "facts_version": 2}
+
+
+@pytest.mark.parametrize(
+    ("started", "switched_to", "after"),
+    [
+        # Approved by hand, then the producer lets the rest through: the corrected card still waits.
+        ("manual", "auto", {"status": "drafted", "status_by": "correction"}),
+        # Approved automatically, then the producer takes over: nobody approved the old wording by hand.
+        ("auto", "manual", {"status": "approved", "status_by": "auto"}),
+    ],
+)
+async def test_who_approved_a_card_decides_what_a_correction_does(
+    pool: Pool, showcase: Match, analysis: Analysis, started: str, switched_to: str, after: dict
+) -> None:
+    store, push = PostgresStore(pool), Pushed()
+    await store.put_match(showcase.meta)
+    processor = Processor(showcase, store, push, analysis=analysis)
+    items = _replay(showcase, 81, end=False, viewer=VIEWER, producer=started)
+    amendment = next(i for i, item in enumerate(items) if item.body.get("type") == "amendment")
+    await processor.handle(items[:amendment])
+    await _agents_fall_back(pool)
+    desk = Desk(pool, Pushed())
+    if started == "manual":
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    await desk.set_mode(RUN_ID, VIEWER, switched_to)
+    await processor.handle(items[amendment:])
+    row = await _one(pool, "select status, status_by, facts_version from insights where insight_id = 'goal-e1586'")
+    assert row == {**after, "facts_version": 2}
 
 
 async def test_the_desk_acts_only_for_the_viewer_who_started_the_replay(
@@ -403,6 +444,10 @@ async def test_the_desk_acts_only_for_the_viewer_who_started_the_replay(
     with pytest.raises(Refused) as refused:
         await desk.act(RUN_ID, "goal-e0391", VIEWER, "approve")  # history, from the backfill
     assert refused.value.status == 409
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")  # its restated job waits for an agent
+    assert refused.value.status == 409 and "drafting" in refused.value.message
+    await _agents_fall_back(pool)
 
     rev = (await _one(pool, "select insight_rev from runs where run_id = %s", RUN_ID))["insight_rev"]
     approved = await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
@@ -469,6 +514,107 @@ async def test_an_edit_passes_the_same_checks_as_an_agents_draft(
     assert card["status"] == "drafted"  # an edit is not an approval
     cached = await _one(pool, "select count(*) as n from agent_cache")
     assert cached["n"] == 0
+
+
+async def test_a_producer_approves_only_wording_they_have_seen(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    """An agent's draft can't land on a graphic the producer approved: approving waits for a draft
+    in flight, and a redraft needs the graphic off air first."""
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    desk, agents = Desk(pool, Pushed()), AgentStore(pool)
+    claims = {c.insight_id: c for c in await agents.claim(10, 60)}  # the agents are drafting
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    assert refused.value.status == 409 and "drafting" in refused.value.message
+    await agents.fall_back(claims["goal-e1586"], "No agent draft within 45 s; the template stands.")
+    approved = await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    assert approved["insight"]["status"] == "approved" and approved["insight"]["status_by"] == "producer"
+
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "redraft")
+    assert refused.value.status == 409 and "withdraw" in refused.value.message
+    await desk.act(RUN_ID, "goal-e1586", VIEWER, "withdraw")
+    redrafted = await desk.act(RUN_ID, "goal-e1586", VIEWER, "redraft")
+    assert redrafted["insight"]["agent_state"] == "pending" and redrafted["insight"]["status"] == "withdrawn"
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")  # "Approve again" waits for the redraft too
+    assert refused.value.status == 409
+
+
+async def test_redrafts_are_limited_per_card_and_per_replay(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    await _agents_fall_back(pool)
+    desk = Desk(pool, Pushed())
+    other = await _one(
+        pool,
+        "select insight_id from insights where run_id = %s and live and agent_state <> 'off'"
+        " and insight_id <> 'goal-e1586' order by seq limit 1",
+        RUN_ID,
+    )
+
+    async def agent_runs(insight_id: str, count: int) -> None:
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.executemany(
+                "insert into agent_runs (agent_run_id, run_id, insight_id, facts_version, cache_key, model,"
+                " prompt_version) values (%s, %s, %s, 1, 'key', 'gpt-5-mini', 'test')",
+                [(uuid.uuid4().hex, RUN_ID, insight_id) for _ in range(count)],
+            )
+
+    await agent_runs("goal-e1586", REDRAFT_CARD_RUNS)
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "redraft")
+    assert refused.value.status == 409 and "all the agent drafts it gets" in refused.value.message
+    await agent_runs("elsewhere", REDRAFT_REPLAY_RUNS - REDRAFT_CARD_RUNS)
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, other["insight_id"], VIEWER, "redraft")
+    assert refused.value.status == 409 and "This replay has used all its agent drafts" in refused.value.message
+
+
+async def test_every_insight_push_is_stored_as_it_was_sent(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    """The processor's, the agents' and the desk's pushes are kept, so a page that loads later has
+    every state a card went through."""
+    _, push = await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    fallen = await _agents_fall_back(pool)
+    approved = await Desk(pool, Pushed()).act(RUN_ID, "goal-e1586", VIEWER, "approve")
+    sent = [m for m in push.sent if m["type"] == "insight"] + fallen + [approved]
+    async with pool.connection() as conn:
+        cur = await conn.execute("select rev, push from insight_pushes where run_id = %s order by rev", (RUN_ID,))
+        rows = await cur.fetchall()
+    as_sent = sorted(({k: v for k, v in m.items() if k != "timing"} for m in sent), key=lambda m: m["rev"])
+    assert [r["push"] for r in rows] == as_sent
+    assert all(r["rev"] == r["push"]["rev"] for r in rows)
+    assert "goal-e0391" not in {r["push"]["insight"]["insight_id"] for r in rows}  # history: snapshot only
+
+
+async def test_a_desk_action_that_waits_on_another_writer_still_finds_the_card(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    """The desk locks the card while another writer's new version is uncommitted, as an agent's
+    publish or a correction would be, and acts on that version once it lands."""
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    await _agents_fall_back(pool)
+    desk = Desk(pool, Pushed())
+    async with pool.connection() as conn:
+        async with conn.transaction():
+            row = await (
+                await conn.execute(
+                    "select version from insights where run_id = %s and insight_id = 'goal-e1586' for update", (RUN_ID,)
+                )
+            ).fetchone()
+            assert row is not None
+            await conn.execute(
+                "insert into insight_versions (run_id, insight_id, version, source, facts_version, draft, card, provenance)"
+                " select run_id, insight_id, version + 1, source, facts_version, draft, card, provenance"
+                " from insight_versions where run_id = %s and insight_id = 'goal-e1586' and version = %s",
+                (RUN_ID, row["version"]),
+            )
+            await conn.execute(
+                "update insights set version = version + 1 where run_id = %s and insight_id = 'goal-e1586'", (RUN_ID,)
+            )
+            acting = asyncio.create_task(desk.act(RUN_ID, "goal-e1586", VIEWER, "approve"))
+            await asyncio.sleep(0.5)
+            assert not acting.done()  # waiting for the row lock
+        approved = await acting
+    assert approved["insight"]["status"] == "approved" and approved["insight"]["version"] == row["version"] + 1
 
 
 async def test_the_tracking_is_stored_once_per_file(pool: Pool, showcase: Match) -> None:

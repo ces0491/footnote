@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
-from footnote.db.insights import Connection, cards, insight_push, next_rev
+from footnote.db.insights import Connection, next_rev, push_insights
 from footnote.insights.draft import Draft, render
 from footnote.insights.facts import Facts, facts_from_json, facts_to_json
 
@@ -202,8 +202,8 @@ async def _still_current(conn: Connection, claim: Claim) -> bool:
 
 async def _push(conn: Connection, claim: Claim) -> dict | None:
     rev = await next_rev(conn, claim.run_id)
-    docs = await cards(conn, claim.run_id, [claim.insight_id])
-    return insight_push(claim.run_id, rev, docs[0]) if docs and docs[0]["live"] else None
+    pushes = await push_insights(conn, claim.run_id, {claim.insight_id: rev})
+    return pushes[0] if pushes else None
 
 
 class PostgresSource:

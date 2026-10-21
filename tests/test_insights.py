@@ -221,6 +221,14 @@ def test_a_clean_draft_passes_and_renders_with_the_figures_from_code() -> None:
         ("{player.kin-07.name} scores. Riverton are top.", "more than one sentence"),
         ("{player.kin-07.name} scores as " + chr(0xD8) + "degaard watches.", "degaard' isn't a name"),
         ("Teo Adeyani scores for Saltmarsh.", "'Teo Adeyani' isn't a name as any one fact gives it"),
+        # Plain text only, so figures and names can't slip past the checks above in disguise.
+        ("{player.kin-07.name} scores <b>again</b>.", "markup ('<'"),
+        ("Saltmarsh are tw" + chr(0x200B) + "o goals down.", "characters a reader can't see (U+200B)"),
+        ("{player.kin-07.name} makes it " + chr(0x2461) + "-" + chr(0x2460) + ".", "a figure typed as"),
+        ("Saltmarsh have had " + chr(0xBD) + " of the ball.", "a figure typed as"),
+        ("Saltmarsh press in the " + chr(0xB2) + "nd half.", "a figure typed as"),
+        ("Saltmarsh are tw" + chr(0x3BF) + " goals down.", "letters from outside the Latin alphabet"),
+        ("{player.kin-07.name} beats " + chr(0x299) + "ob " + chr(0xA731) + "mith.", "outside the Latin alphabet"),
     ],
 )
 def test_the_checks_catch_figures_names_and_tone(casual: str, problem: str) -> None:
@@ -236,6 +244,14 @@ def test_the_checks_catch_figures_names_and_tone(casual: str, problem: str) -> N
         "It is one of the better moves by {teams.SAL.name} today.",
         "Saltmarsh's Teo Varlan finds Adeyani with a first-time pass.",
         "The goal comes at {moment.minute}, against the run of play.",
+        # Accented letters and typographic punctuation are plain text too.
+        "A d"
+        + chr(0xE9)
+        + "but goal for {player.kin-07.name} "
+        + chr(0x2013)
+        + " and Saltmarsh"
+        + chr(0x2019)
+        + "s lead is gone.",
     ],
 )
 def test_the_checks_let_ordinary_football_words_and_names_through(casual: str) -> None:

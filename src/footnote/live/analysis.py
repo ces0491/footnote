@@ -35,6 +35,12 @@ from footnote.live.timeline import broadcast_minute
 _HOME_STATES = [i for i, side in enumerate(SIDE_OF_LABEL) if side == 0]
 _AWAY_STATES = [i for i, side in enumerate(SIDE_OF_LABEL) if side == 1]
 
+# Who's been on top lately, for the casual fan's bar: each side's share of the last five minutes of
+# the period in which the state shown was its own (control, pressure or a break), counted second by
+# second as the cards count it (insights/moments.py), once at least a minute is covered.
+RECENT_SECONDS = 300
+RECENT_LEAST = 60
+
 
 @dataclass(frozen=True)
 class Analysis:
@@ -68,7 +74,8 @@ class Analysis:
 
 
 def state_summary(estimate: Estimate, frames: Frames) -> dict:
-    """The match state a viewer is shown, the model's chance of it, and which side is on top."""
+    """The match state a viewer is shown, the model's chance of it, and the chance each side is on
+    top now. RunAnalysis adds `recent`, who has been on top over the last few minutes."""
     belief = estimate.belief
     i = estimate.shown
     state, _, side = LABELS[i].partition(":")
@@ -160,6 +167,7 @@ class RunAnalysis:
             self.shown.setdefault(estimate.period, []).append(estimate.shown)
         if estimates and self.tracker.latest is not None:
             self.match_state = state_summary(self.tracker.latest, a.frames)
+            self.match_state["recent"] = self.recent_on_top(self.match_state["period"], self.match_state["second"])
         self.timeline = timeline_after(self.timeline, self.match_state)
         if m["type"] not in ("match_info", "amendment"):
             frame = a.tracking.frame(int(m["period"]), float(m["t"]))
@@ -233,6 +241,17 @@ class RunAnalysis:
         """The state shown each second of `period` from `start` up to `end`, as labels."""
         seconds = self.shown.get(period, [])
         return [LABELS[i] for i in seconds[max(0, start) : max(0, end)]]
+
+    def recent_on_top(self, period: int, second: int) -> dict | None:
+        """Each side's share of the last RECENT_SECONDS of `period` up to `second` in which the state
+        shown was its own; None while less than RECENT_LEAST of it is covered."""
+        labels = self.shown_between(period, second + 1 - RECENT_SECONDS, second + 1)
+        if len(labels) < RECENT_LEAST:
+            return None
+        return {
+            "home": round(sum(label.endswith(":home") for label in labels) / len(labels), 2),
+            "away": round(sum(label.endswith(":away") for label in labels) / len(labels), 2),
+        }
 
     def view(self) -> dict:
         players = sorted(set(self.players) | set(self.analysis.physical.player_ids))

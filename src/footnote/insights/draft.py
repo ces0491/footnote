@@ -20,7 +20,11 @@ and so do the agents.
   an unknown name without a dictionary;
 - every sentence rests on something: an event it cites, or a fact it uses; every event it cites is
   one the writer was shown; and when the facts rest on events, the card links to at least one;
-- headline and lines fit their space, with no betting language, exclamations, links or emoji.
+- headline and lines fit their space, with no betting language, exclamations, links or emoji;
+- the text is plain: no markup, no characters a reader can't see, no number characters other than
+  the digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
+  can't get past the checks above in disguise (a circled digit, a fraction sign, a zero-width space
+  inside "two", a Greek omicron in it, a name in small capitals).
 
 The checks catch figures and names a writer made up. A real name from the match given to the wrong
 player, or a sentence that reads the facts unfairly, passes them: that is for the evaluations of the
@@ -30,6 +34,7 @@ agents' output.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -82,6 +87,10 @@ _LEAD = re.compile("[\\s(\"'" + chr(0x2018) + chr(0x201C) + "]*")
 _PLACEHOLDER_MARK = f" {chr(0xFFFC)} "
 # Capitalised words a card may use that no fact supplies.
 ALWAYS_ALLOWED = frozenset({"VAR", "I"})
+# Where a card's letters may come from: the Latin alphabet with the accented letters names and
+# French or Spanish words need. Small capitals and look-alike letters from other alphabets are
+# outside it, so they can't stand in for a name or a number word.
+_LATIN_LETTERS = ((0x41, 0x5A), (0x61, 0x7A), (0xC0, 0x24F), (0x1E00, 0x1EFF))
 
 
 class Sentence(BaseModel):
@@ -231,6 +240,27 @@ def _figure_problems(where: str, own: str) -> list[str]:
     return problems
 
 
+def _latin(letter: str) -> bool:
+    return any(low <= ord(letter) <= high for low, high in _LATIN_LETTERS)
+
+
+def _character_problems(where: str, own: str) -> list[str]:
+    problems = []
+    if "<" in own or ">" in own:
+        problems.append(f"{where}: markup ('<' or '>'); write plain text")
+    hidden = sorted({f"U+{ord(c):04X}" for c in own if unicodedata.category(c) in ("Cc", "Cf")})
+    if hidden:
+        problems.append(f"{where}: characters a reader can't see ({', '.join(hidden)}); write plain text")
+    # Digits are refused already; these are the other number characters: circled, fractions, superscripts.
+    figures = [c for c in own if unicodedata.category(c).startswith("N") and not _DIGIT.match(c)]
+    if figures:
+        problems.append(f"{where}: a figure typed as '{figures[0]}'; put every figure in as its placeholder")
+    letters = sorted({c for c in own if unicodedata.category(c).startswith("L") and not _latin(c)})
+    if letters:
+        problems.append(f"{where}: letters from outside the Latin alphabet ('{''.join(letters)}'); write plain English")
+    return problems
+
+
 def _name_problems(where: str, own: str, names: Names) -> list[str]:
     problems = []
     first = _LEAD.match(own)
@@ -262,6 +292,7 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names) -> list[st
     if _SENTENCE_BREAK.search(own.strip()):
         problems.append(f"{where}: more than one sentence; give each sentence its own entry, with its own events")
     problems += _figure_problems(where, own)
+    problems += _character_problems(where, own)
     if (word := _BETTING.search(own)) is not None:
         problems.append(f"{where}: betting language ('{word.group(0)}')")
     if "!" in own:

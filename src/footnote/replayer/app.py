@@ -5,7 +5,7 @@ POST   /runs            start a replay: {"start_minute": 1-90, "speed": 1, 2 or 
                         replay replaces their previous one
 GET    /runs            the runs in progress
 GET    /runs/{run_id}   one run's descriptor
-DELETE /runs/{run_id}   stop a run
+DELETE /runs/{run_id}   stop a run: {"viewer": ID}, which must be the one that started it, if any
 GET    /healthz
 """
 
@@ -43,6 +43,15 @@ class StartRun(BaseModel):
     )
     producer: Literal["auto", "manual"] = Field(
         default="auto", description="Approve each graphic as it is found, or leave it for the producer"
+    )
+
+
+class StopRun(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    viewer: str | None = Field(
+        default=None,
+        pattern=VIEWER_PATTERN,
+        description="The anonymous ID of the browser asking; a run started with one stops only for it",
     )
 
 
@@ -97,7 +106,14 @@ def create_app(match: Match | None = None, publisher: Publisher | None = None) -
         return run.descriptor
 
     @app.delete("/runs/{run_id}", status_code=204)
-    async def stop_run(run_id: str, request: Request) -> Response:
+    async def stop_run(run_id: str, request: Request, body: StopRun | None = None) -> Response:
+        # Only the viewer who started a replay may stop it, as only they may produce it; a run
+        # started without a viewer belongs to nobody, and anyone may stop it.
+        run = manager(request).runs.get(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="no such run in progress")
+        if run.viewer is not None and (body is None or body.viewer != run.viewer):
+            raise HTTPException(status_code=403, detail="only the viewer who started this replay can stop it")
         if not await manager(request).stop(run_id):
             raise HTTPException(status_code=404, detail="no such run in progress")
         return Response(status_code=204)
