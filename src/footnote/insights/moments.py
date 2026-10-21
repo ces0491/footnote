@@ -674,8 +674,10 @@ class MomentFinder:
     # --- recaps --------------------------------------------------------------------------------
 
     def _recap(self, m: dict, state: RunState, topic: str) -> Found:
+        # "Final score" heads the full-time recap: the Translator renders "Full time" as "Tiempo
+        # completo" and "Temps plein".
         f: Facts = {
-            "recap.label": F.text("Half-time" if topic == "half_time" else "Full time", "which break this is"),
+            "recap.label": F.text("Half-time" if topic == "half_time" else "Final score", "the recap's heading"),
             "recap.when": F.text("half-time" if topic == "half_time" else "full time", "the break, in a sentence"),
             **self._recap_facts(m, state),
         }

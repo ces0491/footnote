@@ -74,12 +74,12 @@ def var_decision(f: Facts) -> Draft:
     if f["moment.decision"].value == "no_goal" and "moment.passer" in f:
         casual = [
             _s("{moment.subject} was offside when {moment.passer} played the pass, so the goal is ruled out.", *events),
-            _s("It stays {moment.score_line}.", *events),
+            _s("The score stays {moment.score_line}.", *events),
         ]
     elif f["moment.decision"].value == "no_goal":
         casual = [
             _s("The goal is ruled out for {moment.incident}.", *events),
-            _s("It stays {moment.score_line}.", *events),
+            _s("The score stays {moment.score_line}.", *events),
         ]
     elif f["moment.decision"].value == "no_penalty":
         casual = [_s("No penalty after the check for {moment.incident} by {moment.subject}.", *events)]
@@ -158,7 +158,7 @@ def sprint(f: Facts) -> Draft:
     return Draft(
         headline="{moment.player} hits {moment.speed}",
         casual=[_s("{moment.player} sprints at {moment.speed}, the fastest of the match so far.")],
-        analyst=[_s("Top speed from the tracking at {moment.minute}, smoothed as tracking providers report it.")],
+        analyst=[_s("Top speed in the tracking data at {moment.minute}, smoothed as tracking providers report it.")],
     )
 
 
@@ -166,7 +166,7 @@ def distance(f: Facts) -> Draft:
     return Draft(
         headline="{moment.player} passes {moment.distance}",
         casual=[_s("{moment.player} has covered {moment.distance}.")],
-        analyst=[_s("Distance from the tracking, reached at {moment.minute}.")],
+        analyst=[_s("Distance in the tracking data, reached at {moment.minute}.")],
     )
 
 
@@ -235,7 +235,7 @@ def correction(f: Facts) -> Draft:
                 *_event(f, "correction.after"),
             )
         ],
-        analyst=[_s("The provider's reason: {correction.reason}.", *_event(f, "correction.after"))],
+        analyst=[_s("The data provider's reason: {correction.reason}.", *_event(f, "correction.after"))],
     )
 
 

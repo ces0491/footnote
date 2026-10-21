@@ -33,8 +33,8 @@ The cards were drafted and judged by `uv run --group evals python -m footnote.ev
 | Accepted at the first attempt | 15 |
 | Accepted after a revision | 5 |
 | Rejected, late or failed: the template stands | 0 |
-| Accepted with every evaluation passed | 16 |
-| Evaluations passed | 96 of 100 |
+| Accepted with every evaluation passed | 17 |
+| Evaluations passed | 97 of 100 |
 | Time to a draft | median 13.1 s, slowest 24.7 s |
 | Tokens per card | median 6172 in, 846 out |
 | Cost of the drafts at list prices (the judge's calls aside) | US$0.075 |
@@ -45,7 +45,7 @@ The cards were drafted and judged by `uv run --group evals python -m footnote.ev
 | --- | --- | --- |
 | names the subject | 20 of 20 | The headline or the casual line names who the moment is about; a recap, every scorer. |
 | claims hold | 20 of 20 | Every claim the card makes in words rests on a fact its writer was given. |
-| adds to the template | 18 of 20 | The casual line is more than the template's in other words: most of its words are its own, which is the agent's reason to be there. |
+| adds to the template | 19 of 20 | The casual line is more than the template's in other words: most of its words are its own, which is the agent's reason to be there. |
 | one line per figure | 19 of 20 | No figure takes up both lines, so casual and analyst readers each get something of their own. A minute or a spell's stretch may be in both: they frame the rest. |
 | grounded | 19 of 20 | A model reads the card against its writer's facts and scores it 1 to 5; it passes at 3. |
 
@@ -56,7 +56,7 @@ The cards were drafted and judged by `uv run --group evals python -m footnote.ev
 | `pressure-sal-1-318/v1` | accepted, 1 attempt, 16.9 s | **Saltmarsh pinning Kingsferry back** Saltmarsh are keeping Kingsferry under pressure and have forced them to sit deep for 62% of the last 3 minutes. | all passed |
 | `goal-e0391/v1` | accepted, 1 attempt, 16.0 s | **Adeyani gives Kingsferry lead** Saltmarsh 0–1 Kingsferry: Femi Adeyani scores at 23'. Saltmarsh had been on top for 66% of the 10 minutes before, so the goal came against the run of play. | all passed |
 | `goal-e0532/v1` | accepted, 1 attempt, 13.0 s | **Dellow levels for Saltmarsh** Saltmarsh equalise as Marco Dellow finishes from 19 m after a pass from Teo Varlan. | one line per figure: moment.shot_distance in both lines |
-| `var-e0534/v1` | accepted, 1 attempt, 9.2 s | **VAR: No goal** Saltmarsh remain behind as the goal is ruled out after Marco Dellow was offside when Teo Varlan played the pass. It stays Saltmarsh 0–1 Kingsferry. | adds to the template: 82% of its words are the template's |
+| `var-e0534/v1` | accepted, 1 attempt, 9.2 s | **VAR: No goal** Saltmarsh remain behind as the goal is ruled out after Marco Dellow was offside when Teo Varlan played the pass. It stays Saltmarsh 0–1 Kingsferry. | all passed |
 | `pressure-kin-1-2134/v1` | accepted, 1 attempt, 10.1 s | **Kingsferry pinning Saltmarsh back** Kingsferry are keeping Saltmarsh pinned in their own half, controlling 61% of the last 3 minutes. | all passed |
 | `pressure-sal-1-2440/v1` | accepted, 1 attempt, 11.6 s | **Saltmarsh pinning Kingsferry back** Saltmarsh are forcing Kingsferry deep and keeping them under sustained pressure for 73% of the last 3 minutes. | all passed |
 | `ht/v1` | accepted, 2 attempts, 17.6 s | **Half-time: Saltmarsh 0–1 Kingsferry** Saltmarsh have largely controlled the game before the break, dominating possession and pinning Kingsferry back in long spells, then Femi Adeyani scored on a counter at 23'. Marco Dellow thought he had levelled it but VAR ruled the finish out for offside when Teo Varlan played the pass, so the score remains Saltmarsh 0–1 Kingsferry. | all passed |

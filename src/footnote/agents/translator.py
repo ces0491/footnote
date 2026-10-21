@@ -1,8 +1,9 @@
 """The agents service's translator: each live card's wording in Spanish and French.
 
-The version of a card viewers see is translated with Azure AI Translator, names marked to be left
-alone, and checked by code (footnote.insights.translation); the run's viewers are then pushed the
-card again with its translations, which the overlay contract carries by language (docs/overlay.md).
+The version of a card viewers see is translated with Azure AI Translator, the names given to it as
+dictionary entries, and checked by code (footnote.insights.translation); the run's viewers are then
+pushed the card again with its translations, which the overlay contract carries by language
+(docs/overlay.md).
 Only the current version of a live card in a running replay is translated: an agent's draft usually
 replaces the template's within seconds, and a viewer whose stream is behind gets the later one.
 
@@ -27,19 +28,19 @@ from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
 from footnote.db.insights import next_rev, push_insights
-from footnote.insights.translation import LANGUAGES, PARTS, check, protect, unprotect
+from footnote.insights.translation import LANGUAGES, PARTS, check, prepare, read_back
 
 log = logging.getLogger(__name__)
 
-# Change it when the marking or the check changes, so translations kept from before aren't reused.
-TRANSLATION_VERSION = "2026-10-21.1"
+# Change it when the preparing or the check changes, so translations kept from before aren't reused.
+TRANSLATION_VERSION = "2026-10-21.4"
 TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 TRANSLATE_PATH = "translator/text/v3.0/translate"
 
 
 class Translator(Protocol):
     async def translate(self, texts: list[str], languages: tuple[str, ...]) -> list[dict[str, str]]:
-        """Each text (HTML, names marked) in each language: one dict per text, by language."""
+        """Each text (HTML, from `prepare`) in each language: one dict per text, by language."""
         ...
 
 
@@ -237,16 +238,16 @@ class TranslationWorker:
 
     async def _translate(self, cards: list[Pending]) -> list[Results]:
         """Every part of every card in one request, checked card by card."""
-        texts = [protect(str(p.card.get(part, "")), self.names) for p in cards for part in PARTS]
+        english = [{part: str(p.card.get(part) or "") for part in PARTS} for p in cards]
+        texts = [text for card in english for text in prepare(card, self.names)]
         out = await self.translator.translate(texts, self.languages)
         results = []
         for i, p in enumerate(cards):
-            english = {part: str(p.card.get(part, "")) for part in PARTS}
             mine = out[i * len(PARTS) : (i + 1) * len(PARTS)]
             per: Results = {}
             for lang in self.languages:
-                translated = {part: unprotect(mine[j].get(lang, "")) for j, part in enumerate(PARTS)}
-                problems = check(english, translated, self.names)
+                translated = read_back(english[i], [text.get(lang, "") for text in mine])
+                problems = check(english[i], translated, self.names, lang)
                 per[lang] = {"card": None if problems else translated, "problems": problems or None}
                 if problems:
                     log.info(

@@ -28,7 +28,7 @@ from footnote.db.connect import Pool
 from footnote.db.migrate import migrate
 from footnote.insights.draft import Draft, Sentence
 from footnote.insights.facts import Fact
-from footnote.insights.translation import names_of
+from footnote.insights.translation import names_of, protect, unprotect
 from footnote.live import pitch
 from footnote.live.analysis import Analysis
 from footnote.live.contract import KIND_CONTROL, KIND_FEED, wire
@@ -683,7 +683,8 @@ async def test_cards_are_translated_checked_and_pushed_again(pool: Pool, showcas
     )["doc"]
     OverlayItem.model_validate(doc)
     assert set(doc["translations"]) == {"es"}
-    assert doc["translations"]["es"]["casual"] == doc["card"]["casual"] + " [es]"
+    english = unprotect(protect(doc["card"]["casual"], names_of(showcase.meta)))
+    assert doc["translations"]["es"]["casual"] == english + " [es]"
     failed = await _one(
         pool, "select problems from card_translations where insight_id = 'goal-e1586' and lang = 'fr' and card is null"
     )
