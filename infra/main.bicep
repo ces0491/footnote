@@ -30,6 +30,9 @@ param webPubSubSku string = 'Free_F1'
 @description('Create Azure AI Translator (free tier) for the Spanish and French cards')
 param translatorEnabled bool = false
 
+@description('Create the writers\' model deployment. Azure refuses to submit one that exists again, even unchanged (error 715-123420), so set it false once the deployment is there')
+param deployWriterModel bool = true
+
 var tags = { 'azd-env-name': environmentName }
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -51,6 +54,7 @@ module resources 'resources.bicep' = {
     clientIpAddress: clientIpAddress
     webPubSubSku: webPubSubSku
     translatorEnabled: translatorEnabled
+    deployWriterModel: deployWriterModel
   }
 }
 

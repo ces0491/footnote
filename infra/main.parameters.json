@@ -9,6 +9,7 @@
     "principalName": { "value": "${AZURE_PRINCIPAL_NAME=}" },
     "clientIpAddress": { "value": "${CLIENT_IP_ADDRESS=}" },
     "webPubSubSku": { "value": "${WEBPUBSUB_SKU=Free_F1}" },
-    "translatorEnabled": { "value": "${TRANSLATOR_ENABLED=false}" }
+    "translatorEnabled": { "value": "${TRANSLATOR_ENABLED=false}" },
+    "deployWriterModel": { "value": "${DEPLOY_WRITER_MODEL=true}" }
   }
 }

@@ -14,6 +14,7 @@
     "postgresHost": { "value": "${POSTGRES_HOST}" },
     "postgresDatabase": { "value": "${POSTGRES_DATABASE}" },
     "foundryProjectEndpoint": { "value": "${FOUNDRY_PROJECT_ENDPOINT}" },
-    "foundryModel": { "value": "${FOUNDRY_MODEL}" }
+    "foundryModel": { "value": "${FOUNDRY_MODEL}" },
+    "translatorEndpoint": { "value": "${TRANSLATOR_ENDPOINT}" }
   }
 }

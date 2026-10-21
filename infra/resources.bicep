@@ -11,6 +11,7 @@ param principalName string
 param clientIpAddress string
 param webPubSubSku string
 param translatorEnabled bool
+param deployWriterModel bool
 
 var feedHubName = 'feed'
 var checkpointContainerName = 'checkpoints'
@@ -399,8 +400,10 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2026-09-0
   }
 }
 
-// Its own module, checked once the account exists (modules/model-deployment.bicep says why).
-module writerDeployment 'modules/model-deployment.bicep' = {
+// Its own module, checked once the account exists (modules/model-deployment.bicep says why). Azure
+// also refuses to submit it again once it exists, even unchanged, so later provisions leave it out
+// (deployWriterModel, set from DEPLOY_WRITER_MODEL).
+module writerDeployment 'modules/model-deployment.bicep' = if (deployWriterModel) {
   name: 'writer-model'
   params: {
     accountName: foundry.name
@@ -426,6 +429,18 @@ resource agentsUseFoundry 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 resource developerUsesFoundry 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
   name: guid(foundryProject.id, principalId, roles.foundryUser)
   scope: foundryProject
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.foundryUser)
+  }
+}
+
+// The agents' evaluations judge cards through the account's OpenAI endpoint
+// (src/footnote/evals/groundedness.py), which a role on the project doesn't reach.
+resource developerJudgesWithFoundry 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
+  name: guid(foundry.id, principalId, roles.foundryUser)
+  scope: foundry
   properties: {
     principalId: principalId
     principalType: principalType
@@ -488,5 +503,7 @@ output webIdentityName string = webIdentity.name
 output agentsName string = 'ca-agents-${token}'
 output agentsIdentityName string = agentsIdentity.name
 output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${foundryProject.name}'
-output foundryModel string = writerDeployment.outputs.name
-output translatorEndpoint string = translatorEnabled ? translator!.properties.endpoint : ''
+output foundryModel string = deployWriterModel ? writerDeployment!.outputs.name : writerModel.name
+// The resource's own subdomain, where Microsoft Entra tokens work: for a Translator,
+// properties.endpoint names the global endpoint, which wants a key or extra headers.
+output translatorEndpoint string = translatorEnabled ? translator!.properties.endpoints.TextTranslation : ''
