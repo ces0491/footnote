@@ -83,3 +83,4 @@ output SERVICE_AGENTS_IDENTITY_NAME string = resources.outputs.agentsIdentityNam
 output FOUNDRY_PROJECT_ENDPOINT string = resources.outputs.foundryProjectEndpoint
 output FOUNDRY_MODEL string = resources.outputs.foundryModel
 output TRANSLATOR_ENDPOINT string = resources.outputs.translatorEndpoint
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = resources.outputs.applicationInsightsConnectionString

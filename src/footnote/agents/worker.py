@@ -34,12 +34,14 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from agent_framework import SupportsChatGetResponse
+from opentelemetry import trace
 
 from footnote.agents.prompts import PROMPT_VERSION
 from footnote.agents.store import MAX_CLAIMS, Cached, Claim
 from footnote.agents.writer import WRITER_VERSION, Drafted, Job, draft
 from footnote.insights.draft import Draft, check, limits_for
 from footnote.insights.facts import Facts
+from footnote.telemetry import tracer
 from footnote.tools.server import TOOLS_VERSION
 
 log = logging.getLogger(__name__)
@@ -76,6 +78,14 @@ class Store(Protocol):
 
 class Push(Protocol):
     async def send(self, run_id: str, message: dict) -> None: ...
+
+
+def _outcome(outcome: str, **detail: str | int) -> None:
+    """Say on the card's trace how its job ended."""
+    span = trace.get_current_span()
+    span.set_attribute("footnote.outcome", outcome)
+    for name, value in detail.items():
+        span.set_attribute(f"footnote.{name}", value)
 
 
 def cache_key(claim: Claim, model: str) -> str:
@@ -150,15 +160,25 @@ class Worker:
 
     async def _guarded(self, claim: Claim) -> None:
         async with self._slots:
-            try:
-                await self.process(claim)
-            except Exception:
-                log.exception("job %s/%s failed outside the agent", claim.run_id, claim.insight_id)
+            # One trace a card: the agent's run, its model and tool calls nest under this span.
+            attributes: dict[str, str | int | bool] = {
+                "footnote.run_id": claim.run_id,
+                "footnote.insight_id": claim.insight_id,
+                "footnote.topic": claim.topic,
+                "footnote.facts_version": claim.facts_version,
+                "footnote.redraft": claim.redraft,
+            }
+            with tracer.start_as_current_span("draft card", attributes=attributes):
+                try:
+                    await self.process(claim)
+                except Exception:
+                    log.exception("job %s/%s failed outside the agent", claim.run_id, claim.insight_id)
 
     async def process(self, claim: Claim) -> None:
         settings = self.settings
         key = cache_key(claim, settings.model)
         if not claim.redraft and await self._from_cache(claim, key):
+            _outcome("cached")
             return
         if claim.claims > MAX_CLAIMS:
             await self._fall_back(claim, "The agent service failed on this one; the template stands.")
@@ -181,6 +201,7 @@ class Worker:
             log.info(
                 "%s/%s: draft for facts version %d superseded", claim.run_id, claim.insight_id, claim.facts_version
             )
+            _outcome("superseded", agent_run_id=agent_run_id)
             await asyncio.shield(self.store.finish_run(agent_run_id, outcome="superseded"))
             raise
         except TimeoutError:
@@ -209,6 +230,7 @@ class Worker:
 
     async def _finish(self, claim: Claim, key: str, agent_run_id: str, drafted: Drafted) -> None:
         outcome = drafted.outcome
+        _outcome("accepted" if outcome.accepted else "rejected", attempts=outcome.attempts, agent_run_id=agent_run_id)
         await self.store.finish_run(
             agent_run_id,
             outcome="accepted" if outcome.accepted else "rejected",
@@ -254,6 +276,7 @@ class Worker:
         return True
 
     async def _fall_back(self, claim: Claim, note: str) -> None:
+        _outcome("fallback", note=note)
         await self._send(claim, await self.store.fall_back(claim, note))
 
     async def _send(self, claim: Claim, message: dict | None) -> None:

@@ -20,6 +20,9 @@ param foundryModel string
 @description('Azure AI Translator for the Spanish and French cards; empty leaves them in English')
 param translatorEndpoint string = ''
 
+@description('Application Insights for the agents\' traces; empty sends none')
+param applicationInsightsConnectionString string = ''
+
 @description('Agent runs a day (UTC) before every job keeps its template: a ceiling on what the model can cost')
 param agentDailyRuns int = 150
 
@@ -76,6 +79,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             { name: 'AGENT_DEADLINE_SECONDS', value: string(agentDeadlineSeconds) }
             { name: 'DESK_PORT', value: '8080' }
             { name: 'TRANSLATOR_ENDPOINT', value: translatorEndpoint }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: applicationInsightsConnectionString }
           ]
         }
       ]

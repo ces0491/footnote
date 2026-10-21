@@ -32,6 +32,7 @@ var roles = {
   webPubSubServiceOwner: '12cf5a90-567b-43ae-8102-96cf46c7d9b4'
   foundryUser: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
   cognitiveServicesUser: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+  monitoringMetricsPublisher: '3913510d-42f4-4e42-8a64-420c390055eb'
 }
 
 // --- Identities -----------------------------------------------------------------------------------
@@ -71,6 +72,41 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
     retentionInDays: 30
     // A ceiling on ingestion cost: the first 5 GB a month are free, and the services log little.
     workspaceCapping: { dailyQuotaGb: json('0.2') }
+  }
+}
+
+// Traces from the agents service (src/footnote/telemetry.py), kept in the workspace above and under
+// its cap. Local auth is off: the agents publish with their managed identity.
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: 'appi-${token}'
+  location: location
+  tags: tags
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logs.id
+    IngestionMode: 'LogAnalytics'
+    DisableLocalAuth: true
+  }
+}
+
+resource agentsPublishTraces 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, agentsIdentity.id, roles.monitoringMetricsPublisher)
+  scope: appInsights
+  properties: {
+    principalId: agentsIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.monitoringMetricsPublisher)
+  }
+}
+
+resource developerPublishesTraces 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
+  name: guid(appInsights.id, principalId, roles.monitoringMetricsPublisher)
+  scope: appInsights
+  properties: {
+    principalId: principalId
+    principalType: principalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.monitoringMetricsPublisher)
   }
 }
 
@@ -504,6 +540,9 @@ output agentsName string = 'ca-agents-${token}'
 output agentsIdentityName string = agentsIdentity.name
 output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${foundryProject.name}'
 output foundryModel string = deployWriterModel ? writerDeployment!.outputs.name : writerModel.name
+// Where the agents send traces. It names the resource and its ingestion endpoint; with local auth off,
+// sending also takes an Entra token for a role on the resource.
+output applicationInsightsConnectionString string = appInsights.properties.ConnectionString
 // The resource's own subdomain, where Microsoft Entra tokens work: for a Translator,
 // properties.endpoint names the global endpoint, which wants a key or extra headers.
 output translatorEndpoint string = translatorEnabled ? translator!.properties.endpoints.TextTranslation : ''

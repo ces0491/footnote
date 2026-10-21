@@ -16,6 +16,7 @@ Settings come from the environment (set by infra/agents.bicep in Azure):
     MCP_PORT                                  the match tools' local port, 8100 unless set
     DESK_PORT                                 the producer's desk, 8080 unless set
     TRANSLATOR_ENDPOINT                       Azure AI Translator; cards stay in English without it
+    APPLICATIONINSIGHTS_CONNECTION_STRING     traces to Application Insights (footnote.telemetry)
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from agent_framework_foundry import FoundryChatClient
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
 
-from footnote import cloud
+from footnote import cloud, telemetry
 from footnote.agents.desk import Desk, create_app
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.agents.translator import AzureTranslator, TranslationStore, TranslationWorker
@@ -81,6 +82,7 @@ async def listen(credential: AsyncTokenCredential, *wakes: asyncio.Event) -> Non
 
 
 async def main() -> None:
+    telemetry.configure("footnote-agents")
     match = load_match(os.environ.get("FOOTNOTE_MATCH_ID", SHOWCASE_MATCH_ID))
     analysis = Analysis.load(match)
     credential = cloud.credential()

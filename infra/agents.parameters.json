@@ -15,6 +15,7 @@
     "postgresDatabase": { "value": "${POSTGRES_DATABASE}" },
     "foundryProjectEndpoint": { "value": "${FOUNDRY_PROJECT_ENDPOINT}" },
     "foundryModel": { "value": "${FOUNDRY_MODEL}" },
-    "translatorEndpoint": { "value": "${TRANSLATOR_ENDPOINT}" }
+    "translatorEndpoint": { "value": "${TRANSLATOR_ENDPOINT}" },
+    "applicationInsightsConnectionString": { "value": "${APPLICATIONINSIGHTS_CONNECTION_STRING}" }
   }
 }

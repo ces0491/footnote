@@ -29,6 +29,7 @@ from psycopg.types.json import Jsonb
 from footnote.db.connect import Pool
 from footnote.db.insights import next_rev, push_insights
 from footnote.insights.translation import LANGUAGES, PARTS, check, prepare, read_back
+from footnote.telemetry import tracer
 
 log = logging.getLogger(__name__)
 
@@ -214,26 +215,31 @@ class TranslationWorker:
         pending = await self.store.pending(self.batch)
         if not pending:
             return 0
-        results: dict[tuple[str, str, int], Results] = {}
-        fresh: list[Pending] = []
-        for p in pending:
-            hit = await self.store.cached(self.key(p.card))
-            if hit is not None:
-                results[p.ref] = hit
-            else:
-                fresh.append(p)
-        if fresh:
-            translated = await self._translate(fresh)
-            for p, r in zip(fresh, translated, strict=True):
-                await self.store.cache(self.key(p.card), r)
-                results[p.ref] = r
-        for p in pending:
-            message = await self.store.store(p, results[p.ref])
-            if message is not None:
-                try:
-                    await self.push.send(p.run_id, message)
-                except Exception:
-                    log.exception("push failed for %s/%s", p.run_id, p.insight_id)
+        # Traced only when there is work: the loop looks every few seconds.
+        with tracer.start_as_current_span("translate cards", attributes={"footnote.cards": len(pending)}) as span:
+            results: dict[tuple[str, str, int], Results] = {}
+            fresh: list[Pending] = []
+            for p in pending:
+                hit = await self.store.cached(self.key(p.card))
+                if hit is not None:
+                    results[p.ref] = hit
+                else:
+                    fresh.append(p)
+            span.set_attribute("footnote.translated", len(fresh))
+            if fresh:
+                translated = await self._translate(fresh)
+                for p, r in zip(fresh, translated, strict=True):
+                    await self.store.cache(self.key(p.card), r)
+                    results[p.ref] = r
+            failed = sum(1 for r in results.values() for lang in r.values() if lang["card"] is None)
+            span.set_attribute("footnote.failed_checks", failed)
+            for p in pending:
+                message = await self.store.store(p, results[p.ref])
+                if message is not None:
+                    try:
+                        await self.push.send(p.run_id, message)
+                    except Exception:
+                        log.exception("push failed for %s/%s", p.run_id, p.insight_id)
         return len(pending)
 
     async def _translate(self, cards: list[Pending]) -> list[Results]:

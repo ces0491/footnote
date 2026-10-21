@@ -23,6 +23,10 @@ from agent_framework import (
 )
 from agent_framework.exceptions import ToolExecutionException
 from agent_framework.observability import ChatTelemetryLayer
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from footnote.agents.prompts import RECAP_WRITER, instructions, writer_name
 from footnote.agents.store import Cached, Claim
@@ -426,6 +430,34 @@ async def test_no_model_call_past_the_limits(showcase: Match, analysis: Analysis
         await _work(stale, client, url)
     assert client.calls == 0 and spent.runs == {} and stale.runs == {}
     assert "budget is spent" in spent.fallbacks[0][1] and "waited too long" in stale.fallbacks[0][1]
+
+
+@pytest.fixture(scope="module")
+def spans() -> InMemorySpanExporter:
+    """Every span this module's tests make, kept in memory: the agents service sends them to
+    Application Insights instead (footnote.telemetry)."""
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
+    return exporter
+
+
+async def test_each_card_drafted_is_a_trace_with_its_outcome(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict], spans: InMemorySpanExporter
+) -> None:
+    spans.clear()
+    store = Store([_claim(rows, showcase)])
+    async with match_tools(showcase, analysis, rows) as url:
+        await _work(store, Scripted(GOOD), url)
+    finished = spans.get_finished_spans()
+    (card,) = [s for s in finished if s.name == "draft card"]
+    assert card.attributes is not None
+    assert card.attributes["footnote.insight_id"] == GOAL and card.attributes["footnote.outcome"] == "accepted"
+    assert card.attributes["footnote.agent_run_id"] == next(iter(store.runs))
+    # The agent's run, its model and tool calls are spans of the same trace.
+    inside = [s for s in finished if s.context.trace_id == card.context.trace_id and s is not card]
+    assert inside and all(s.context.trace_id == card.context.trace_id for s in inside)
 
 
 async def test_the_tools_answer_only_for_a_scoped_run(
