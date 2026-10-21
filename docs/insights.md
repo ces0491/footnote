@@ -103,15 +103,16 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   facts, and names written side by side must be one name as a fact gives it ("Femi Adeyani", or
   "Adeyani" alone), so words from two names can't make a third. A sentence's first word is held to
   this only when it is part of a name: an ordinary word in capitals can't be told from an unknown
-  name without a dictionary;
+  name without a dictionary. Filled in, the headline and every sentence start with a capital or a
+  figure, so "{moment.overturned} on-field decision" ("stands on-field decision") is refused;
 - every sentence cites an event the writer was shown or uses a fact, and when the facts rest on
   events the card links to at least one (the card's evidence is the cited events plus those behind
   each fact used);
 - the headline fits in 60 characters, the casual line in two sentences and 240, the analyst line
   in three and 360, filled in; a recap, which tells the story of a half, gets three sentences and
   400 characters for its casual line; no betting language, exclamation marks, links or emoji;
-- a count shows its noun once: a fact's display carries it ("44 passes"), so "{key} passes" is
-  refused;
+- a count shows its noun once: a fact's display carries it ("44 passes", "2 shots on target"), so
+  "{key} passes" or "{key} on target" is refused;
 - a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name

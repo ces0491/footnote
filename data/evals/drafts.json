@@ -1,9 +1,9 @@
 {
- "recorded_at": "2026-10-21T09:41:09+00:00",
+ "recorded_at": "2026-10-21T12:58:55+00:00",
  "model": "gpt-5-mini",
  "reasoning_effort": "low",
  "versions": {
-  "prompt": "2026-10-21.1",
+  "prompt": "2026-10-21.2",
   "tools": "2026-10-21.1",
   "writer": "2026-10-21.1"
  },
@@ -14,43 +14,36 @@
     {
      "name": "get_moment",
      "arguments": {}
-    },
-    {
-     "name": "get_match_state",
-     "arguments": {
-      "minutes": 10
-     }
     }
    ],
    "draft": {
-    "headline": "Saltmarsh pinning Kingsferry back",
+    "headline": "{segment.club} pinning {segment.other} back",
     "casual": [
      {
-      "text": "{segment.club} are keeping {segment.other} under pressure and have forced them to sit deep for {segment.state_share} of the last {segment.window}.",
+      "text": "{segment.club} have spent {segment.state_share} of the last {segment.window} keeping {segment.other} deep in their own half, forcing frequent turnovers.",
       "events": [
-       "e0148"
+       "e0127"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "During that spell {segment.club} won {segment.pass_share} of the passes and produced {segment.shots}, with the ball changing hands {segment.changes} and their longest sequence being {segment.longest_move}.",
+      "text": "During the spell {segment.club} produced {segment.pass_share} of the passes, their longest uninterrupted sequence was {segment.longest_move} and they managed {segment.shots}.",
       "events": [
        "e0117",
-       "e0127",
        "e0148"
       ]
      }
     ]
    },
    "attempts": 1,
-   "latency_ms": 16945,
-   "input_tokens": 6093,
-   "output_tokens": 959,
+   "latency_ms": 10407,
+   "input_tokens": 3411,
+   "output_tokens": 737,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The query requested a graphic card with a headline, a casual-fan line, and an analyst line. The response provides three distinct parts: a short headline ('Saltmarsh pinning Kingsferry back'), a casual-fan line that references the 62% of the last 3 minutes and summarizes the pressure, and an analyst line listing the 71% pass share, 1 shot, 7 changes of possession and a longest sequence of 6 passes. Each fact matches the provided context (62% pinning over 3 minutes; 71% share of passes; 1 shot; ball changing hands 7 times; longest run 6 passes). No incorrect or unrelated information was introduced and the response directly addresses the requested three items. Therefore it is fully grounded in the context."
+    "reason": "Let's think step by step: The query asked for a headline, a casual fan line and an analyst line based on the provided match-state data. The response delivers three short sentences that map to those three elements. Each factual claim matches the context: 62% of the last 3 minutes (correct), 3-minute spell (correct), Saltmarsh holding the state and pinning Kingsferry back (correct), 71% share of passes (correct), longest sequence 6 passes (correct), and 1 shot (correct). The phrase \"forcing frequent turnovers\" is an interpretation but is supported by the context detail that the ball changed hands 7 times, so it remains grounded. No incorrect or extraneous information is introduced. Therefore the response is fully correct and complete with respect to the context."
    }
   },
   "goal-e0391/v1": {
@@ -61,7 +54,56 @@
      "arguments": {}
     },
     {
-     "name": "get_match_stats",
+     "name": "get_match_state",
+     "arguments": {
+      "minutes": 10
+     }
+    }
+   ],
+   "draft": {
+    "headline": "Adeyani gives Kingsferry lead",
+    "casual": [
+     {
+      "text": "Kingsferry take the lead as {moment.scorer} finishes a {moment.play_pattern} at {moment.minute}.",
+      "events": [
+       "e0391"
+      ]
+     },
+     {
+      "text": "The goal comes {moment.run_of_play}; {moment.other_club} had been on top for {moment.other_on_top} of the {moment.window} beforehand.",
+      "events": []
+     }
+    ],
+    "analyst": [
+     {
+      "text": "The shot, from {moment.shot_distance}, left the boot at {moment.shot_speed}.",
+      "events": [
+       "e0390"
+      ]
+     },
+     {
+      "text": "The last pass came from {moment.passer}, difficulty {moment.key_pass_difficulty}.",
+      "events": [
+       "e0387"
+      ]
+     }
+    ]
+   },
+   "attempts": 1,
+   "latency_ms": 15266,
+   "input_tokens": 6895,
+   "output_tokens": 873,
+   "groundedness": {
+    "score": 5.0,
+    "passed": true,
+    "reason": "Let's think step by step: The query asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response supplies a concise headline-style sentence ('Adeyani gives Kingsferry lead'), a brief descriptive line for fans ('Kingsferry take the lead as Femi Adeyani finishes a counter at 23\"){which communicates scorer, minute and the nature of the move}, and an analyst-oriented sentence giving context and metrics ('against the run of play; Saltmarsh had been on top for 66% of the 10 minutes beforehand' plus shot distance, speed and last-pass difficulty). All facts (scorer, minute, counter, 66% control, 21 m, 89.1 km/h, Javi Ferrano, difficulty 0.42) match the provided context, so the response is accurate, relevant and complete for the requested card."
+   }
+  },
+  "goal-e0532/v1": {
+   "outcome": "rejected",
+   "calls": [
+    {
+     "name": "get_moment",
      "arguments": {}
     },
     {
@@ -71,68 +113,17 @@
      }
     },
     {
-     "name": "get_events",
+     "name": "get_player",
      "arguments": {
-      "event_ids": [
-       "e0391",
-       "e0390",
-       "e0387"
-      ]
+      "player_id": "sal-9"
      }
     }
    ],
    "draft": {
-    "headline": "Adeyani gives Kingsferry lead",
+    "headline": "{moment.scorer} scores",
     "casual": [
      {
       "text": "{moment.score_line}: {moment.scorer} scores at {moment.minute}.",
-      "events": [
-       "e0391"
-      ]
-     },
-     {
-      "text": "{moment.other_club} had been on top for {moment.other_on_top} of the {moment.window} before, so the goal came against the run of play.",
-      "events": []
-     }
-    ],
-    "analyst": [
-     {
-      "text": "The shot came from {moment.shot_distance} and left the boot at {moment.shot_speed}.",
-      "events": [
-       "e0390"
-      ]
-     },
-     {
-      "text": "{moment.passer} played the final ball, difficulty {moment.key_pass_difficulty}.",
-      "events": [
-       "e0387"
-      ]
-     }
-    ]
-   },
-   "attempts": 1,
-   "latency_ms": 16013,
-   "input_tokens": 8622,
-   "output_tokens": 800,
-   "groundedness": {
-    "score": 5.0,
-    "passed": true,
-    "reason": "Let's think step by step: The response directly answers the query by providing a short headline, a casual-fan line, and an analyst line. All facts in the response are supported by the context: scorer (Femi Adeyani), minute (23'), score (Saltmarsh 0–1 Kingsferry), that the goal was against the run of play (Saltmarsh on top 66% of the prior 10 minutes), shot distance (21 m), shot speed (89.1 km/h), and the assister (Javi Ferrano) with pass difficulty (0.42). The response omits minor additional context details (e.g., the move started on a counter, the pass length/speed, or that the shot was taken with the left foot), but those omissions do not make the answer incorrect or irrelevant to the requested card. Therefore the response is well grounded in the provided context and fulfills the query fully and accurately."
-   }
-  },
-  "goal-e0532/v1": {
-   "outcome": "accepted",
-   "calls": [
-    {
-     "name": "get_moment",
-     "arguments": {}
-    }
-   ],
-   "draft": {
-    "headline": "Dellow levels for Saltmarsh",
-    "casual": [
-     {
-      "text": "Saltmarsh equalise as {moment.scorer} finishes from {moment.shot_distance} after a pass from {moment.passer}.",
       "events": [
        "e0532"
       ]
@@ -140,28 +131,30 @@
     ],
     "analyst": [
      {
-      "text": "The effort came from {moment.shot_distance} and left the boot at {moment.shot_speed}.",
+      "text": "The shot, from {moment.shot_distance}, left the boot at {moment.shot_speed}.",
       "events": [
        "e0531"
       ]
      },
      {
-      "text": "{moment.passer} made the last pass, difficulty {moment.key_pass_difficulty}, and Saltmarsh had been on top for {moment.club_on_top} of the previous {moment.window}.",
+      "text": "{moment.passer} made the last pass, difficulty {moment.key_pass_difficulty}.",
       "events": [
        "e0529"
+      ]
+     },
+     {
+      "text": "In the {moment.window} before the goal Saltmarsh were on top for {state.last.SAL.control} while Kingsferry were on top for {state.last.KIN.control}.",
+      "events": [
+       "e0532"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 13041,
-   "input_tokens": 3347,
-   "output_tokens": 686,
-   "groundedness": {
-    "score": 5.0,
-    "passed": true,
-    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual line, and one for analysts. The response supplies a succinct headline ('Dellow levels for Saltmarsh'), a casual fan line describing the goal and the assist, and an analyst line giving shot distance, speed, pass difficulty, and possession-share over the previous 10 minutes. All facts (scorer Marco Dellow, equaliser for Saltmarsh, 19 m, 111.3 km/h, last pass by Teo Varlan with difficulty 0.58, 40% dominance over the prior 10 minutes) match the provided context. The response omits the minute (31') and the explicit 1–1 score, which could be included but were not required by the query. Overall the answer is accurate, relevant, and complete for the requested card format."
-   }
+   "attempts": 2,
+   "latency_ms": 18067,
+   "input_tokens": 9936,
+   "output_tokens": 1008,
+   "groundedness": null
   },
   "var-e0534/v1": {
    "outcome": "accepted",
@@ -169,19 +162,22 @@
     {
      "name": "get_moment",
      "arguments": {}
+    },
+    {
+     "name": "get_events",
+     "arguments": {
+      "event_ids": [
+       "e0534",
+       "e0529"
+      ]
+     }
     }
    ],
    "draft": {
     "headline": "VAR: {moment.decision_text}",
     "casual": [
      {
-      "text": "Saltmarsh remain behind as the goal is ruled out after {moment.subject} was offside when {moment.passer} played the pass.",
-      "events": [
-       "e0534"
-      ]
-     },
-     {
-      "text": "It stays {moment.score_line}.",
+      "text": "Because {moment.subject} was offside when {moment.passer} played, the attempt is wiped out and {moment.score_line} stays as it is.",
       "events": [
        "e0534"
       ]
@@ -189,21 +185,27 @@
     ],
     "analyst": [
      {
-      "text": "The on-field decision {moment.overturned} following the offside check.",
+      "text": "The on-field decision {moment.overturned}.",
       "events": [
        "e0534"
+      ]
+     },
+     {
+      "text": "The pass from {event.e0529.player} to {event.e0529.receiver} was {event.e0529.outcome} over {event.e0529.length} at {event.e0529.speed}.",
+      "events": [
+       "e0529"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 9229,
-   "input_tokens": 3108,
-   "output_tokens": 650,
+   "attempts": 2,
+   "latency_ms": 19780,
+   "input_tokens": 8494,
+   "output_tokens": 1602,
    "groundedness": {
     "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The response accurately reflects the context — it states the VAR decision (No goal), explains it was for an offside involving Marco Dellow and Teo Varlan, notes the on-field decision was overturned, and gives the score Saltmarsh 0–1 Kingsferry. However, the user asked specifically for a live-graphics card with a headline, a line for casual fans, and one for analysts. The reply is a single paragraph rather than three distinct lines or clearly labeled sections, so while the content is correct and relevant, the requested format and separation into the three specified elements are missing. Therefore it is correct but incomplete relative to the query."
+    "reason": "Let's think step by step: The response accurately reflects the context facts — VAR decision 'No goal', the check was for offside involving Marco Dellow when Teo Varlan played, the on-field decision was overturned, the score remains Saltmarsh 0–1 Kingsferry, and it includes pass details (26 m, 67.8 km/h, complete). These facts are all grounded in the provided context. However, the query asked specifically for a live-graphics card: a headline, a line for casual fans and one for analysts. The reply is written as explanatory sentences rather than three distinct, clearly labeled lines formatted for a graphics card, so it fails to meet the requested structure and audience-targeting exactly. Because it is factually correct but incomplete in fulfilling the requested format/presentation, I rate it as partially correct."
    }
   },
   "pressure-kin-1-2134/v1": {
@@ -212,38 +214,41 @@
     {
      "name": "get_moment",
      "arguments": {}
+    },
+    {
+     "name": "get_match_state",
+     "arguments": {
+      "minutes": 10
+     }
     }
    ],
    "draft": {
-    "headline": "Kingsferry pinning Saltmarsh back",
+    "headline": "{segment.club} pinning {segment.other} back",
     "casual": [
      {
-      "text": "Kingsferry are keeping Saltmarsh pinned in their own half, controlling {segment.state_share} of the last {segment.window}.",
+      "text": "That sustained spell has kept {segment.other} pinned inside their own half and forced {segment.changes} changes of possession in the last {segment.window}.",
       "events": [
-       "e0619"
+       "e0644"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "In that spell {segment.club} had {segment.pass_share} of the passes and {segment.shots}, with the ball changing hands {segment.changes} and a longest completed move of {segment.longest_move}.",
+      "text": "In that spell {segment.club} played {segment.pass_share} of the passes, completed {segment.longest_move} longest passing sequence and forced {segment.changes} changes of possession while creating {segment.shots}.",
       "events": [
-       "e0605",
-       "e0606",
-       "e0607",
-       "e0603"
+       "e0605"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 10129,
-   "input_tokens": 3194,
-   "output_tokens": 761,
+   "attempts": 2,
+   "latency_ms": 16055,
+   "input_tokens": 9476,
+   "output_tokens": 1024,
    "groundedness": {
-    "score": 5.0,
+    "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response provides three clear lines that map to those roles: a short headline ('Kingsferry pinning Saltmarsh back'), a casual explanation referencing the 61% control of the last 3 minutes, and an analyst line listing the specific metrics (67% of passes, no shots, 7 changes of possession, longest completed move 3 passes). All figures and facts match the provided context (61% of the last 3 minutes, 3-minute stretch, 67% passes, no shots, 7 turnovers, longest run 3 passes), and no unrelated or incorrect information is introduced. Therefore the response is fully grounded in the context and complete for the query."
+    "reason": "Let's think step by step: The user asked for a graphics card with a headline, a casual-fan line and an analysts' line. The response gives three sentences that can be read as those three elements. All numeric details in the response (3-minute spell, 7 changes of possession, 67% share of passes, longest sequence 3 passes, no shots) match the CONTEXT exactly, so the content is accurate and well grounded in the provided data. However, the response is imperfect as a direct answer to the query: it does not explicitly label which sentence is the headline, casual line or analyst line, it repeats the \"7 times changes of possession\" point, and it adds the phrase \"pinned inside their own half,\" which is implied by \"pinning back\" but not explicitly stated in the context. Because it is accurate and relevant to the context but slightly incomplete and stylistically mismatched to the requested format, a partially correct rating is appropriate."
    }
   },
   "pressure-sal-1-2440/v1": {
@@ -261,32 +266,32 @@
     }
    ],
    "draft": {
-    "headline": "Saltmarsh pinning Kingsferry back",
+    "headline": "{segment.club} pinning {segment.other} back",
     "casual": [
      {
-      "text": "{segment.club} are forcing {segment.other} deep and keeping them under sustained pressure for {segment.state_share} of the last {segment.window}.",
+      "text": "{segment.club} have forced {segment.other} deep into their own half, turning the ball over {segment.changes} and testing them with {segment.shots}.",
       "events": [
-       "e0727"
+       "e0709"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "During that spell {segment.club} had {segment.pass_share} of the passes and registered {segment.shots}.",
+      "text": "They have played {segment.pass_share} of the passes, the longest uninterrupted sequence was {segment.longest_move}, and the model shows this state for {segment.state_share} of the last {segment.window}.",
       "events": [
        "e0709"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 11554,
-   "input_tokens": 6184,
-   "output_tokens": 765,
+   "attempts": 2,
+   "latency_ms": 16272,
+   "input_tokens": 9536,
+   "output_tokens": 1095,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response provides three distinct lines that map well to the request. The headline \"Saltmarsh pinning Kingsferry back.\" directly reflects the context entry that Saltmarsh was pinning the other side back. The casual-fans line \"Saltmarsh are forcing Kingsferry deep and keeping them under sustained pressure for 73% of the last 3 minutes.\" accurately uses the 73% share and the 3-minute stretch from the context. The analyst line \"During that spell Saltmarsh had 78% of the passes and registered 3 shots.\" precisely reports the 78% pass share and 3 shots noted in the context. No incorrect details are introduced and the key metrics from the context are included, so the response is fully grounded and appropriately complete for the query."
+    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fan line and an analysts' line. The response supplies three lines in that order. Each fact in the response matches the context: headline \"Saltmarsh pinning Kingsferry back\" mirrors the 73% pinning state; the casual line states Kingsferry were forced deep, \"turning the ball over 8 times\" and \"3 shots\" which aligns with \"how often the ball changed hands: 8 times\" and \"shots by Saltmarsh: 3\"; the analyst line gives 78% of the passes, a longest sequence of 4 passes, and that the model shows this state for 73% of the last 3 minutes — all directly supported by the context. No unsupported or incorrect details were introduced. Therefore the response is fully grounded in the provided context."
    }
   },
   "ht/v1": {
@@ -305,45 +310,43 @@
     "headline": "{recap.label}: {recap.score_line}",
     "casual": [
      {
-      "text": "{story.1.club} have largely controlled the game before the break, dominating possession and pinning {story.1.other} back in long spells, then {story.4.scorer} scored on a counter at {story.4.minute}.",
+      "text": "{recap.score_line} at {recap.when}.",
       "events": [
-       "e0053",
-       "e0391"
+       "e0882"
       ]
      },
      {
-      "text": "{story.5.subject} thought he had levelled it but VAR ruled the finish out for offside when {story.5.passer} played the pass, so the score remains {recap.score_line}.",
+      "text": "{story.3.club} controlled long spells and pinned {story.3.other} back at times, but {story.4.club} broke away and {story.4.scorer} scored at {story.4.minute} from a {story.4.play_pattern} move.",
       "events": [
-       "e0534",
-       "e0529",
-       "e0882"
+       "e0299",
+       "e0391",
+       "e0390"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}, while {recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}, reflecting Saltmarsh's territorial control despite falling behind.",
+      "text": "{recap.home_club} had {recap.home_possession} of the passes and {recap.home_shots}, while {recap.away_club} managed {recap.away_possession} and {recap.away_shots}.",
       "events": [
        "e0882"
       ]
      },
      {
-      "text": "{story.4.scorer}'s strike came from {story.4.shot_distance} at {story.4.shot_speed} and the match-state model calls it {story.4.run_of_play} after {story.4.other_club} had been on top for {story.4.other_on_top} of the {story.4.window}.",
+      "text": "A VAR check at {story.5.minute} ruled the other side's effort out for {story.5.incident}, so the score remains {story.5.score_line}.",
       "events": [
-       "e0390",
-       "e0391"
+       "e0534"
       ]
      }
     ]
    },
-   "attempts": 2,
-   "latency_ms": 17590,
-   "input_tokens": 13143,
-   "output_tokens": 1407,
+   "attempts": 1,
+   "latency_ms": 13935,
+   "input_tokens": 7402,
+   "output_tokens": 1205,
    "groundedness": {
-    "score": 5.0,
+    "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The response accurately reflects the context — it gives the half-time score (Saltmarsh 0–1 Kingsferry), correctly names Femi Adeyani as the 23' scorer on a counter, and cites the shot distance (21 m) and speed (89.1 km/h). It correctly recounts the VAR check (Marco Dellow, Teo Varlan pass, offside, no goal) and the possession/shot stats (Saltmarsh 64% and 13 shots; Kingsferry 36% and 1 shot). It also references the match-state model calling the goal against the run of play and that Saltmarsh were on top for 66% of the 10‑minute run — all details drawn exactly from the context. The reply provides a clear headline and includes both a casual-fan summary and an analyst-style insight (even if not rigidly formatted as three separate lines), so it is fully grounded in the provided context."
+    "reason": "Let's think step by step: The query asked for a live-graphics card with a headline, a line for casual fans and one for analysts. The response is anchored in the context: it correctly states the half-time score (Saltmarsh 0–1 Kingsferry), the goal scorer and minute (Femi Adeyani, 23'), that the goal came from a counter, pass shares (64% vs 36%), shots (13 vs 1) and the VAR check at 33' overturning a goal for offside — all facts match the provided context. However, the output repeats the headline twice and doesn't clearly label or separate the three requested lines (casual and analyst lines are merged into narrative and stats rather than presented distinctly). Because the content is accurate and relevant but slightly incomplete in formatting and clarity for the specific requested structure, the response is partially correct but not perfectly formatted or clearly separated."
    }
   },
   "pressure-sal-2-1/v1": {
@@ -361,10 +364,10 @@
     }
    ],
    "draft": {
-    "headline": "Saltmarsh pinning Kingsferry back",
+    "headline": "{segment.club} pinning {segment.other} back",
     "casual": [
      {
-      "text": "That pressure means {segment.club} have kept {segment.other} pinned for {segment.state_share} of the last {segment.window}.",
+      "text": "{segment.club} have kept {segment.other} trapped in their own half for {segment.window}, forcing the ball to change hands {segment.changes}.",
       "events": [
        "e0941"
       ]
@@ -374,19 +377,19 @@
      {
       "text": "In that time {segment.club} have had {segment.pass_share} of the passes and {segment.shots}.",
       "events": [
-       "e0949"
+       "e0942"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 12751,
-   "input_tokens": 6160,
-   "output_tokens": 891,
+   "attempts": 2,
+   "latency_ms": 17600,
+   "input_tokens": 9509,
+   "output_tokens": 1075,
    "groundedness": {
-    "score": 4.0,
+    "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response accurately pulls facts from the context — \"Saltmarsh pinning Kingsferry back,\" the 100% of the last 3 minutes, 62% of passes and no shots — so the factual content is grounded in the provided data. However the user asked for a three-part live-graphics card (a headline, a line for casual fans, and one for analysts). The reply instead returns a short factual summary without clearly providing the three distinct lines or tailoring one sentence to casual fans and another to analysts. Because it is accurate but incomplete / not formatted to the requested parts, it should be rated as partially correct."
+    "reason": "Let's think step by step: The query asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response provides three short lines that map directly to those elements: (1) headline: \"Saltmarsh pinning Kingsferry back\" matches the context's match-state; (2) casual line: \"kept Kingsferry trapped in their own half for 3 minutes, forcing the ball to change hands 6 times\" uses the context's 3-minute stretch and 6 changes of possession; (3) analyst line: \"62% of the passes and no shots\" directly reflects the context's pass share and shot count. All figures used are accurate according to the context. It omits some extra model details (e.g., model probability, longest pass sequence), but those were not required by the query. Therefore the response is fully grounded in the provided context."
    }
   },
   "goal-e1029/v1": {
@@ -404,10 +407,10 @@
     }
    ],
    "draft": {
-    "headline": "{moment.scorer} scores",
+    "headline": "{moment.scorer} equalises",
     "casual": [
      {
-      "text": "{moment.scorer} {moment.situation} the match, bringing {moment.score_line} and halting Kingsferry's earlier spell of control.",
+      "text": "{moment.score_line}: {moment.scorer} brings the game level at {moment.minute} with a {moment.play_pattern} shot from {moment.shot_distance}.",
       "events": [
        "e1029"
       ]
@@ -421,21 +424,21 @@
       ]
      },
      {
-      "text": "In the {moment.window} before the goal Saltmarsh were on top for {moment.club_on_top} while Kingsferry had {moment.other_on_top}.",
+      "text": "In the {moment.window} before the goal Saltmarsh were on top, with {state.last.SAL.pressure} shown as pinning Kingsferry back and {state.last.SAL.control} shown as Saltmarsh in control.",
       "events": [
        "e1029"
       ]
      }
     ]
    },
-   "attempts": 2,
-   "latency_ms": 20542,
-   "input_tokens": 9257,
-   "output_tokens": 1449,
+   "attempts": 1,
+   "latency_ms": 16731,
+   "input_tokens": 6433,
+   "output_tokens": 1143,
    "groundedness": {
-    "score": 2.0,
-    "passed": false,
-    "reason": "Let's think step by step: The response attempts to produce a live-graphics card and includes a short headline and lines that could serve casual fans and analysts. It correctly names the scorer (Teo Varlan), states it was an equaliser making the score Saltmarsh 1–1, and gives accurate shot details (21 m and 105.7 km/h). It also correctly reports the 6-minute pre-goal share where Saltmarsh were on top 100% and Kingsferry 0%. However, the response incorrectly claims the goal \"halted Kingsferry's earlier spell of control,\" which contradicts the provided context showing Saltmarsh were dominant in the covered stretch before the goal. The card also isn't clearly formatted into three distinct labeled lines as requested. Because it mostly uses the context but contains at least one factual inaccuracy and a minor formatting omission, the appropriate groundedness rating is 2."
+    "score": 5.0,
+    "passed": true,
+    "reason": "Let's think step by step: The query asked for a live-graphics card with a headline, a casual-fan line and an analysts' line. The response gives a clear headline ('Teo Varlan equalises.'), a casual line that states the score, scorer and minute ('Saltmarsh 1–1 Kingsferry: Teo Varlan brings the game level at 52' with a regular play shot from 21 m.'), and an analysts' line containing shot speed and the six-minute control breakdown ('The shot... left the boot at 105.7 km/h. In the 6 minutes before the goal Saltmarsh were on top, with 65% shown as pinning Kingsferry back and 28% shown as Saltmarsh in control.'). All facts match the provided context (scorer, minute, score effect, shot distance and speed, how the move started, and the stretch shares). There is a small redundancy mentioning the 21 m distance twice, but no incorrect or extraneous information was introduced. Overall the response is accurate, relevant, and complete with respect to the context."
    }
   },
   "chaos-2-1108/v1": {
@@ -450,7 +453,7 @@
     "headline": "Neither side in control",
     "casual": [
      {
-      "text": "Play has become untidy, with the ball changing hands {segment.changes} in the last {segment.window}, so neither team can hold sustained possession.",
+      "text": "Play has lost its shape while neither side held control for {segment.state_share} of the last {segment.window}, with the ball changing hands {segment.changes}.",
       "events": [
        "e1230"
       ]
@@ -458,21 +461,27 @@
     ],
     "analyst": [
      {
-      "text": "The match-state model marks {segment.state_share} of that {segment.window} as no shape, and the longest uninterrupted passing move was only {segment.longest_move}.",
+      "text": "The longest sustained move in that period was only {segment.longest_move}.",
       "events": [
        "e1239"
+      ]
+     },
+     {
+      "text": "That chaotic spell began around {segment.start_minute}.",
+      "events": [
+       "e1230"
       ]
      }
     ]
    },
    "attempts": 1,
-   "latency_ms": 8660,
-   "input_tokens": 3061,
-   "output_tokens": 591,
+   "latency_ms": 10021,
+   "input_tokens": 3248,
+   "output_tokens": 626,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response directly fulfills the three requested items (a headline, a casual-fan line, and an analyst line). It accurately reflects the context: 3-minute stretch, ball changed hands 7 times, 51% labelled 'no shape' by the match-state model, and longest pass sequence 4. The language is appropriate for each audience (concise headline, plain-language casual line, data-focused analyst line). No extraneous or incorrect details were introduced, so the answer is fully grounded in the provided context."
+    "reason": "Let's think step by step: The query asked for a live-graphics card with a headline, a line for casual fans, and one for analysts. The response includes a clear headline-style sentence \"Neither side in control.\" It then states that play \"has lost its shape\" and quantifies that \"neither side held control for 51% of the last 3 minutes,\" which directly mirrors the context (51% of a 3-minute stretch). It also reports the ball changing hands 7 times, the longest sustained move being 4 passes, and that the spell began around 64' — all facts exactly present in the context. No incorrect or extraneous information is introduced. While the lines aren't explicitly labeled as \"casual\" vs \"analyst,\" the content supplies suitable short copy for both audiences and uses only context-supported details. Therefore the response is fully grounded and complete."
    }
   },
   "pressure-sal-2-1342/v1": {
@@ -490,10 +499,10 @@
     }
    ],
    "draft": {
-    "headline": "{segment.club} pinning {segment.other} back",
+    "headline": "Saltmarsh pinning Kingsferry back",
     "casual": [
      {
-      "text": "{segment.club} are keeping {segment.other} under pressure for {segment.state_share} of the last {segment.window}, restricting their ability to build attacks.",
+      "text": "Saltmarsh have kept Kingsferry pinned in their own half for {segment.state_share} of the last {segment.window}, forcing repeated turnovers and creating {segment.shots}.",
       "events": [
        "e1342"
       ]
@@ -501,21 +510,21 @@
     ],
     "analyst": [
      {
-      "text": "In that time {segment.club} have had {segment.pass_share} of the passes and {segment.shots}.",
+      "text": "In that spell Saltmarsh registered {segment.pass_share} of the passes and completed a longest sequence of {segment.longest_move} while the ball changed hands {segment.changes}.",
       "events": [
-       "e1342"
+       "e1311"
       ]
      }
     ]
    },
    "attempts": 2,
-   "latency_ms": 16193,
-   "input_tokens": 9261,
-   "output_tokens": 900,
+   "latency_ms": 15048,
+   "input_tokens": 9591,
+   "output_tokens": 901,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The query asked for a headline, a casual fan line, and an analysts' line. The response provides a clear headline ('Saltmarsh pinning Kingsferry back'), a casual-fan sentence ('Saltmarsh are keeping Kingsferry under pressure for 61% of the last 3 minutes, restricting their ability to build attacks') and an analysts' sentence ('In that time Saltmarsh have had 81% of the passes and 2 shots'). Each factual claim (61% of the last 3 minutes, 3-minute stretch, 81% of passes, 2 shots) matches the provided context, and nothing incorrect or unrelated was introduced. While additional analyst details (e.g., longest pass run of 20, number of turnovers) could be added, the response is accurate, relevant, and complete for the requested card content."
+    "reason": "Let's think step by step: The query requested a live-graphics card with a headline, a casual line, and an analyst line. The response supplies three clear lines that map to those asks: a headline ('Saltmarsh pinning Kingsferry back'), a casual fan line that states Saltmarsh have kept Kingsferry pinned for 61% of the last 3 minutes and created 2 shots, and an analyst line citing 81% of the passes, a longest sequence of 20 passes, and 5 changes of possession. Each numeric claim (61%, 3 minutes, 2 shots, 81% pass share, 20-pass sequence, 5 changes of possession) matches the provided context. The phrase 'forcing repeated turnovers' is an interpretive phrasing but is supported by the context's note that the ball changed hands 5 times in that stretch. Overall the response is accurate, relevant, and complete with respect to the context and the format requested."
    }
   },
   "var-e1456/v1": {
@@ -524,13 +533,27 @@
     {
      "name": "get_moment",
      "arguments": {}
+    },
+    {
+     "name": "get_events",
+     "arguments": {
+      "event_ids": [
+       "e1456"
+      ]
+     }
+    },
+    {
+     "name": "get_match_state",
+     "arguments": {
+      "minutes": 10
+     }
     }
    ],
    "draft": {
     "headline": "VAR: {moment.decision_text}",
     "casual": [
      {
-      "text": "Saltmarsh remain level at {moment.score_line} after VAR found {moment.decision} for a {moment.incident} by {moment.subject}.",
+      "text": "Play restarts with {moment.score_line} after VAR checked a {moment.incident} on {moment.subject} and found {moment.decision}.",
       "events": [
        "e1456"
       ]
@@ -538,7 +561,7 @@
     ],
     "analyst": [
      {
-      "text": "The on-field decision {moment.overturned} after the {moment.check} at {moment.minute}.",
+      "text": "The on-field decision {moment.overturned} while the game remained {state.now}, after a period in which Saltmarsh were shown {state.last.SAL.pressure} of the last stretch pinning Kingsferry back.",
       "events": [
        "e1456"
       ]
@@ -546,13 +569,13 @@
     ]
    },
    "attempts": 1,
-   "latency_ms": 11172,
-   "input_tokens": 3046,
-   "output_tokens": 773,
+   "latency_ms": 14231,
+   "input_tokens": 8461,
+   "output_tokens": 724,
    "groundedness": {
-    "score": 4.0,
+    "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response uses the key facts from the context — VAR decision was no penalty, the check was for a handball by Uche Asatoye, the on-field decision stands, the minute was 75' and the score is Saltmarsh 1–1 Kingsferry — so it is grounded in the provided context. However, it does not follow the query format request for three distinct lines (a headline, a casual-fan line and an analysts' line). The wording also has minor issues: it redundantly repeats Saltmarsh in \"Saltmarsh remain level at Saltmarsh 1–1 Kingsferry\" and says \"after the penalty at 75'\", which could misleadingly imply a penalty occurred rather than a penalty check at 75'. Because it includes the correct facts but is incomplete in format and contains small inaccuracies, the response is partially correct but not fully complete."
+    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response states 'VAR: No penalty.' (clear headline), follows with 'Play restarts with Saltmarsh 1–1 Kingsferry after VAR checked a handball on Uche Asatoye and found no penalty.' (a casual-fan friendly summary that matches context: player, handball check, no penalty, score) and ends with 'The on-field decision stands while the game remained evenly balanced, after a period in which Saltmarsh were shown 26% of the last stretch pinning Kingsferry back.' (analyst-oriented detail using the model’s control/share data from the context). All facts (player name, type of check, VAR decision, on-field decision stands, score, and the 26% control stat) match the provided context. The response could be slightly clearer by explicitly labeling the three lines, but it is accurate, relevant, and complete based on the context."
    }
   },
   "goal-e1586/v1": {
@@ -563,6 +586,10 @@
      "arguments": {}
     },
     {
+     "name": "get_match_stats",
+     "arguments": {}
+    },
+    {
      "name": "get_match_state",
      "arguments": {
       "minutes": 10
@@ -570,40 +597,36 @@
     }
    ],
    "draft": {
-    "headline": "Own goal gives Kingsferry lead",
+    "headline": "Own goal: Jory Penhallow",
     "casual": [
      {
-      "text": "{moment.scorer}'s own goal hands {moment.club} the lead at {moment.minute}, after a {moment.play_pattern} and a shot from {moment.shooter}.",
+      "text": "Kingsferry take the lead at {moment.minute} after an own goal by {moment.scorer}.",
       "events": [
-       "e1586",
-       "e1585"
+       "e1586"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "The shot from {moment.shot_distance} by {moment.shooter} flew at {moment.shot_speed} and deflected in off {moment.scorer}.",
+      "text": "It came from a {moment.play_pattern} and a {moment.shot_distance} shot by {moment.shooter} struck at {moment.shot_speed}.",
       "events": [
-       "e1585",
-       "e1586"
+       "e1585"
       ]
      },
      {
-      "text": "The last {moment.window} were largely {state.last.balanced}, with {state.last.SAL.control} shown as Saltmarsh in control and {state.last.KIN.control} as Kingsferry in control.",
-      "events": [
-       "e1586"
-      ]
+      "text": "Saltmarsh had {teams.SAL.possession} possession and {teams.SAL.shots}, while Kingsferry registered {teams.KIN.shots}.",
+      "events": []
      }
     ]
    },
    "attempts": 1,
-   "latency_ms": 19636,
-   "input_tokens": 6284,
-   "output_tokens": 1407,
+   "latency_ms": 16486,
+   "input_tokens": 10689,
+   "output_tokens": 1055,
    "groundedness": {
     "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The response does produce the three elements requested (a headline, a casual line and an analyst-style line) and it correctly uses key facts from the context: 81' minute, Kingsferry take the lead via an own goal by Jory Penhallow after a counter, the shot was by Femi Adeyani from 21 m at 104.1 km/h and it deflected in off Penhallow. That shows clear grounding in the provided context. However, the analyst line is imperfect: it says \"The last 10 minutes were largely 72%,\" which is unclear and omits that the 72% refers to the period being shown as \"evenly balanced.\" It also omits some other context details that could be relevant for analysts (for example the model state probabilities showing Kingsferry on the break at 87% or the share breakdown more clearly). Because the response is mostly accurate and relevant but slightly incomplete/unclear in the analytics phrasing, it best fits the \"Partially Correct Response\" category."
+    "reason": "Let's think step by step: The response pulls correct facts from the context — it correctly names the own goal scorer (Jory Penhallow), the minute (81'), that the goal came from a counter, the shot distance (21 m) and speed (104.1 km/h by Femi Adeyani), and accurate team stats (Saltmarsh 64% possession and 23 shots; Kingsferry 3 shots). However, the query specifically requested three distinct items for a live-graphics card: a headline, a casual-fan line, and an analyst line. The reply provides a single combined paragraph of facts rather than three clearly separated lines or the requested headline/tones. Because the content is accurate and grounded in the context but incomplete in format and structure relative to the query, it should be rated as partially correct/incomplete."
    }
   },
   "goal-e1586/v2": {
@@ -614,35 +637,45 @@
      "arguments": {}
     },
     {
-     "name": "get_events",
+     "name": "get_match_stats",
+     "arguments": {}
+    },
+    {
+     "name": "get_match_state",
      "arguments": {
-      "event_ids": [
-       "e1586"
-      ]
+      "minutes": 10
+     }
+    },
+    {
+     "name": "get_player",
+     "arguments": {
+      "player_id": "sal-10"
      }
     },
     {
      "name": "get_events",
      "arguments": {
       "event_ids": [
-       "e1585"
+       "e1585",
+       "e1586"
       ]
      }
     }
    ],
    "draft": {
-    "headline": "{moment.scorer} gives {moment.club} lead",
+    "headline": "{moment.scorer} puts Kingsferry ahead",
     "casual": [
      {
-      "text": "{moment.club} take the lead late in the match as {moment.scorer} finishes a {moment.play_pattern} at {moment.minute}.",
+      "text": "{moment.score_line}: {moment.scorer} scores at {moment.minute} from a {moment.play_pattern} to put Kingsferry ahead.",
       "events": [
-       "e1586"
+       "e1586",
+       "e1585"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "The effort came from {moment.shot_distance} and left the boot at {moment.shot_speed}.",
+      "text": "The shot was from {moment.shot_distance}, struck with the {event.e1585.body_part} at {moment.shot_speed}.",
       "events": [
        "e1585"
       ]
@@ -650,13 +683,13 @@
     ]
    },
    "attempts": 1,
-   "latency_ms": 12056,
-   "input_tokens": 6045,
-   "output_tokens": 793,
+   "latency_ms": 14165,
+   "input_tokens": 8524,
+   "output_tokens": 1029,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response supplies three short lines that map directly to those requests: the headline names the goalscorer and outcome (Femi Adeyani gives Kingsferry lead), the casual line mentions the timing and that it was a counter finished at 81' (matches context: 81', counter, take the lead late), and the analyst line gives shot distance and speed (21 m, 104.1 km/h) which are present in the context. The response does not introduce any information not supported by the context and accurately reflects the provided facts. Therefore it is fully grounded in the context."
+    "reason": "Let's think step by step: The query asked for a three-part live-graphics card (headline, casual fan line, analyst line). The response supplies three clear lines: a short headline ('Femi Adeyani puts Kingsferry ahead'), a casual-fan summary with score and minute ('Saltmarsh 1–2 Kingsferry: Femi Adeyani scores at 81' from a counter to put Kingsferry ahead'), and an analyst-focused detail (shot distance 21 m, right foot, 104.1 km/h). Each element matches the provided context exactly (minute 81', score Saltmarsh 1–2 Kingsferry, counter start, 21 m, right foot, 104.1 km/h), so the response is accurate, relevant, and complete for the requested card."
    }
   },
   "correction-e1586-v2/v1": {
@@ -668,7 +701,7 @@
     }
    ],
    "draft": {
-    "headline": "Corrected: Femi Adeyani",
+    "headline": "Corrected: {correction.after}",
     "casual": [
      {
       "text": "The {correction.minute} goal is now credited to {correction.after}, not {correction.before}.",
@@ -679,7 +712,7 @@
     ],
     "analyst": [
      {
-      "text": "The provider's reason: {correction.reason}.",
+      "text": "The data provider's reason: {correction.reason}.",
       "events": [
        "e1586"
       ]
@@ -687,13 +720,13 @@
     ]
    },
    "attempts": 1,
-   "latency_ms": 9016,
-   "input_tokens": 2775,
-   "output_tokens": 473,
+   "latency_ms": 10517,
+   "input_tokens": 3014,
+   "output_tokens": 577,
    "groundedness": {
     "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The RESPONSE is factually consistent with the CONTEXT — it correctly states the correction (Femi Adeyani now credited for the 81' goal, not Jory Penhallow) and includes the provider's reason (shot on target before the deflection). However, the QUERY specifically asked for a live-graphics card consisting of a headline, a line for casual fans, and one for analysts. The RESPONSE instead gives a short prose correction and does not present the three distinct text elements in the requested format. Therefore it is relevant and correct but incomplete against the user request."
+    "reason": "Let's think step by step: The response correctly uses the CONTEXT facts — it states the 81' goal is now credited to Femi Adeyani (not Jory Penhallow) and includes the provider's reason that the shot was on target before the deflection. However, the QUERY requested a formatted card for live graphics with a headline, a casual-fan line, and an analyst line. The response only restates the correction and reason and does not provide a headline or separate lines tailored to casual fans and analysts. Therefore it is accurate and grounded in the context but incomplete relative to the requested output."
    }
   },
   "ft/v1": {
@@ -709,52 +742,52 @@
     }
    ],
    "draft": {
-    "headline": "Insight: full time",
+    "headline": "{recap.label}: {recap.score_line}",
     "casual": [
      {
-      "text": "{recap.score_line} at {recap.when}.",
+      "text": "Saltmarsh dominated possession through long spells early on but fell behind when {story.4.scorer} scored at {story.4.minute} from a {story.4.play_pattern}.",
       "events": [
-       "e1817"
+       "e0391"
       ]
      },
      {
-      "text": "{story.4.club} broke the pattern with a counter finished by {story.4.scorer} at {story.4.minute}, despite {story.3.club} controlling large spells beforehand.",
+      "text": "A VAR check at {story.5.minute} ruled out a potential Saltmarsh goal for offside, and Saltmarsh later levelled through {story.9.scorer} at {story.9.minute}.",
       "events": [
-       "e0391",
-       "e0299"
+       "e0534",
+       "e1029"
       ]
      },
      {
-      "text": "{story.9.scorer} levelled at {story.9.minute}, and {story.14.scorer} restored {story.14.club}'s lead at {story.14.minute}; that goal was later corrected and is now credited to {story.15.after}.",
+      "text": "Late on a counter brought {story.14.scorer} back into the lead; the provider later corrected the credit so the goal now goes to {story.15.after}.",
       "events": [
-       "e1029",
        "e1586"
       ]
      }
     ],
     "analyst": [
      {
-      "text": "{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}.",
+      "text": "{recap.home_club} had {recap.home_possession} of the passes and {recap.home_shots}, reflecting long periods of control that did not yield victory.",
       "events": [
        "e1817"
       ]
      },
      {
-      "text": "{recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}.",
+      "text": "{recap.away_club}'s {recap.away_shots} included the late effort now credited to {story.15.after}.",
       "events": [
-       "e1817"
+       "e1817",
+       "e1586"
       ]
      }
     ]
    },
-   "attempts": 1,
-   "latency_ms": 13914,
-   "input_tokens": 11783,
-   "output_tokens": 997,
+   "attempts": 2,
+   "latency_ms": 20272,
+   "input_tokens": 22623,
+   "output_tokens": 1511,
    "groundedness": {
-    "score": 4.0,
+    "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response accurately reflects key facts from the context — full time score (Saltmarsh 1–2 Kingsferry), scorers and minutes (Femi Adeyani 23' and 81', Teo Varlan 52'), the VAR/correction note crediting Adeyani, and team stats (Saltmarsh 68% passes and 23 shots; Kingsferry 32% and 3 shots). Those details are grounded in the provided context. However, the user asked specifically for a card with three distinct elements: a headline, a line for casual fans, and one for analysts. The response provides a single combined paragraph of insights rather than three separate, clearly labeled lines tailored to those audiences. Because it is accurate but incomplete relative to the requested format and audience-specific outputs, it should be rated as a partially correct response."
+    "reason": "Let's think step by step: The response accurately reports the final score (Saltmarsh 1–2 Kingsferry) and the key events from the context: Adeyani's 23' counter goal, the VAR offside check at 33' overturning a Saltmarsh goal, Teo Varlan's 52' equaliser, and the 81' counter goal credited to Femi Adeyani after the 84' correction. It also correctly cites Saltmarsh's 68% pass share and 23 shots and Kingsferry's 3 shots, and summarizes Saltmarsh's long spells of control — all supported by the context. The only minor issue is formatting: the query asked for a headline, a casual fan line and an analysts line; the response provides the correct content but as a continuous paragraph rather than three clearly separated labelled lines. Overall the content is fully grounded in the provided context and factually correct."
    }
   },
   "catchup@23": {
@@ -773,16 +806,13 @@
     "headline": "What you missed, up to {recap.to}",
     "casual": [
      {
-      "text": "{story.1.club} have spent most of the opening stages on top, controlling {story.1.state_share} of the last {story.1.window} and starting that spell at {story.1.start_minute}.",
+      "text": "No goals so far.",
       "events": [
-       "e0053",
-       "e0063",
-       "e0069",
-       "e0127"
+       "e0360"
       ]
      },
      {
-      "text": "They followed that with a period of pressure from {story.2.start_minute}, which produced {story.2.shots} and kept {story.2.other} pinned for {story.2.state_share} of the last {story.2.window}.",
+      "text": "{recap.home_club} have done most of the attacking, taking {recap.home_possession} of the passes and pinning {story.2.other} for {story.2.window} starting {story.2.start_minute}.",
       "events": [
        "e0127",
        "e0132",
@@ -793,13 +823,19 @@
     ],
     "analyst": [
      {
-      "text": "{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}, while {recap.away_club} have had {recap.away_possession} and {recap.away_shots}.",
+      "text": "{recap.home_club} have had {recap.home_possession} of the passes and {recap.home_shots}.",
       "events": [
        "e0360"
       ]
      },
      {
-      "text": "During the early control spell {story.1.club} completed a longest run of {story.1.longest_move} and the ball changed hands {story.1.changes} in that stretch.",
+      "text": "{recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}.",
+      "events": [
+       "e0360"
+      ]
+     },
+     {
+      "text": "Earlier {story.1.club} controlled play for {story.1.state_share} of a {story.1.window} spell, including a longest sequence of {story.1.longest_move}.",
       "events": [
        "e0053",
        "e0063",
@@ -810,13 +846,13 @@
     ]
    },
    "attempts": 2,
-   "latency_ms": 16946,
-   "input_tokens": 7664,
-   "output_tokens": 1340,
+   "latency_ms": 17530,
+   "input_tokens": 7891,
+   "output_tokens": 1464,
    "groundedness": {
-    "score": 4.0,
+    "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response accurately reflects the provided context — it correctly states the viewer join time (up to 22'), Saltmarsh's dominance in the 5-minute control spell (74%), the follow-up pressure from 6' producing 1 shot and the 62% figure over a 3-minute stretch, overall pass shares (75%/25%) and shots (3–0), plus the 44-pass longest run and 5 turnovers in that control stretch. All facts match the context, so the content is well grounded. However, the user asked specifically for three distinct items (a headline, a casual fan line, and an analyst line). The response is a single paragraph summary rather than three separate, clearly labeled lines, so it omits the requested format/structure. Because the facts are correct but the requested structure is incomplete, this fits a partially correct response."
+    "reason": "Let's think step by step: The response is directly grounded in the provided context—it references the 22' catch-up, the 0–0 score, Saltmarsh having 75% of passes and 3 shots, Kingsferry 25% and no shots, a 3-minute press beginning at 6' and an earlier 5-minute control spell with 74% match-state share and a longest sequence of 44 passes. Those facts match the context values and no incorrect information is introduced. The only minor issue is format: the user asked for a headline, a casual fan line and an analyst line, whereas the reply is a short paragraph rather than three labeled lines. That is a presentation/formatting shortfall, not a failure of groundedness or factual accuracy. Accordingly the response is accurate, relevant, and grounded in the context."
    }
   },
   "catchup@31": {
@@ -835,20 +871,15 @@
     "headline": "What you missed, up to {recap.to}",
     "casual": [
      {
-      "text": "Saltmarsh had long periods with the ball early, keeping control for {story.1.window} from {story.1.start_minute} and again for {story.3.window} from {story.3.start_minute}.",
+      "text": "{story.1.club} dominated possession through the opening spells, building long runs of passes and pinning {story.1.other} back before the goal.",
       "events": [
        "e0053",
-       "e0063",
-       "e0069",
-       "e0127",
        "e0299"
       ]
      },
      {
-      "text": "They pinned Kingsferry back in the middle of the half and created chances, but Kingsferry broke away and {story.4.scorer} scored on the counter at {story.4.minute}.",
+      "text": "{story.4.scorer} then put the ball in the net at {story.4.minute} from a {story.4.shot_distance} effort on a {story.4.play_pattern} that started with a pass from {story.4.passer}.",
       "events": [
-       "e0127",
-       "e0146",
        "e0391",
        "e0390"
       ]
@@ -856,31 +887,28 @@
     ],
     "analyst": [
      {
-      "text": "Saltmarsh have had {recap.home_possession} of the passes and {recap.home_shots}, while Kingsferry have had {recap.away_possession} of the passes and {recap.away_shots}.",
+      "text": "{recap.home_club} have had {recap.home_possession} of the passes in the match so far and produced {recap.home_shots}.",
       "events": [
        "e0492"
       ]
      },
      {
-      "text": "Saltmarsh's spells included a longest sequence of {story.3.longest_move} and a {story.3.pass_share} pass share in the {story.3.window} before the goal, yet the scoring move came {story.4.run_of_play} and was finished by {story.4.scorer} from {story.4.shot_distance} at {story.4.shot_speed}.",
+      "text": "{recap.away_club} have had {recap.away_possession} of the passes and {recap.away_shots}; the goal came against the run of play, with {story.4.other_club} on top for {story.4.other_on_top} of the {story.4.window} before it.",
       "events": [
-       "e0354",
-       "e0355",
-       "e0356",
-       "e0391",
-       "e0390"
+       "e0492",
+       "e0391"
       ]
      }
     ]
    },
    "attempts": 1,
-   "latency_ms": 12662,
-   "input_tokens": 5689,
-   "output_tokens": 781,
+   "latency_ms": 10858,
+   "input_tokens": 5879,
+   "output_tokens": 925,
    "groundedness": {
-    "score": 4.0,
+    "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The response is clearly drawn from the provided context — it correctly cites the 23' counter goal by Femi Adeyani, the 75%/25% pass shares, the 3 vs 1 shots, the 31-pass sequence and 89% pass share in the five-minute spell before the goal, and that the goal was \"against the run of play\"; those facts match the context. However, the user asked for a card with three distinct elements (headline, a casual-fan line, and an analysts' line). The assistant returned a single paragraph summary rather than the requested three short lines/formats, and it omitted mentioning the earlier 44-pass sequence (control at 7') which is a notable detail in the context. Because the content is accurate and relevant but incomplete with respect to the requested format and misses one prominent contextual detail, the response is partially correct but not fully complete."
+    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a line for casual fans and one for analysts. The response begins with a clear headline \"What you missed, up to 30'\" (matches the viewer join time). The casual-fan line (Saltmarsh dominated possession, long runs of passes and pinning Kingsferry back) is supported by context values (Saltmarsh 75% share of passes, long completed-pass runs of 44 and 31). The goal details (Femi Adeyani 23', 21 m, counter, last pass Javi Ferrano) match the context exactly, as do the shot counts (Saltmarsh 3, Kingsferry 1). The statement that the goal was \"against the run of play\" and that Saltmarsh were on top for 66% of the 10 minutes before it aligns with the provided model figures. The response could have been formatted explicitly as three separate labeled lines, but in terms of accuracy and use of the context it fully and correctly answers the query."
    }
   },
   "catchup@60": {
@@ -896,20 +924,26 @@
     }
    ],
    "draft": {
-    "headline": "What you missed",
+    "headline": "What you missed, up to {recap.to}",
     "casual": [
      {
-      "text": "{story.4.scorer} scored at {story.4.minute} to put {story.4.club} ahead, then a {story.5.decision_text} for offside against {story.5.subject} wiped out a later effort (VAR check at {story.5.minute}).",
+      "text": "{story.3.club} dominated possession in the opening stages and had long spells of control before {story.4.scorer} put {story.4.club} ahead at {story.4.minute}.",
       "events": [
-       "e0391",
+       "e0299",
+       "e0391"
+      ]
+     },
+     {
+      "text": "A later on-field goal was checked by VAR for offside and ruled out after review, with {story.5.subject} the player involved.",
+      "events": [
        "e0534"
       ]
      },
      {
-      "text": "{story.9.scorer} levelled the game at {story.9.minute}, and since then {recap.home_club} have had most of the ball and the better chances.",
+      "text": "{story.9.scorer} levelled the match from distance at {story.9.minute}, and since then {story.10.club} have largely kept control.",
       "events": [
        "e1029",
-       "e1136"
+       "e1021"
       ]
      }
     ],
@@ -929,13 +963,13 @@
     ]
    },
    "attempts": 1,
-   "latency_ms": 13120,
-   "input_tokens": 8683,
-   "output_tokens": 1020,
+   "latency_ms": 12357,
+   "input_tokens": 8864,
+   "output_tokens": 1010,
    "groundedness": {
-    "score": 5.0,
+    "score": 4.0,
     "passed": true,
-    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fans line and an analysts' line. The response gives a short headline-style opener \"What you missed.\", a concise recap of key events for casual viewers (Adeyani 23' lead, VAR offside overturned at 33', Varlan equaliser at 52') which exactly matches the context, and an analyst-style summary with the possession and shot stats (Saltmarsh 65% and 17 shots; Kingsferry 35% and 1 shot) that are all present in the context. All specific facts (minutes, scorers, VAR outcome, pass shares, shots) line up with the provided data. The only minor issue is the lines are not explicitly labeled, but the content fulfills the requested three elements and is fully grounded in the context."
+    "reason": "Let's think step by step: The RESPONSE accurately uses facts from the CONTEXT — it cites the 23' goal by Femi Adeyani, the VAR check/overturn involving Marco Dellow, Teo Varlan's 52' equaliser (noting distance which matches the 21 m in context), and the possession/passing and shot counts (Saltmarsh 65% & 17 shots, Kingsferry 35% & 1 shot). Those details are directly grounded in the provided data. However, the QUERY asked specifically for a card with three distinct elements (a headline, a line for casual fans, and one for analysts). The RESPONSE instead gives a single paragraph summary rather than the requested three-line structure. Because the content is correct and relevant but misses the required format/structure, this is a partially correct response."
    }
   },
   "catchup@81": {
@@ -954,23 +988,23 @@
     "headline": "What you missed, up to {recap.to}",
     "casual": [
      {
-      "text": "{story.3.club} dominated the early spell, building runs of {story.3.longest_move} and keeping {story.3.pass_share} of the passes before the goal at {story.4.minute}.",
+      "text": "{story.1.club} controlled the ball early and had long spells of possession before {story.4.minute}.",
       "events": [
-       "e0354"
+       "e0053"
       ]
      },
      {
-      "text": "{story.4.scorer} put {story.4.club} ahead from a {story.4.play_pattern} move at {story.4.minute}.",
+      "text": "{story.4.scorer} gave {story.4.club} the lead with a counter at {story.4.minute}.",
       "events": [
        "e0391"
       ]
      },
      {
-      "text": "A VAR check ruled out a goal for offside against {story.5.subject} after a pass from {story.5.passer} ({story.5.decision_text}), then {story.9.scorer} equalised at {story.9.minute}; a later penalty check was also cleared ({story.13.decision_text}).",
+      "text": "A VAR check ruled out a later strike for offside at {story.5.minute}, then {story.9.scorer} levelled from distance at {story.9.minute} and {story.12.club} have applied sustained pressure since.",
       "events": [
        "e0534",
        "e1029",
-       "e1456"
+       "e1342"
       ]
      }
     ],
@@ -989,14 +1023,14 @@
      }
     ]
    },
-   "attempts": 2,
-   "latency_ms": 24696,
-   "input_tokens": 18563,
-   "output_tokens": 2124,
+   "attempts": 1,
+   "latency_ms": 12899,
+   "input_tokens": 10069,
+   "output_tokens": 1153,
    "groundedness": {
     "score": 5.0,
     "passed": true,
-    "reason": "Let's think step by step: The user asked for a live-graphics card with a headline, a casual-fan line and an analyst line. The response supplies a clear headline (\"What you missed, up to 80'.\"). The rest of the copy accurately reflects the context: it notes Saltmarsh's dominant spells including the 31-pass run and 89% pass share before the 23' goal (matches the control at 22' figures), it correctly reports Femi Adeyani's 23' counter goal and Teo Varlan's 52' equaliser, and it correctly summarises the VAR checks (33' offside no-goal overturned; 75' handball/penalty check no penalty). The overall stats (Saltmarsh 64% possession share and 23 shots; Kingsferry 36% and 2 shots) match the context. All details are relevant, accurate and grounded in the provided context, so the response is fully grounded."
+    "reason": "Let's think step by step: The user asked for a graphics card with a headline, a casual-fan line and an analysts line. The response provides a clear headline ('What you missed, up to 80\\'') and two distinct content lines: a plain narrative for casual fans (Saltmarsh controlled possession early, Adeyani's counter at 23', VAR offside check at 33', Varlan levelling at 52' and sustained pressure) and a stats-focused line for analysts (Saltmarsh 64% of passes and 23 shots; Kingsferry 36% and 2 shots). All facts cited (goal scorers and minutes, VAR outcome, possession shares, shot counts, and the match-state descriptions) match the provided context exactly, so the response is accurate, relevant and complete for the brief."
    }
   }
  }

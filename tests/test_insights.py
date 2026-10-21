@@ -343,20 +343,33 @@ def test_every_sentence_must_rest_on_an_event_or_a_fact_and_cite_only_what_it_wa
     assert any("e9999" in p and "no tool returned" in p for p in unseen)
 
 
+def test_a_sentence_starts_with_a_capital_once_filled_in() -> None:
+    facts = {**FACTS, "moment.overturned": Fact("stands", "stands", "what became of the on-field decision")}
+    problems = check(_draft("{moment.overturned} on-field decision, with no penalty."), facts, EVENTS)
+    assert problems == [
+        "casual sentence 1: starts in lower case once filled in ('stands on-field decision, with'); start with a capital"
+    ]
+    assert check(_draft("The on-field decision {moment.overturned}."), facts, EVENTS) == []
+
+
 def test_a_count_shows_its_noun_once() -> None:
     facts = {
         **FACTS,
         "teams.SAL.shots": Fact(3, "3 shots", "shots by Saltmarsh"),
+        "teams.SAL.on_target": Fact(2, "2 shots on target", "Saltmarsh's shots on target"),
         "segment.changes": Fact(5, "5 times", "x"),
     }
-    for casual, word in (
+    for casual, words in (
         ("{teams.SAL.name} have had {teams.SAL.shots} shots.", "shots"),
         ("The ball changed hands {segment.changes} times.", "times"),
         ("{teams.SAL.name} managed {teams.SAL.shots} shot.", "shot"),
+        ("{teams.SAL.name} have had {teams.SAL.on_target} on target.", "on target"),
+        ("{teams.SAL.name} have had {teams.SAL.on_target} shots on target.", "shots on target"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
-        assert any(f"leave out '{word}'" in p for p in problems), problems
+        assert any(f"leave out '{words}'" in p for p in problems), problems
     assert check(_draft("{teams.SAL.name} have had {teams.SAL.shots} on goal."), facts, EVENTS) == []
+    assert check(_draft("{teams.SAL.name} have had {teams.SAL.on_target} in the second half."), facts, EVENTS) == []
 
 
 def test_length_limits_apply_to_the_filled_in_text() -> None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from footnote.insights.draft import RECAP
 
-PROMPT_VERSION = "2026-10-21.1"
+PROMPT_VERSION = "2026-10-21.2"
 
 
 def _rules(lengths: str) -> str:
@@ -21,7 +21,11 @@ Rules, which code checks before anyone sees your card:
   no "one", "nil", "two" or "seventy per cent", no ordinals such as "first goal" or "twentieth
   minute", no "half the ball", "brace" or "hat-trick". Phrases such as "first half", "second
   half", "one of", "no one" and "final third" are fine. A fact's display already includes its unit
-  or noun, so write "{{teams.SAL.shots}}", which shows as "13 shots", not "{{teams.SAL.shots}} shots".
+  or noun, so write "{{teams.SAL.shots}}", which shows as "13 shots", not "{{teams.SAL.shots}} shots",
+  and "{{teams.SAL.on_target}}", which shows as "5 shots on target", with nothing after it.
+- A fact's description tells you what the fact is; don't copy it into the card. The match state's
+  facts name a state of play, such as "Saltmarsh in control", which isn't a thing a sentence can act
+  on: write "while Saltmarsh were in control", not "ending Saltmarsh in control".
 - Use only the facts and names the tools returned. Write a name as one fact shows it, in full or
   in part ("Femi Adeyani" or "Adeyani"), or use the fact's placeholder. Capitals are for names and
   the first word of a sentence: write the headline in sentence case, and after a colon carry on in
@@ -80,10 +84,11 @@ that earlier cards cited, and viewers need to know what changed. Each job is one
 
 How to work:
 1. Call get_moment first. It gives the correction's facts: what the event was credited to before,
-   what it is credited to now, and the provider's reason.
+   what it is credited to now, and the data provider's reason.
 2. If it helps, get_events gives the corrected event as it now stands.
-3. Write the notice in your own words, not the template's: lead with what is true now, say what it
-   replaces, and put the provider's reason plainly. Don't speculate about why beyond that reason.
+3. Write the notice in your own words, not the template's: lead with what is true now, then what it
+   was credited to before, with "not" or "instead of" ("replacing" reads as a substitution), and
+   give the data provider's reason plainly. Don't speculate about why beyond that reason.
 
 {_RULES}"""
 
@@ -103,8 +108,8 @@ How to work:
    tells the story: who was on top and when, how each goal came about, and what VAR or a correction
    changed. Don't repeat the template's sentences, and leave out what didn't matter. recap.goals is
    the template's list; in a sentence, use each goal's own facts from get_story instead
-   (story.<n>.scorer, story.<n>.minute). For a goal the provider corrected, say who it was first
-   credited to and who it is credited to now.
+   (story.<n>.scorer, story.<n>.minute). For a goal the data provider corrected, say who it was
+   first credited to and who it is credited to now.
 3. A spell's figures cover that spell alone: its shots are the shots in those minutes, not the
    match's. Don't write "only", "every" or "never" unless a fact shows it.
 

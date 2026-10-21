@@ -13,11 +13,14 @@ and so do the agents.
   ("half the ball", "per cent"), and no "brace" or "hat-trick". Phrases that use those words without
   stating a figure, such as "first half", "one of" and "final third", are allowed;
 - each sentence is its own entry;
+- a fact's display carries its noun ("13 shots", "2 shots on target"), so the words after its
+  placeholder don't say the noun again;
 - capitals are for names: every capitalised word except a sentence's first is a name from the facts,
   and names written next to each other must be one name as a fact gives it ("Femi Adeyani", or
   "Adeyani" alone), so words from two names can't be joined into a third. A sentence's first word
   is held to this only when it is part of a name: an ordinary word in capitals can't be told from
-  an unknown name without a dictionary;
+  an unknown name without a dictionary. Filled in, the headline and every sentence start with a
+  capital or a figure;
 - every sentence rests on something: an event it cites, or a fact it uses; every event it cites is
   one the writer was shown; and when the facts rest on events, the card links to at least one;
 - headline and lines fit their space, with no betting language, exclamations, links or emoji;
@@ -283,7 +286,8 @@ def _figure_problems(where: str, own: str) -> list[str]:
     return problems
 
 
-_NEXT_WORD = re.compile(r"\s+([^\W\d_]+)")
+# The words straight after a placeholder, as many as a fact's noun can have.
+_NEXT_WORDS = re.compile(r"(?:\s+[^\W\d_]+){1,4}")
 
 
 def _singular(word: str) -> str:
@@ -292,19 +296,27 @@ def _singular(word: str) -> str:
 
 
 def _doubled_nouns(where: str, text: str, facts: Facts) -> list[str]:
-    """A count's display carries its noun ("44 passes"), so "{key} passes" would show it twice."""
+    """A count's display carries its noun ("44 passes", "2 shots on target"), so "{key} passes" or
+    "{key} on target" would show it twice."""
     problems = []
     for m in PLACEHOLDER.finditer(text):
         fact = facts.get(m.group(1))
-        after = _NEXT_WORD.match(text, m.end())
-        if fact is None or after is None:
+        following = _NEXT_WORDS.match(text, m.end())
+        if fact is None or following is None:
             continue
         shown = fact.display.split()
-        if len(shown) > 1 and shown[-1].isalpha() and _singular(shown[-1]) == _singular(after.group(1)):
-            problems.append(
-                f"{where}: '{{{m.group(1)}}} {after.group(1)}' shows as '{fact.display} {after.group(1)}': the"
-                f" fact already shows its noun, so leave out '{after.group(1)}'"
-            )
+        noun: list[str] = []  # the words that end the display, after its figure
+        while len(shown) > 1 and len(noun) < len(shown) and shown[-1 - len(noun)].isalpha():
+            noun.insert(0, shown[-1 - len(noun)])
+        after = following.group(0).split()
+        for n in range(min(len(noun), len(after)), 0, -1):
+            if [_singular(w) for w in after[:n]] == [_singular(w) for w in noun[-n:]]:
+                doubled = " ".join(after[:n])
+                problems.append(
+                    f"{where}: '{{{m.group(1)}}} {doubled}' shows as '{fact.display} {doubled}': the fact"
+                    f" already shows its noun, so leave out '{doubled}'"
+                )
+                break
     return problems
 
 
@@ -402,6 +414,16 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
                 problems.append(f"{where}: rests on nothing; cite the events behind it or use a fact")
     if problems:
         return problems
+    # A placeholder can open a sentence with its fact's display, which may start in lower case.
+    for where, text in [("headline", draft.headline)] + [
+        (f"{part} sentence {i}", sentence.text)
+        for part, sentences in (("casual", draft.casual), ("analyst", draft.analyst))
+        for i, sentence in enumerate(sentences, start=1)
+    ]:
+        filled = fill(text, facts).strip()
+        lead = _LEAD.match(filled)
+        if filled[lead.end() if lead else 0 :][:1].islower():
+            problems.append(f"{where}: starts in lower case once filled in ('{filled[:30]}'); start with a capital")
     card = render(draft, facts)
     for part, value, limit in (
         ("headline", card.headline, HEADLINE_CHARS),
