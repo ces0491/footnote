@@ -10,6 +10,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { MatchMeta } from "@/lib/live/contract";
+import { type Detail, DETAILS, type Pace, PACES } from "@/lib/live/described";
+import { type Language, LANGUAGES } from "@/lib/live/language";
 import { DELAYS } from "@/lib/live/playback";
 import { METRICS, type Metric, type Mode, PROFILES, type Profile, type Settings } from "@/lib/live/profiles";
 
@@ -102,6 +104,23 @@ export function SettingsDialog({
               ))}
             </NativeSelect>
           </Row>
+          <Row id="set-language" label="Cards in">
+            <NativeSelect
+              id="set-language"
+              value={settings.language}
+              onChange={(e) => set("language", e.target.value as Language)}
+              aria-describedby="set-language-note"
+            >
+              {Object.entries(LANGUAGES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </NativeSelect>
+          </Row>
+          <p id="set-language-note" className="-mt-2 pl-39 text-xs text-muted-foreground">
+            Translated by Azure AI Translator; code checks every figure and name came through.
+          </p>
           <Row id="set-metric" label="Pinned metric">
             <NativeSelect id="set-metric" value={settings.metric} onChange={(e) => set("metric", e.target.value as Metric)}>
               {Object.entries(METRICS).map(([value, label]) => (
@@ -145,6 +164,34 @@ export function SettingsDialog({
           <Row id="set-graphics" label="Graphics on the pitch">
             <Switch id="set-graphics" checked={settings.graphics} onCheckedChange={(v) => set("graphics", v)} />
           </Row>
+          <Row id="set-described" label="Described feed">
+            <div className="flex items-center gap-2">
+              <Switch id="set-described" checked={settings.described} onCheckedChange={(v) => set("described", v)} />
+              <span className="text-xs text-muted-foreground">The match in words, for a screen reader</span>
+            </div>
+          </Row>
+          {settings.described && (
+            <>
+              <Row id="set-detail" label="Feed detail">
+                <NativeSelect id="set-detail" value={settings.detail} onChange={(e) => set("detail", e.target.value as Detail)}>
+                  {Object.entries(DETAILS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Row>
+              <Row id="set-pace" label="Feed pace">
+                <NativeSelect id="set-pace" value={settings.pace} onChange={(e) => set("pace", e.target.value as Pace)}>
+                  {Object.entries(PACES).map(([value, p]) => (
+                    <option key={value} value={value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Row>
+            </>
+          )}
         </div>
         <div>
           <Button variant="ghost" size="sm" onClick={onReset}>

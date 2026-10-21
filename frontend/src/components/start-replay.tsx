@@ -55,7 +55,7 @@ export function StartReplay() {
     <div className="space-y-5">
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Watch as</legend>
-        <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Watch as">
+        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Watch as">
           {PROFILES.map((p) => (
             <button
               key={p.id}

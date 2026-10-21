@@ -14,9 +14,11 @@ import { type Connection, type Latency, useLiveRun } from "@/hooks/use-live-run"
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useNow } from "@/hooks/use-now";
 import { usePlaybackView } from "@/hooks/use-playback-view";
+import { catchUpOf, keyMoments } from "@/lib/live/catch-up";
 import type { Clock, DeskRefusal, InsightMessage, ProducerMode, RunEndReason, RunSnapshot, StateView } from "@/lib/live/contract";
 import { roster } from "@/lib/live/describe";
 import { forMode } from "@/lib/live/fan";
+import { localized } from "@/lib/live/language";
 import { airing, DELAYS, delayText, insightsAt, onScreenAt, playbackOf, reached } from "@/lib/live/playback";
 import {
   profile as profileOf,
@@ -33,6 +35,7 @@ import { clockLabel, moment } from "@/lib/live/timeline";
 import { viewerId } from "@/lib/live/viewer";
 import { cn } from "@/lib/utils";
 
+import { DescribedFeed } from "./described-feed";
 import { FanPanel } from "./fan-panel";
 import { MatchStatePanel } from "./match-state";
 import { ProducerConsole } from "./producer-console";
@@ -101,6 +104,9 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   // A mode the producer switched to, until the next snapshot reports the run's own.
   const [switched, setSwitched] = useState<{ mode: ProducerMode; snapshot: RunSnapshot | null } | null>(null);
   const [stopping, setStopping] = useState(false);
+  // A fan joining mid-match starts on the catch-up, with the score hidden until they ask for it.
+  const [catchUpOpen, setCatchUpOpen] = useState(true);
+  const [scoreShown, setScoreShown] = useState(false);
   const ended = live.ended !== null;
   const now = useNow(250, true);
   // The match stays the same object across refetches (useLiveRun keeps it), so the roster does too.
@@ -315,23 +321,56 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
     );
   }
 
-  const cards = forMode(airing(shown), settings.mode);
+  const cards = localized(forMode(airing(shown), settings.mode), settings.language);
   const graphics = settings.graphics ? onScreenAt(cards, pb.at, run.speed) : [];
   const focus = settings.player ? (r.player(settings.player) ?? null) : null;
   const analyst = settings.mode === "analyst";
   const clock = clockAt(atPlayback, run.timeline, pb.at, ended && caughtUp);
   const pitch = Boolean(tracking) && wide && settings.pitch;
   const behind = delayText(settings.delay, run.speed);
+  const catchUpCard = catchUpOf(cards);
+  // A listener to the described feed hears the score with every goal: hiding it on screen only
+  // contradicts the feed.
+  const scoreHidden = catchUpCard !== null && catchUpOpen && !scoreShown && !settings.described;
+  const score = atPlayback.score;
+  const catchUp = catchUpCard && {
+    insight: catchUpCard,
+    moments: keyMoments(shown),
+    open: catchUpOpen,
+    scoreShown: scoreShown || settings.described,
+    scoreLine: `${match.home.short_name} ${score.home}–${score.away} ${match.away.short_name}`,
+    onShowScore: () => setScoreShown(true),
+    onOpen: () => setCatchUpOpen(true),
+    onClose: () => {
+      setCatchUpOpen(false);
+      setScoreShown(true);
+    },
+  };
   return (
     <div className="space-y-4">
       {header}
       {notices}
-      <Scoreboard home={match.home} away={match.away} score={atPlayback.score} phase={atPlayback.phase} clock={clock} />
+      <Scoreboard home={match.home} away={match.away} score={score} phase={atPlayback.phase} clock={clock} hidden={scoreHidden} />
       <p className="text-sm text-muted-foreground">
         {pb.waiting > 0
           ? `Your stream is ${behind}: it reaches the replay's start in ${Math.ceil(pb.waiting / run.speed)} seconds.`
           : `Your stream: ${behind}. Nothing reaches this page before your stream shows it.`}
       </p>
+      {settings.described && base && (
+        <DescribedFeed
+          match={match}
+          roster={r}
+          base={base}
+          startReplay={run.start_replay}
+          events={events}
+          reached={count}
+          cards={cards}
+          detail={settings.detail}
+          pace={settings.pace}
+          onDetail={(detail) => change({ ...settings, detail })}
+          onPace={(pace) => change({ ...settings, pace })}
+        />
+      )}
       <div className={cn("grid gap-4", pitch && "lg:grid-cols-[minmax(0,1fr)_24rem]")}>
         {pitch && tracking && (
           <div>
@@ -356,6 +395,7 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
           layout={tracking}
           view={atPlayback}
           cards={cards}
+          catchUp={catchUp}
           settings={settings}
           roster={r}
           focus={focus}

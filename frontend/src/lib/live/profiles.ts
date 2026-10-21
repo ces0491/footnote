@@ -2,6 +2,8 @@
 // The ready-made profiles let a judge switch between them mid-match and see the same moment change.
 // Settings a viewer changes are kept in this browser; they start from the profile picked.
 
+import { DETAILS, type Detail, type Pace, PACES } from "./described";
+import { type Language, LANGUAGES } from "./language";
 import { DELAYS } from "./playback";
 
 export type Role = "producer" | "fan";
@@ -22,14 +24,18 @@ export interface Settings {
   club: string | null; // club ID: the fan's side
   player: string | null; // player ID: the player in focus, on top of the club
   metric: Metric;
+  language: Language; // the cards' language (lib/live/language.ts)
   delay: (typeof DELAYS)[number]; // seconds of match time the fan's stream runs behind live
   calm: boolean; // no motion, nothing flashing
   graphics: boolean; // graphics on the pitch view
   pitch: boolean; // the pitch view itself: moving content a viewer can hide (WCAG 2.2.2)
+  described: boolean; // the described feed, read out by the device's screen reader (lib/live/described.ts)
+  detail: Detail; // how much it describes
+  pace: Pace; // how often it speaks
 }
 
 export interface Profile {
-  id: "nadia" | "sam" | "priya";
+  id: "nadia" | "sam" | "priya" | "lucia" | "tom";
   name: string;
   role: Role;
   summary: string;
@@ -41,10 +47,14 @@ const BASE: Settings = {
   club: null,
   player: null,
   metric: "possession",
+  language: "en",
   delay: DELAYS[0],
   calm: false,
   graphics: true,
   pitch: true,
+  described: false,
+  detail: "standard",
+  pace: "normal",
 };
 
 // The showcase's clubs and cast (docs/experience.md): Saltmarsh are "sal", Teo Varlan "sal-10".
@@ -69,6 +79,20 @@ export const PROFILES: Profile[] = [
     role: "fan",
     summary: "Fantasy manager who owns Varlan. Analyst view, focused on him, pinned to pass difficulty.",
     settings: { ...BASE, mode: "analyst", club: "sal", player: "sal-10", metric: "pass_difficulty" },
+  },
+  {
+    id: "lucia",
+    name: "Lucía",
+    role: "fan",
+    summary: "In Madrid, joining after work: the cards in Spanish, starting with what she missed.",
+    settings: { ...BASE, language: "es", delay: 20 },
+  },
+  {
+    id: "tom",
+    name: "Tom",
+    role: "fan",
+    summary: "Blind fan following on a phone with a screen reader: the described feed at standard detail.",
+    settings: { ...BASE, described: true, calm: true, pitch: false, graphics: false },
   },
 ];
 
@@ -136,7 +160,13 @@ export function settingsFrom(text: string, p: Profile): Settings {
     saved = undefined;
   }
   const merged = { ...p.settings, ...saved };
-  return DELAYS.includes(merged.delay) && merged.metric in METRICS ? merged : p.settings;
+  const valid =
+    DELAYS.includes(merged.delay) &&
+    merged.metric in METRICS &&
+    merged.language in LANGUAGES &&
+    merged.detail in DETAILS &&
+    merged.pace in PACES;
+  return valid ? merged : p.settings;
 }
 
 export function saveSettings(p: Profile, settings: Settings): void {

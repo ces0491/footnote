@@ -46,6 +46,12 @@ export function provenanceLabel(insight: Insight): string {
   return "Template";
 }
 
+/** The languages this version of the card is ready in for fans, or null while there are none. */
+export function translatedLabel(insight: Insight): string | null {
+  const ready = Object.keys(insight.translations ?? {}).sort();
+  return ready.length ? `Translated: ${ready.map((lang) => lang.toUpperCase()).join(", ")}` : null;
+}
+
 /** Whether an insight airs, and who decided, in a few words. */
 export function statusLabel(insight: Insight): string {
   switch (insight.status) {

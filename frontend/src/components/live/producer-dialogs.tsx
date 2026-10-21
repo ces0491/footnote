@@ -156,7 +156,10 @@ export function EditDialog({
               <p className="text-xs text-muted-foreground">Reads: {fill(headline, fields)}</p>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-casual">For casual fans (one or two sentences)</Label>
+              {/* A recap tells a half's story, so it gets more room (src/footnote/insights/draft.py, limits_for). */}
+              <Label htmlFor="edit-casual">
+                For casual fans ({insight?.kind === "recap" ? "one to three sentences" : "one or two sentences"})
+              </Label>
               <Textarea id="edit-casual" value={casual} onChange={(e) => setCasual(e.target.value)} rows={2} />
               <p className="text-xs text-muted-foreground">Reads: {fill(casual.replaceAll("\n", " "), fields)}</p>
             </div>

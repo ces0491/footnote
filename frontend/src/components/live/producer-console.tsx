@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { Clock, DeskAction, DeskRefusal, Insight, InsightMessage, ProducerMode } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
-import { corrections, provenanceLabel, shortlist, statusLabel } from "@/lib/live/shortlist";
+import { corrections, provenanceLabel, shortlist, statusLabel, translatedLabel } from "@/lib/live/shortlist";
 import { cn } from "@/lib/utils";
 
 import { Evidence } from "./evidence";
@@ -155,6 +155,11 @@ function Item({
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={airs ? "default" : "outline"}>{statusLabel(insight)}</Badge>
         <Badge variant={insight.source === "template" ? "outline" : "secondary"}>{provenanceLabel(insight)}</Badge>
+        {translatedLabel(insight) && (
+          <span className="text-xs text-muted-foreground" title="Translated by Azure AI Translator and checked by code">
+            {translatedLabel(insight)}
+          </span>
+        )}
         {insight.agent_note && <span className="text-xs text-muted-foreground">{insight.agent_note}</span>}
       </div>
       <Actions runId={runId} insight={insight} viewer={viewer} canProduce={canProduce} onChange={onChange} onEdit={onEdit} />

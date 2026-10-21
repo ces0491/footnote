@@ -249,6 +249,13 @@ export interface InsightFlag {
   seq: number;
 }
 
+/** A card's wording in another language, translated and checked to keep every figure and name. */
+export interface Translation {
+  headline: string;
+  casual: string;
+  analyst: string;
+}
+
 /** One item of the overlay contract: an insight as it now stands. */
 export interface Insight {
   match_id: string;
@@ -279,6 +286,7 @@ export interface Insight {
   version: number;
   source: WordingSource;
   card: InsightCard;
+  translations?: Partial<Record<"es" | "fr", Translation>>; // absent from items pushed before they existed
   fields: Record<string, string>; // each fact's text, for graphics systems filling a template
   provenance: Provenance;
   created_at: string;

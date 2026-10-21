@@ -5,17 +5,33 @@ import { History, MonitorPlay } from "lucide-react";
 import { RuleFrame } from "@/components/pitch/rule-frame";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Club, MatchMeta, Player, StateView, TrackingLayout } from "@/lib/live/contract";
+import { CATCH_UP_TOPIC, type KeyMoment } from "@/lib/live/catch-up";
+import type { Club, Insight, MatchMeta, Player, StateView, TrackingLayout } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
 import { involves, metricFigures, ownFirst, playerLine, undone } from "@/lib/live/fan";
+import { LANGUAGES, untranslated } from "@/lib/live/language";
 import type { Shown } from "@/lib/live/playback";
 import { METRICS, type Settings } from "@/lib/live/profiles";
 import { minuteLabel } from "@/lib/live/timeline";
 import { cn } from "@/lib/utils";
 
+import { CatchUp } from "./catch-up";
 import { Evidence } from "./evidence";
 import { stateLine } from "./match-state";
+
+/** The catch-up a fan joining mid-match gets, and what they have done with it. */
+export interface CatchUpView {
+  insight: Insight;
+  moments: KeyMoment[];
+  open: boolean;
+  scoreShown: boolean;
+  scoreLine: string;
+  onShowScore: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}
 
 /**
  * Who's been on top over the last five minutes, counted by the processor as the cards count it
@@ -70,6 +86,7 @@ export function FanPanel({
   layout,
   view,
   cards,
+  catchUp,
   settings,
   roster,
   focus,
@@ -79,6 +96,7 @@ export function FanPanel({
   layout: TrackingLayout | null;
   view: StateView;
   cards: Shown[];
+  catchUp: CatchUpView | null;
   settings: Settings;
   roster: Roster;
   focus: Player | null;
@@ -87,12 +105,32 @@ export function FanPanel({
   const focusLine = focus ? view.players?.[focus.player_id] : undefined;
   const metric = metricFigures(settings.metric, view, clubs, focus ? { name: focus.name, line: focusLine } : null);
   const analyst = settings.mode === "analyst";
+  // The catch-up has a place of its own at the top.
+  const listed = cards.filter((s) => s.insight.topic !== CATCH_UP_TOPIC);
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>{analyst ? `Analyst · ${METRICS[settings.metric]}` : "Why it matters"}</CardTitle>
+        {catchUp && !catchUp.open && (
+          <Button variant="ghost" size="sm" className="h-7" onClick={catchUp.onOpen}>
+            <History aria-hidden /> What you missed
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {catchUp?.open && (
+          <CatchUp
+            runId={runId}
+            insight={catchUp.insight}
+            moments={catchUp.moments}
+            analyst={analyst}
+            scoreLine={catchUp.scoreLine}
+            scoreShown={catchUp.scoreShown}
+            onShowScore={catchUp.onShowScore}
+            onClose={catchUp.onClose}
+            roster={roster}
+          />
+        )}
         {analyst ? (
           <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 rounded-lg bg-muted/60 px-3 py-2 text-sm" aria-label={METRICS[settings.metric]}>
             {metric.clubs.map(({ club, figure }) => (
@@ -119,11 +157,11 @@ export function FanPanel({
             <p className="text-xs text-muted-foreground">{playerLine(focusLine).join(" · ") || "No touches yet."}</p>
           </div>
         )}
-        {cards.length === 0 ? (
+        {listed.length === 0 ? (
           <p className="text-sm text-muted-foreground">Cards appear here as the moments reach your stream.</p>
         ) : (
           <ol className="space-y-3" aria-label="Cards">
-            {cards.map(({ insight }) => {
+            {listed.map(({ insight }) => {
               const own = settings.club !== null && Object.values(insight.fields).includes(clubs[0].short_name);
               const mine = focus !== null && involves(insight, focus.name);
               const Icon = insight.kind === "correction" ? History : insight.kind === "rule_call" ? MonitorPlay : null;
@@ -134,9 +172,16 @@ export function FanPanel({
                       {Icon && <Icon aria-hidden className="mr-1.5 inline size-4 align-[-2px] text-muted-foreground" />}
                       {insight.card.headline}
                     </div>
-                    <Badge variant="outline" className="shrink-0 font-mono tabular-nums">
-                      {minuteLabel(insight.at.minute ?? 0, insight.at.added_minute ?? null)}
-                    </Badge>
+                    <div className="flex shrink-0 gap-1">
+                      {untranslated(insight, settings.language) && (
+                        <Badge variant="secondary" title={`Not yet in ${LANGUAGES[settings.language]}: the English for now`}>
+                          {LANGUAGES.en}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="font-mono tabular-nums">
+                        {minuteLabel(insight.at.minute ?? 0, insight.at.added_minute ?? null)}
+                      </Badge>
+                    </div>
                   </div>
                   {undone(insight) === "undone" && (
                     <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{insight.flag!.reason}</p>
