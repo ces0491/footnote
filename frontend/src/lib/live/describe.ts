@@ -2,6 +2,7 @@
 // a line says what the event records and nothing more.
 
 import type { FeedEvent, MatchMeta, Player, Tag } from "./contract";
+import { minuteLabel } from "./timeline";
 
 // Between a figure and its unit, so a line never wraps between them.
 export const NBSP = "\u00a0";
@@ -102,18 +103,29 @@ export interface TickerLine extends EventLine {
   key: string;
   minute: number;
   addedMinute: number | null;
+  correctedAt: string | null; // the minute the provider amended the event, once the list has the amendment
 }
 
 /**
  * Key events in feed order, with each tag placed before the first event that comes after it in the
- * match. Events keep their own order: a correction carries the clock of the whistle before it.
+ * match. Events keep their own order: a correction carries the clock of the whistle before it. An
+ * event the provider amended later in the list keeps its line as it was first recorded, marked with
+ * when it was corrected.
  */
 export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): TickerLine[] {
+  // An amendment carries the ID of the event it amends; the latest one for each event.
+  const amendments = new Map<string, FeedEvent>();
+  for (const event of events) if (event.type === "amendment") amendments.set(event.event_id, event);
+  const correctedAt = (event: FeedEvent) => {
+    const amendment = amendments.get(event.event_id);
+    return amendment && amendment.seq > event.seq ? minuteLabel(amendment.minute, amendment.added_minute) : null;
+  };
   const out: TickerLine[] = [];
   const tagLine = (tag: Tag): TickerLine => ({
     key: `tag-${tag.kind}-${tag.player_id}-${tag.period}-${tag.t}`,
     minute: tag.minute,
     addedMinute: tag.added_minute,
+    correctedAt: null,
     ...describeTag(tag, r),
   });
   let next = 0;
@@ -121,7 +133,7 @@ export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): Ticker
     while (next < tags.length && (event.period > tags[next].period || (event.period === tags[next].period && event.t > tags[next].t))) {
       out.push(tagLine(tags[next++]));
     }
-    out.push({ key: `${event.seq}`, minute: event.minute, addedMinute: event.added_minute, ...describe(event, r) });
+    out.push({ key: `${event.seq}`, minute: event.minute, addedMinute: event.added_minute, correctedAt: correctedAt(event), ...describe(event, r) });
   }
   for (const tag of tags.slice(next)) out.push(tagLine(tag));
   return out;
@@ -136,13 +148,29 @@ export function describeTag(tag: Tag, r: Roster): EventLine {
   return { text: `${who} has covered ${tag.value}${NBSP}km`, tone: "distance" };
 }
 
+/**
+ * How a correction that moves an event's credit had it and has it now: "credited to X", or "given as
+ * an own goal by X", with the names `name` gives. Null for a correction that doesn't move the credit.
+ * Shared with the described feed (lib/live/described.ts), so the two say the same.
+ */
+export function credits(event: FeedEvent, name: (id: unknown) => string): { before: string; after: string } | null {
+  const changes = (event.changes ?? {}) as Record<string, { before: unknown; after: unknown } | undefined>;
+  const player = changes.player_id;
+  if (!player) return null;
+  const corrected = (event.corrected_event ?? {}) as { own_goal?: unknown };
+  const credit = (side: "before" | "after") => {
+    const own = (changes.own_goal ? changes.own_goal[side] : corrected.own_goal) === true;
+    return own ? `given as an own goal by ${name(player[side])}` : `credited to ${name(player[side])}`;
+  };
+  return { before: credit("before"), after: credit("after") };
+}
+
 function correction(event: FeedEvent, r: Roster): string {
-  const changes = (event.changes ?? {}) as Record<string, { before: unknown; after: unknown }>;
-  if (changes.player_id) {
-    const before = name(r, changes.player_id.before);
-    const after = name(r, changes.player_id.after);
-    const wasOwnGoal = changes.own_goal?.before === true;
-    return `Correction: ${String(event.amends)} now credited to ${after}, not ${before}${wasOwnGoal ? " (own goal)" : ""}`;
-  }
-  return `Correction to the ${String(event.amends)}: ${Object.keys(changes).join(", ")}`;
+  const changes = (event.changes ?? {}) as Record<string, unknown>;
+  const corrected = (event.corrected_event ?? {}) as { minute?: number; added_minute?: number | null };
+  const what =
+    typeof corrected.minute === "number" ? `the ${minuteLabel(corrected.minute, corrected.added_minute ?? null)} ${String(event.amends)}` : `the ${String(event.amends)}`;
+  const credit = credits(event, (id) => name(r, id));
+  if (credit) return `Correction: ${what} is now ${credit.after}; it had been ${credit.before}`;
+  return `Correction to ${what}: ${Object.keys(changes).join(", ")}`;
 }

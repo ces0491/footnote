@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { Clock, DeskAction, DeskRefusal, Insight, InsightMessage, ProducerMode } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
+import { undone } from "@/lib/live/fan";
 import { corrections, provenanceLabel, shortlist, statusLabel, translatedLabel } from "@/lib/live/shortlist";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,32 @@ function Actions({
   );
 }
 
+/** Whether a card airs, where its wording came from, and the languages it's ready in. */
+function Labels({ insight }: { insight: Insight }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge variant={insight.status === "approved" ? "default" : "outline"}>{statusLabel(insight)}</Badge>
+      <Badge variant={insight.source === "template" ? "outline" : "secondary"}>{provenanceLabel(insight)}</Badge>
+      {translatedLabel(insight) && (
+        <span className="text-xs text-muted-foreground" title="Translated by Azure AI Translator and checked by code">
+          {translatedLabel(insight)}
+        </span>
+      )}
+      {insight.agent_note && <span className="text-xs text-muted-foreground">{insight.agent_note}</span>}
+    </div>
+  );
+}
+
+/** The events behind a card, and the agents' runs on it. */
+function Sources({ runId, insight, roster }: { runId: string; insight: Insight; roster: Roster }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <Evidence runId={runId} insight={insight} roster={roster} />
+      {insight.agent_state !== "off" && <AgentRunsDialog runId={runId} insight={insight} />}
+    </div>
+  );
+}
+
 function Item({
   runId,
   insight,
@@ -152,21 +179,9 @@ function Item({
         <span className="font-medium text-foreground">Why it&apos;s here: </span>
         {insight.reason}
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={airs ? "default" : "outline"}>{statusLabel(insight)}</Badge>
-        <Badge variant={insight.source === "template" ? "outline" : "secondary"}>{provenanceLabel(insight)}</Badge>
-        {translatedLabel(insight) && (
-          <span className="text-xs text-muted-foreground" title="Translated by Azure AI Translator and checked by code">
-            {translatedLabel(insight)}
-          </span>
-        )}
-        {insight.agent_note && <span className="text-xs text-muted-foreground">{insight.agent_note}</span>}
-      </div>
+      <Labels insight={insight} />
       <Actions runId={runId} insight={insight} viewer={viewer} canProduce={canProduce} onChange={onChange} onEdit={onEdit} />
-      <div className="flex flex-wrap items-center gap-1">
-        <Evidence runId={runId} insight={insight} roster={roster} />
-        {insight.agent_state !== "off" && <AgentRunsDialog runId={runId} insight={insight} />}
-      </div>
+      <Sources runId={runId} insight={insight} roster={roster} />
     </li>
   );
 }
@@ -263,26 +278,41 @@ export function ProducerConsole({
             <AlertTitle>Corrections</AlertTitle>
             <AlertDescription>
               <ul className="space-y-2">
-                {alerts.map((i) => (
-                  <li
-                    key={i.insight_id}
-                    id={cardId(i.insight_id)}
-                    tabIndex={-1}
-                    className="space-y-1 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    {i.kind === "correction" ? (
-                      <span className="font-medium">{i.card.casual}</span>
-                    ) : (
-                      <span>
-                        <span className="font-medium">{i.card.headline}</span>: {i.flag?.reason}
-                      </span>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{statusLabel(i)}</Badge>
-                    </div>
-                    <Actions runId={runId} insight={i} viewer={viewer} canProduce={canProduce} onChange={acted} onEdit={setEditing} />
-                  </li>
-                ))}
+                {alerts.map((i) => {
+                  // A card a correction restated has new wording, shown here as on the shortlist: what
+                  // the producer approves is what they read.
+                  const restated = undone(i) === "corrected";
+                  return (
+                    <li
+                      key={i.insight_id}
+                      id={cardId(i.insight_id)}
+                      tabIndex={-1}
+                      className="space-y-1 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      {i.kind === "correction" ? (
+                        <span className="font-medium">{i.card.casual}</span>
+                      ) : (
+                        <span>
+                          <span className="font-medium">{i.card.headline}</span>: {i.flag?.reason}
+                        </span>
+                      )}
+                      {restated ? (
+                        <>
+                          {/* Not paragraphs: the alert spaces its paragraphs apart. */}
+                          <div className="text-foreground">{i.card.casual}</div>
+                          <div className="text-xs">{i.card.analyst}</div>
+                          <Labels insight={i} />
+                        </>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{statusLabel(i)}</Badge>
+                        </div>
+                      )}
+                      <Actions runId={runId} insight={i} viewer={viewer} canProduce={canProduce} onChange={acted} onEdit={setEditing} />
+                      {restated && <Sources runId={runId} insight={i} roster={roster} />}
+                    </li>
+                  );
+                })}
               </ul>
             </AlertDescription>
           </Alert>

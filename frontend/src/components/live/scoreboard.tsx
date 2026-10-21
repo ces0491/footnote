@@ -1,5 +1,3 @@
-import { EyeOff } from "lucide-react";
-
 import type { Club, Phase, Score } from "@/lib/live/contract";
 
 const PHASE: Record<Phase, string> = {
@@ -35,32 +33,21 @@ export function Scoreboard({
   score,
   phase,
   clock,
-  hidden = false,
 }: {
   home: Club;
   away: Club;
   score: Score;
   phase: Phase;
   clock: string;
-  hidden?: boolean; // a fan catching up hasn't asked for the score yet
 }) {
   return (
     <section aria-label="Score" className="rounded-xl bg-zinc-950 px-4 py-4 text-zinc-50 sm:px-6">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
         <Side club={home} align="start" />
-        <div className="text-center">
-          {hidden ? (
-            <div className="flex items-center justify-center gap-1.5 px-2 text-sm text-zinc-300">
-              <EyeOff aria-hidden className="size-5" />
-              <span className="sr-only sm:not-sr-only">Score hidden</span>
-            </div>
-          ) : (
-            <div className="font-mono text-4xl font-bold tabular-nums sm:text-5xl">
-              {score.home}
-              <span className="px-2 text-zinc-500">–</span>
-              {score.away}
-            </div>
-          )}
+        <div className="text-center font-mono text-4xl font-bold tabular-nums sm:text-5xl">
+          {score.home}
+          <span className="px-2 text-zinc-500">–</span>
+          {score.away}
         </div>
         <Side club={away} align="end" />
       </div>

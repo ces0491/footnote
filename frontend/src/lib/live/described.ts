@@ -5,23 +5,47 @@
 //
 // Three levels of detail. Key moments: goals, shots, VAR, cards, substitutions, the clock, the
 // provider's corrections and the graphics that air. Standard adds the build-up: changes of
-// possession, passes and runs that take the ball forward, crosses, through balls, fouls, offsides and
-// set pieces. Full adds every pass, run and contest for the ball.
+// possession in open play, passes and runs that take the ball forward, crosses, through balls, fouls,
+// offsides and set pieces other than throw-ins. Full adds every pass and run, throw-ins, tackles,
+// interceptions, clearances and blocks.
 
 import type { EventMessage, FeedEvent, MatchMeta, Score, StateView } from "./contract";
-import type { Roster } from "./describe";
+import { credits, type Roster } from "./describe";
+import type { Language } from "./language";
 import type { Shown } from "./playback";
 import { clockLabel } from "./timeline";
 
 export const DETAILS = { key: "Key moments", standard: "Standard", full: "Full" } as const;
 export type Detail = keyof typeof DETAILS;
 
+/** Words the feed says in one language: English, as the page is, or the language of a graphic's
+ * wording, so a screen reader can say each in its own voice. */
+export interface Part {
+  text: string;
+  lang: Language;
+}
+
 export interface DescribedLine {
   key: string;
   replay: number; // the replay second it belongs to: when its event was published, or its card showed
   clock: string; // the match clock, as a broadcast shows it
-  text: string;
+  parts: Part[]; // in English, but for a graphic's wording in Spanish or French
   level: Detail;
+}
+
+function english(text: string): Part[] {
+  return [{ text, lang: "en" }];
+}
+
+/** Parts in a row in the same language, as one part. */
+function joined(parts: Part[]): Part[] {
+  const out: Part[] = [];
+  for (const part of parts) {
+    const before = out.at(-1);
+    if (before?.lang === part.lang) out[out.length - 1] = { text: `${before.text} ${part.text}`, lang: part.lang };
+    else out.push(part);
+  }
+  return out;
 }
 
 const LEVEL_RANK: Record<Detail, number> = { key: 0, standard: 1, full: 2 };
@@ -140,6 +164,7 @@ class Teller {
     }
     if (type === "kick_off") return { text: `${passer} kicks off.`, level: "full" };
     const forward = start && end ? end.u - start.u : 0;
+    const sideways = start && end ? Math.abs(end.v - start.v) : 0;
     const length = typeof e.length === "number" ? e.length : 0;
     const from = start ? `, ${where(start)},` : "";
     if (e.cross) {
@@ -148,7 +173,9 @@ class Teller {
     }
     if (e.through_ball) return { text: `${passer}${from} plays a through ball${result}.`, level: "standard" };
     const kind = length >= 30 ? "long pass" : length < 12 ? "short pass" : "pass";
-    const direction = forward > 10 ? " forward" : forward < -8 ? " back" : " across";
+    // Which way it goes, from its angle: forward or back when it gains or loses more ground than it
+    // moves sideways, and across otherwise. Without both ends there is no way to tell.
+    const direction = !start || !end ? "" : forward > sideways ? " forward" : -forward > sideways ? " back" : " across";
     // The build-up a listener needs: the ball going forward into the opposition half, or into the box.
     const progressive = forward >= 15 && end !== null && end.u >= LENGTH / 2;
     const intoBox = landing === "in the box";
@@ -257,13 +284,11 @@ class Teller {
   }
 
   private correction(e: FeedEvent): string {
-    const changes = (e.changes ?? {}) as Record<string, { before: unknown; after: unknown }>;
     const corrected = (e.corrected_event ?? {}) as { minute?: number };
     const when = typeof corrected.minute === "number" ? `the ${ordinal(corrected.minute)}-minute ${String(e.amends)}` : `the ${String(e.amends)}`;
-    if (changes.player_id) {
-      const wasOwn = changes.own_goal?.before === true ? ", as an own goal" : "";
-      return `Correction from the data provider: ${when} is now credited to ${this.name(changes.player_id.after)}, not ${this.name(changes.player_id.before)}${wasOwn}.`;
-    }
+    // The new credit first and the old one in a sentence of its own, so neither reads as the other.
+    const credit = credits(e, (id) => this.name(id));
+    if (credit) return `Correction from the data provider: ${when} is now ${credit.after}. It had been ${credit.before}.`;
     return `Correction from the data provider to ${when}.`;
   }
 }
@@ -278,20 +303,21 @@ export const PACES = {
 export type Pace = keyof typeof PACES;
 
 /**
- * What to say next, from the lines not yet said. One line waiting is said as it is. When lines have
- * backed up (a fast replay, or a pause), the listener catches up instead of hearing stale build-up:
- * the key moments among them, the latest three at most, and then the latest line. After a pause the
- * announcement says so.
+ * What to say next, from the lines not yet said, in order and each once. Up to three lines waiting
+ * are said in full: a pass and the shot it sets up often reach playback within one announcement.
+ * When more have backed up in play (a fast replay), the listener catches up instead of hearing stale
+ * build-up: every key moment among them, with the line just before it when that one is its build-up,
+ * and the latest line. After a pause the announcement says so, and gives every key moment that
+ * waited and the latest line.
  */
-export function nextSaying(backlog: DescribedLine[], resumed: boolean): string | null {
+export function nextSaying(backlog: DescribedLine[], resumed: boolean): Part[] | null {
   if (backlog.length === 0) return null;
-  const latest = backlog.at(-1)!;
-  const keys = backlog
-    .slice(0, -1)
-    .filter((l) => l.level === "key")
-    .slice(-3);
-  const said = [...keys, latest].map((l) => l.text).join(" ");
-  return resumed ? `While paused: ${said}` : said;
+  const last = backlog.length - 1;
+  const said =
+    backlog.length <= 3
+      ? backlog
+      : backlog.filter((l, i) => i === last || l.level === "key" || (!resumed && backlog[i + 1].level === "key"));
+  return joined([...(resumed ? english("While paused:") : []), ...said.flatMap((l) => l.parts)]);
 }
 
 /** The line a replay's feed opens with: the score and the minute it starts at. */
@@ -301,7 +327,7 @@ export function openingLine(match: MatchMeta, base: StateView, replay: number): 
     base.phase === "pre_match" || !clock
       ? `${match.home.name} against ${match.away.name}. Kick-off is coming up.`
       : `${spokenScore(match, base.score)}, in the ${ordinal(clock.minute)} minute.`;
-  return { key: "opening", replay, clock: clock ? clockLabel({ period: clock.period === 1 ? 1 : 2, t: clock.t }) : "", text, level: "key" };
+  return { key: "opening", replay, clock: clock ? clockLabel({ period: clock.period === 1 ? 1 : 2, t: clock.t }) : "", parts: english(text), level: "key" };
 }
 
 /** The opening line and a line for each event the viewer's playback has reached (lib/live/playback.ts). */
@@ -312,21 +338,25 @@ export function eventLines(match: MatchMeta, r: Roster, base: StateView, startRe
     const said = teller.tell(message);
     if (!said) continue;
     const e = message.event;
-    lines.push({ key: `e${message.seq}`, replay: message.replay, clock: clockLabel({ period: e.period === 1 ? 1 : 2, t: e.t }), ...said });
+    const clock = clockLabel({ period: e.period === 1 ? 1 : 2, t: e.t });
+    lines.push({ key: `e${message.seq}`, replay: message.replay, clock, parts: english(said.text), level: said.level });
   }
   return lines;
 }
 
 /** A line for each graphic airing for the viewer, read out when it shows, as RNIB asks of text on
- * screen. One VAR or a correction undid isn't read: the decision or the notice is. */
+ * screen, in the language its wording is in. One VAR or a correction undid isn't read: the decision
+ * or the notice is. A line is keyed on the graphic, so a graphic is read once: a later wording of
+ * it, the agent's after the template's or a translation, isn't read again, and one not yet read is
+ * read as it now stands. A producer's edit is read again: it may put right what was said. */
 export function cardLines(cards: Shown[]): DescribedLine[] {
   return cards
     .filter((s) => !s.insight.flag)
     .map((s) => ({
-      key: `card-${s.insight.insight_id}-${s.insight.version}`,
+      key: `card-${s.insight.insight_id}${s.insight.source === "producer" ? `-v${s.insight.version}` : ""}`,
       replay: s.from,
       clock: "",
-      text: `On screen: ${s.insight.card.plain}`,
+      parts: joined([...english("On screen:"), { text: s.insight.card.plain, lang: s.lang ?? "en" }]),
       level: "key" as const,
     }));
 }

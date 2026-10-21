@@ -29,7 +29,10 @@ export function ProfileSwitch({ current, onPick }: { current: Profile; onPick: (
       {PROFILES.map((p) => (
         <ToggleGroupItem key={p.id} value={p.id} className="px-3" title={p.summary}>
           {p.name}
-          <span className="text-muted-foreground">{p.role === "producer" ? " · producer" : ""}</span>
+          {/* Darker on the muted background of a selected or hovered item, for 4.5:1 contrast. */}
+          <span className="text-muted-foreground group-hover/toggle:text-foreground/70 group-data-[state=on]/toggle:text-foreground/70">
+            {p.role === "producer" ? " · producer" : ""}
+          </span>
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

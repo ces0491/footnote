@@ -1,6 +1,7 @@
 "use client";
 
 import { History, MonitorPlay } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { RuleFrame } from "@/components/pitch/rule-frame";
 
@@ -11,7 +12,7 @@ import { CATCH_UP_TOPIC, type KeyMoment } from "@/lib/live/catch-up";
 import type { Club, Insight, MatchMeta, Player, StateView, TrackingLayout } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
 import { involves, metricFigures, ownFirst, playerLine, undone } from "@/lib/live/fan";
-import { LANGUAGES, untranslated } from "@/lib/live/language";
+import { type Language, langAttribute, LANGUAGES } from "@/lib/live/language";
 import type { Shown } from "@/lib/live/playback";
 import { METRICS, type Settings } from "@/lib/live/profiles";
 import { minuteLabel } from "@/lib/live/timeline";
@@ -21,14 +22,12 @@ import { CatchUp } from "./catch-up";
 import { Evidence } from "./evidence";
 import { stateLine } from "./match-state";
 
-/** The catch-up a fan joining mid-match gets, and what they have done with it. */
+/** The catch-up a fan joining mid-match gets, and whether they have it open. */
 export interface CatchUpView {
   insight: Insight;
+  lang?: Language; // the language its wording is in
   moments: KeyMoment[];
   open: boolean;
-  scoreShown: boolean;
-  scoreLine: string;
-  onShowScore: () => void;
   onOpen: () => void;
   onClose: () => void;
 }
@@ -107,12 +106,32 @@ export function FanPanel({
   const analyst = settings.mode === "analyst";
   // The catch-up has a place of its own at the top.
   const listed = cards.filter((s) => s.insight.topic !== CATCH_UP_TOPIC);
+  // Opening the catch-up and closing it each take away the button pressed, so keyboard focus goes to
+  // the catch-up's heading as it opens and to the button that reopens it as it closes.
+  const heading = useRef<HTMLHeadingElement>(null);
+  const reopen = useRef<HTMLButtonElement>(null);
+  const focusNext = useRef<"heading" | "reopen" | null>(null);
+  const open = catchUp?.open ?? false;
+  useEffect(() => {
+    const target = focusNext.current === "heading" ? heading.current : focusNext.current === "reopen" ? reopen.current : null;
+    focusNext.current = null;
+    target?.focus();
+  }, [open]);
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>{analyst ? `Analyst · ${METRICS[settings.metric]}` : "Why it matters"}</CardTitle>
         {catchUp && !catchUp.open && (
-          <Button variant="ghost" size="sm" className="h-7" onClick={catchUp.onOpen}>
+          <Button
+            ref={reopen}
+            variant="ghost"
+            size="sm"
+            className="h-7"
+            onClick={() => {
+              focusNext.current = "heading";
+              catchUp.onOpen();
+            }}
+          >
             <History aria-hidden /> What you missed
           </Button>
         )}
@@ -122,13 +141,15 @@ export function FanPanel({
           <CatchUp
             runId={runId}
             insight={catchUp.insight}
+            lang={catchUp.lang}
             moments={catchUp.moments}
             analyst={analyst}
-            scoreLine={catchUp.scoreLine}
-            scoreShown={catchUp.scoreShown}
-            onShowScore={catchUp.onShowScore}
-            onClose={catchUp.onClose}
+            onClose={() => {
+              focusNext.current = "reopen";
+              catchUp.onClose();
+            }}
             roster={roster}
+            headingRef={heading}
           />
         )}
         {analyst ? (
@@ -161,19 +182,21 @@ export function FanPanel({
           <p className="text-sm text-muted-foreground">Cards appear here as the moments reach your stream.</p>
         ) : (
           <ol className="space-y-3" aria-label="Cards">
-            {listed.map(({ insight }) => {
+            {listed.map(({ insight, lang }) => {
               const own = settings.club !== null && Object.values(insight.fields).includes(clubs[0].short_name);
               const mine = focus !== null && involves(insight, focus.name);
               const Icon = insight.kind === "correction" ? History : insight.kind === "rule_call" ? MonitorPlay : null;
+              // The card's own wording carries its language; the page's words around it are English.
+              const wording = langAttribute(lang);
               return (
                 <li key={insight.insight_id} className={cn("space-y-1 rounded-lg border p-3", own && "border-l-4")} style={own ? { borderLeftColor: clubs[0].colours[0] } : undefined}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className={cn("font-medium", undone(insight) === "undone" && "line-through decoration-1")}>
+                    <div className={cn("font-medium", undone(insight) === "undone" && "line-through decoration-1")} lang={wording}>
                       {Icon && <Icon aria-hidden className="mr-1.5 inline size-4 align-[-2px] text-muted-foreground" />}
                       {insight.card.headline}
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      {untranslated(insight, settings.language) && (
+                      {settings.language !== "en" && lang === "en" && (
                         <Badge variant="secondary" title={`Not yet in ${LANGUAGES[settings.language]}: the English for now`}>
                           {LANGUAGES.en}
                         </Badge>
@@ -189,7 +212,9 @@ export function FanPanel({
                   {undone(insight) === "corrected" && (
                     <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Corrected by the data provider</p>
                   )}
-                  <p className="text-sm">{analyst ? insight.card.analyst : insight.card.casual}</p>
+                  <p className="text-sm" lang={wording}>
+                    {analyst ? insight.card.analyst : insight.card.casual}
+                  </p>
                   {!analyst && layout && insight.topic === "var_decision" && (
                     <RuleFrame runId={runId} insight={insight} match={match} layout={layout} roster={roster} />
                   )}

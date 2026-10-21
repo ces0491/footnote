@@ -2,7 +2,7 @@
 
 import { Play } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -12,17 +12,27 @@ import { PROFILES, type Profile, rememberStarted } from "@/lib/live/profiles";
 import { viewerId } from "@/lib/live/viewer";
 import { cn } from "@/lib/utils";
 
-// The judges' jump points from docs/experience.md; each replay starts 30 s before its minute.
+// The judges' jump points from docs/experience.md, each with what happens there and the viewers who
+// show it best. Each replay starts 30 s before its minute.
 const JUMPS = [
-  { minute: 1, label: "Kick-off" },
-  { minute: 23, label: "23'" },
-  { minute: 31, label: "31'" },
-  { minute: 60, label: "60'" },
-  { minute: 81, label: "81'" },
+  { minute: 1, label: "Kick-off", moment: "The whole match", who: null },
+  { minute: 23, label: "23'", moment: "Kingsferry score", who: "Nadia, then Sam" },
+  { minute: 31, label: "31'", moment: "A goal VAR rules out", who: "Tom's described feed" },
+  { minute: 60, label: "60'", moment: "Join late", who: "Lucía, in Spanish" },
+  { minute: 81, label: "81'", moment: "The amended goal", who: "Nadia's corrections" },
 ];
+
+// Muted text on a selected or hovered choice sits on the muted background, where the muted colour
+// falls short of 4.5:1 contrast; a darker one keeps it readable.
+const MUTED_ON_TOGGLE = "text-muted-foreground group-hover/toggle:text-foreground/70 group-data-[state=on]/toggle:text-foreground/70";
+const MUTED_ON_CARD = "text-muted-foreground group-hover:text-foreground/70 group-aria-checked:text-foreground/70";
+
+const never = () => () => {};
 
 export function StartReplay() {
   const router = useRouter();
+  // False on the server and until the page has hydrated: a click before then would be lost.
+  const ready = useSyncExternalStore(never, () => true, () => false);
   const [who, setWho] = useState<Profile["id"]>("sam");
   const [minute, setMinute] = useState("23");
   const [speed, setSpeed] = useState("2");
@@ -64,14 +74,14 @@ export function StartReplay() {
               aria-checked={who === p.id}
               onClick={() => setWho(p.id)}
               className={cn(
-                "rounded-lg border p-3 text-left text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                "group rounded-lg border p-3 text-left text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
                 who === p.id && "border-foreground bg-muted",
               )}
             >
               <div className="font-medium">
-                {p.name} <span className="font-normal text-muted-foreground">· {p.role === "producer" ? "producer" : "fan"}</span>
+                {p.name} <span className={cn("font-normal", MUTED_ON_CARD)}>· {p.role === "producer" ? "producer" : "fan"}</span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{p.summary}</p>
+              <p className={cn("mt-1 text-xs", MUTED_ON_CARD)}>{p.summary}</p>
             </button>
           ))}
         </div>
@@ -81,10 +91,24 @@ export function StartReplay() {
         <div className="text-sm font-medium" id="jump-label">
           Start from
         </div>
-        <ToggleGroup type="single" variant="outline" value={minute} onValueChange={(v) => v && setMinute(v)} aria-labelledby="jump-label">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={minute}
+          onValueChange={(v) => v && setMinute(v)}
+          aria-labelledby="jump-label"
+          className="grid w-full grid-cols-2 items-stretch sm:grid-cols-5"
+        >
           {JUMPS.map((j) => (
-            <ToggleGroupItem key={j.minute} value={String(j.minute)} className="px-3">
-              {j.label}
+            <ToggleGroupItem
+              key={j.minute}
+              value={String(j.minute)}
+              aria-label={[j.label, j.moment, j.who].filter(Boolean).join(", ")}
+              className="h-auto flex-col items-start justify-start gap-0.5 px-3 py-2 text-left whitespace-normal"
+            >
+              <span>{j.label}</span>
+              <span className="text-xs font-normal">{j.moment}</span>
+              {j.who && <span className={cn("text-xs font-normal", MUTED_ON_TOGGLE)}>{j.who}</span>}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -101,8 +125,8 @@ export function StartReplay() {
           ))}
         </ToggleGroup>
       </div>
-      <Button onClick={start} disabled={starting}>
-        <Play /> {starting ? "Starting…" : "Start the replay"}
+      <Button onClick={start} disabled={!ready || starting}>
+        <Play /> {!ready ? "Loading…" : starting ? "Starting…" : "Start the replay"}
       </Button>
       {error && (
         <Alert variant="destructive">

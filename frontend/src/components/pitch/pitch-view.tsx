@@ -4,7 +4,8 @@ import { useCallback, useMemo } from "react";
 
 import { useTracking } from "@/hooks/use-tracking";
 import type { Club, MatchMeta, RunDescriptor, TrackingLayout } from "@/lib/live/contract";
-import type { Shown } from "@/lib/live/playback";
+import { langAttribute } from "@/lib/live/language";
+import { type Shown, waitText } from "@/lib/live/playback";
 import type { Mode } from "@/lib/live/profiles";
 import { moment } from "@/lib/live/timeline";
 import { cn } from "@/lib/utils";
@@ -16,9 +17,11 @@ function Graphic({ shown, mode, calm, clubs }: { shown: Shown; mode: Mode; calm:
   const { insight } = shown;
   const animate = !calm && insight.motion === "animated";
   const line = mode === "analyst" ? insight.card.analyst : insight.card.casual;
+  const wording = langAttribute(shown.lang);
   if (insight.placement === "full_card") {
     return (
       <div
+        lang={wording}
         className={cn(
           "absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-xl bg-zinc-950/90 p-5 text-zinc-50 shadow-lg ring-1 ring-white/10",
           animate && "animate-in fade-in duration-500 motion-reduce:animate-none",
@@ -32,6 +35,7 @@ function Graphic({ shown, mode, calm, clubs }: { shown: Shown; mode: Mode; calm:
   const accent = insight.kind === "correction" ? "#f59e0b" : insight.kind === "rule_call" ? "#38bdf8" : clubs[0].colours[0];
   return (
     <div
+      lang={wording}
       className={cn(
         "absolute inset-x-3 bottom-3 overflow-hidden rounded-lg bg-zinc-950/90 text-zinc-50 shadow-lg ring-1 ring-white/10 sm:inset-x-6 sm:bottom-5",
         animate && "animate-in slide-in-from-bottom-4 fade-in duration-500 motion-reduce:animate-none",
@@ -104,7 +108,7 @@ export function PitchView({
       />
       {waiting > 0 && (
         <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/50 p-6 text-center text-sm text-white">
-          The stream reaches the replay&apos;s start in {Math.ceil(waiting)} seconds.
+          The stream reaches the replay&apos;s start in {waitText(waiting)}.
         </div>
       )}
       {breakNow && waiting === 0 && (

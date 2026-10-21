@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { airing, delayText, insightsAt, onScreenAt, playbackOf, reached, shownFrom, viewAfter } from "./playback";
+import type { Insight, RunDescriptor } from "./contract";
+import { airing, delayText, insightsAt, onScreenAt, playbackOf, reached, shownFrom, viewAfter, waitText } from "./playback";
 import { initialRunViewState, runReducer, type RunViewState } from "./run-reducer";
 import { baseSnapshot, eventPush, insightFixture, runFixture } from "./test-fixtures";
 
 const run = runFixture(); // starts at replay second 1290, live from started_at
+
+/** A card the producer approved when live play was at replay second `live` of `on`. */
+function approvedAt(id: string, on: RunDescriptor, live: number, overrides: Partial<Insight> = {}): Insight {
+  const wall = on.started_at + ((live - on.start_replay) / on.speed) * 1000;
+  return insightFixture(id, { status: "approved", status_by: "producer", status_at: new Date(wall).toISOString(), ...overrides });
+}
 
 /** A page that has the base at seq 10 and events 11-20, each published at 1290 + seq. */
 function page(extra: Partial<RunViewState> = {}): RunViewState {
@@ -42,6 +49,13 @@ describe("playback", () => {
     expect(delayText(40, 1)).toBe("40 seconds behind live");
     expect(delayText(40, 2)).toBe("40 seconds of match time behind live (20 s at 2×)");
     expect(delayText(3, 4)).toBe("3 seconds of match time behind live (0.8 s at 4×)");
+  });
+
+  it("says how long a waiting stream has to go in whole seconds", () => {
+    expect(waitText(0.25)).toBe("1 second");
+    expect(waitText(1)).toBe("1 second");
+    expect(waitText(1.5)).toBe("2 seconds");
+    expect(waitText(30)).toBe("30 seconds");
   });
 
   it("shows a delayed screen a card as it stood before VAR, for a page that loaded after the decision", () => {
@@ -109,6 +123,25 @@ describe("playback", () => {
     expect(insightsAt(state, run, 1310)[0].insight.flag?.reason).toBe("Ruled out by VAR");
   });
 
+  it("keeps the earlier states that had reached playback with the current one", () => {
+    const template = insightFixture("goal-e0015", { shown_seq: 15 });
+    const agent = { ...template, source: "agent" as const, version: 2, updated_at: "2026-10-20T12:00:15Z" };
+    const ruledOut = {
+      ...agent,
+      shown_seq: 19,
+      flag: { reason: "Ruled out by VAR", event_id: "e0019", version: 1, seq: 19 },
+      updated_at: "2026-10-20T12:00:30Z",
+    };
+    const state = page({ history: { "goal-e0015": [template, agent, ruledOut] } });
+    const at = (second: number) => insightsAt(state, run, second)[0];
+    expect(at(1306).insight).toBe(agent);
+    expect(at(1306).earlier).toEqual([template]);
+    expect(at(1310).earlier).toEqual([template, agent]);
+    // A state that came earlier but hasn't reached playback isn't among them.
+    const early = page({ history: { "goal-e0015": [ruledOut, agent] } });
+    expect(insightsAt(early, run, 1306)[0].earlier).toEqual([]);
+  });
+
   it("airs only live moments that were approved", () => {
     const state = page({
       history: {
@@ -123,20 +156,20 @@ describe("playback", () => {
 
   it("keeps a graphic on screen for its duration, and long enough to read at speed", () => {
     const goal = { insight: insightFixture("goal", { duration: 12 }), from: 1305 };
-    const ids = (at: number, speed = 1) => onScreenAt([goal], at, speed).map((s) => s.insight.insight_id);
+    const ids = (at: number, speed = 1) => onScreenAt([goal], at, { ...run, speed }, 3).map((s) => s.insight.insight_id);
     expect(ids(1304)).toEqual([]);
     expect(ids(1316)).toEqual(["goal"]);
     expect(ids(1317)).toEqual([]);
     expect(ids(1320, 4)).toEqual(["goal"]); // four wall seconds at 4x are 16 replay seconds
     const panel = { insight: insightFixture("spell", { placement: "side_panel", duration: null }), from: 1305 };
-    expect(onScreenAt([panel], 1306, 1)).toEqual([]);
+    expect(onScreenAt([panel], 1306, run, 3)).toEqual([]);
   });
 
   it("runs graphics that show together in turn, strongest first, and never one VAR or a correction undid", () => {
     const goal = { insight: insightFixture("goal", { rank: 0.85 }), from: 1305 };
     const check = { insight: insightFixture("var", { kind: "rule_call", rank: 0.7 }), from: 1305 };
     const recap = { insight: insightFixture("ht", { kind: "recap", placement: "full_card", duration: 20 }), from: 1306 };
-    const ids = (shown: typeof goal[], at: number) => onScreenAt(shown, at, 1).map((s) => s.insight.insight_id);
+    const ids = (shown: typeof goal[], at: number) => onScreenAt(shown, at, run, 3).map((s) => s.insight.insight_id);
     expect(ids([check, goal, recap], 1310)).toEqual(["goal", "ht"]);
     expect(ids([check, goal], 1318)).toEqual(["var"]); // after the goal's twelve seconds
     expect(ids([check, goal], 1330)).toEqual([]);
@@ -147,5 +180,45 @@ describe("playback", () => {
     expect(ids([goal, check, brief], 1328)).toEqual(["var"]);
     expect(ids([goal, check, brief], 1330)).toEqual([]);
     expect(ids([goal, brief], 1318)).toEqual([]); // waited twelve seconds, more than twice its four
+  });
+
+  describe("a lower third the producer approved after the moment", () => {
+    // At 4x the 23' goal's draft took 15 s, so Nadia approved it when live play was 63 replay seconds
+    // past the goal: her preview (3 s behind) and Sam's stream (40 s behind) had both passed it.
+    const fast = runFixture({ speed: 4 });
+    const late = { insight: approvedAt("goal-e0391", fast, 1420), from: 1357 };
+    const ids = (shown: typeof late[], at: number, delay: number) => onScreenAt(shown, at, fast, delay).map((s) => s.insight.insight_id);
+
+    it("goes on the producer's preview from the approval", () => {
+      expect(ids([late], 1416, 3)).toEqual([]);
+      expect(ids([late], 1417, 3)).toEqual(["goal-e0391"]);
+      expect(ids([late], 1432, 3)).toEqual(["goal-e0391"]); // 16 replay seconds: four wall seconds at 4x
+      expect(ids([late], 1433, 3)).toEqual([]);
+    });
+
+    it("reaches a fan's stream from where it was at the approval", () => {
+      expect(ids([late], 1379, 40)).toEqual([]);
+      expect(ids([late], 1380, 40)).toEqual(["goal-e0391"]);
+      expect(ids([late], 1395, 40)).toEqual(["goal-e0391"]);
+      expect(ids([late], 1396, 40)).toEqual([]);
+    });
+
+    it("changes nothing for a stream that hadn't reached the moment at the approval", () => {
+      const early = { insight: approvedAt("goal-e0391", fast, 1380), from: 1357 }; // Sam was at 1340
+      expect(ids([early], 1357, 40)).toEqual(["goal-e0391"]);
+      expect(ids([early], 1373, 40)).toEqual([]);
+    });
+
+    it("waits its turn behind the graphic on screen, its wait counted from the approval", () => {
+      const check = { insight: insightFixture("var-e0400", { kind: "rule_call", rank: 0.7 }), from: 1378 };
+      expect(ids([late, check], 1390, 40)).toEqual(["var-e0400"]);
+      expect(ids([late, check], 1400, 40)).toEqual(["goal-e0391"]); // from 1394, fourteen seconds after the approval
+    });
+
+    it("leaves a full card to its own time, which would cover live play by then", () => {
+      const recap = { insight: approvedAt("ht", fast, 3150, { kind: "recap", placement: "full_card", duration: 20 }), from: 3083 };
+      expect(ids([recap], 3090, 40)).toEqual(["ht"]);
+      expect(ids([recap], 3110, 40)).toEqual([]);
+    });
   });
 });

@@ -29,7 +29,12 @@ export function Ticker({ events, tags, roster }: { events: FeedEvent[]; tags: Ta
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing yet.</p>
         ) : (
-          <ol className="max-h-128 space-y-2 overflow-y-auto pr-1">
+          // Focusable, so the list scrolls from the keyboard too.
+          <ol
+            tabIndex={0}
+            aria-label="Key moments, latest first"
+            className="max-h-128 space-y-2 overflow-y-auto rounded-md pr-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
             {[...lines].reverse().map((line) => {
               const Icon = ICON[line.tone];
               return (
@@ -46,7 +51,14 @@ export function Ticker({ events, tags, roster }: { events: FeedEvent[]; tags: Ta
                     {minuteLabel(line.minute, line.addedMinute)}
                   </Badge>
                   <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <span>{line.text}</span>
+                  <span>
+                    {line.text}
+                    {line.correctedAt && (
+                      <span className="block text-xs font-medium text-amber-700 dark:text-amber-400">
+                        Corrected by the data provider at {line.correctedAt}
+                      </span>
+                    )}
+                  </span>
                 </li>
               );
             })}

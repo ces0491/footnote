@@ -1,19 +1,35 @@
 "use client";
 
 import { Pause, Play } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { EventMessage, MatchMeta, StateView } from "@/lib/live/contract";
-import type { Roster } from "@/lib/live/describe";
-import { atDetail, cardLines, type Detail, DETAILS, eventLines, merged, nextSaying, type Pace, PACES } from "@/lib/live/described";
+import { NBSP, type Roster } from "@/lib/live/describe";
+import { atDetail, cardLines, type Detail, DETAILS, eventLines, merged, nextSaying, type Pace, PACES, type Part } from "@/lib/live/described";
 import type { Shown } from "@/lib/live/playback";
 
-// Lines kept on screen; the screen reader hears each as it comes, and the list is for reading back.
+// Lines kept on screen; the screen reader hears them as they come (nextSaying, lib/live/described.ts),
+// and the list is for reading back.
 const SHOWN_LINES = 40;
+
+/** What is said, with a graphic's Spanish or French wording marked so the screen reader says it in
+ * that language's voice. The page is in English. */
+function Spoken({ parts }: { parts: Part[] }) {
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && " "}
+          {part.lang === "en" ? part.text : <span lang={part.lang}>{part.text}</span>}
+        </Fragment>
+      ))}
+    </>
+  );
+}
 
 /**
  * The described feed (docs/experience.md): the match in words as the viewer's playback reaches it,
@@ -50,21 +66,35 @@ export function DescribedFeed({
     () => eventLines(match, roster, base, startReplay, events.slice(0, reached)),
     [match, roster, base, startReplay, events, reached],
   );
-  const lines = merged(told, cardLines(cards)).filter((l) => atDetail(l, detail));
+  const all = merged(told, cardLines(cards)); // at every detail
+  const lines = all.filter((l) => atDetail(l, detail));
   const [paused, setPaused] = useState(false);
-  const [saying, setSaying] = useState("");
-  const latest = useRef(lines);
+  // `echo` alternates a trailing space, so an announcement worded like the one before still changes
+  // the live region, and is spoken.
+  const [saying, setSaying] = useState<{ parts: Part[]; echo: boolean }>({ parts: [], echo: false });
+  const latest = useRef(all);
+  const sayingAt = useRef(detail); // the detail lines are said at
   const said = useRef<Set<string> | null>(null);
   const resumed = useRef(false);
 
   useEffect(() => {
-    latest.current = lines;
-  }, [lines]);
+    latest.current = all;
+  }, [all]);
 
-  // What is there when the feed opens, or when the detail changes, counts as said: the list shows it,
-  // and a listener wants what happens next, not a reading of the match so far.
+  // What is there when the feed opens counts as said: the list shows it, and a listener wants what
+  // happens next, not a reading of the match so far.
   useEffect(() => {
     said.current = new Set(latest.current.map((l) => l.key));
+  }, []);
+
+  // So do the lines a change of detail adds to what is there. Lines waiting to be said that the new
+  // detail keeps still wait.
+  useEffect(() => {
+    const before = sayingAt.current;
+    sayingAt.current = detail;
+    const done = said.current;
+    if (!done || before === detail) return;
+    for (const l of latest.current) if (atDetail(l, detail) && !atDetail(l, before)) done.add(l.key);
   }, [detail]);
 
   useEffect(() => {
@@ -72,12 +102,12 @@ export function DescribedFeed({
     const speak = () => {
       const done = said.current;
       if (!done) return;
-      const backlog = latest.current.filter((l) => !done.has(l.key));
-      const text = nextSaying(backlog, resumed.current);
+      const backlog = latest.current.filter((l) => atDetail(l, sayingAt.current) && !done.has(l.key));
+      const parts = nextSaying(backlog, resumed.current);
       resumed.current = false;
-      if (text === null) return;
+      if (parts === null) return;
       for (const l of backlog) done.add(l.key);
-      setSaying(text);
+      setSaying((s) => ({ parts, echo: !s.echo }));
     };
     speak();
     const timer = setInterval(speak, PACES[pace].seconds * 1000);
@@ -116,25 +146,32 @@ export function DescribedFeed({
               ))}
             </NativeSelect>
           </div>
-          <Button variant="outline" onClick={toggle} aria-pressed={paused}>
+          {/* The label says what the button does now; a pressed state as well would be read as "Resume, pressed". */}
+          <Button variant="outline" onClick={toggle}>
             {paused ? <Play aria-hidden /> : <Pause aria-hidden />} {paused ? "Resume" : "Pause"}
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <div aria-live="polite" aria-atomic="true" className="sr-only">
-          {saying}
+          <Spoken parts={saying.parts} />
+          {saying.echo && NBSP}
         </div>
-        <ol aria-label="The match so far, latest first" className="max-h-96 space-y-1.5 overflow-y-auto pr-1 text-sm">
+        {/* Focusable, so the list scrolls from the keyboard too. */}
+        <ol
+          tabIndex={0}
+          aria-label="The match so far, latest first"
+          className="max-h-96 space-y-1.5 overflow-y-auto rounded-md pr-1 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
           {lines
             .slice(-SHOWN_LINES)
             .reverse()
             .map((line) => (
               <li key={line.key} className="flex gap-3">
-                <span aria-hidden className="w-12 shrink-0 font-mono text-xs leading-5 tabular-nums text-muted-foreground">
-                  {line.clock}
+                <span className="w-12 shrink-0 font-mono text-xs leading-5 tabular-nums text-muted-foreground">{line.clock}</span>
+                <span className={line.level === "key" ? "font-medium" : undefined}>
+                  <Spoken parts={line.parts} />
                 </span>
-                <span className={line.level === "key" ? "font-medium" : undefined}>{line.text}</span>
               </li>
             ))}
         </ol>

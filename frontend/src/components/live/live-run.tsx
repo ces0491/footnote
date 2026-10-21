@@ -19,7 +19,7 @@ import type { Clock, DeskRefusal, InsightMessage, ProducerMode, RunEndReason, Ru
 import { roster } from "@/lib/live/describe";
 import { forMode } from "@/lib/live/fan";
 import { localized } from "@/lib/live/language";
-import { airing, DELAYS, delayText, insightsAt, onScreenAt, playbackOf, reached } from "@/lib/live/playback";
+import { airing, DELAYS, delayText, insightsAt, onScreenAt, playbackOf, reached, waitText } from "@/lib/live/playback";
 import {
   profile as profileOf,
   type Profile,
@@ -87,8 +87,9 @@ function ConnectionBadge({ connection, latency }: { connection: Connection; late
         <span aria-hidden className={`size-2 rounded-full ${dot}`} />
         {label}
       </Badge>
+      {/* On a phone the latency line would take much of the screen, so it shows from the sm breakpoint up. */}
       {latency && (
-        <span className="text-muted-foreground" title="From the replayer publishing an event to this browser receiving it">
+        <span className="hidden text-muted-foreground sm:inline" title="From the replayer publishing an event to this browser receiving it">
           Publish to browser: p50 {Math.round(latency.p50)} ms · p95 {Math.round(latency.p95)} ms ({latency.samples} events)
         </span>
       )}
@@ -104,9 +105,8 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   // A mode the producer switched to, until the next snapshot reports the run's own.
   const [switched, setSwitched] = useState<{ mode: ProducerMode; snapshot: RunSnapshot | null } | null>(null);
   const [stopping, setStopping] = useState(false);
-  // A fan joining mid-match starts on the catch-up, with the score hidden until they ask for it.
+  // A fan joining mid-match starts on the catch-up.
   const [catchUpOpen, setCatchUpOpen] = useState(true);
-  const [scoreShown, setScoreShown] = useState(false);
   const ended = live.ended !== null;
   const now = useNow(250, true);
   // The match stays the same object across refetches (useLiveRun keeps it), so the roster does too.
@@ -270,7 +270,7 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
 
   if (producer) {
     const view = live.view;
-    const onAir = onScreenAt(airing(insightsAt(state, run, preview.at)), preview.at, run.speed);
+    const onAir = onScreenAt(airing(insightsAt(state, run, preview.at)), preview.at, run, PREVIEW_DELAY);
     return (
       <div className="space-y-4">
         {header}
@@ -322,38 +322,30 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   }
 
   const cards = localized(forMode(airing(shown), settings.mode), settings.language);
-  const graphics = settings.graphics ? onScreenAt(cards, pb.at, run.speed) : [];
+  const graphics = settings.graphics ? onScreenAt(cards, pb.at, run, settings.delay) : [];
   const focus = settings.player ? (r.player(settings.player) ?? null) : null;
   const analyst = settings.mode === "analyst";
   const clock = clockAt(atPlayback, run.timeline, pb.at, ended && caughtUp);
   const pitch = Boolean(tracking) && wide && settings.pitch;
   const behind = delayText(settings.delay, run.speed);
+  // The catch-up names the goals and leaves the score to the scoreboard.
   const catchUpCard = catchUpOf(cards);
-  // A listener to the described feed hears the score with every goal: hiding it on screen only
-  // contradicts the feed.
-  const scoreHidden = catchUpCard !== null && catchUpOpen && !scoreShown && !settings.described;
-  const score = atPlayback.score;
   const catchUp = catchUpCard && {
-    insight: catchUpCard,
-    moments: keyMoments(shown),
+    insight: catchUpCard.insight,
+    lang: catchUpCard.lang,
+    moments: keyMoments(shown, settings.language),
     open: catchUpOpen,
-    scoreShown: scoreShown || settings.described,
-    scoreLine: `${match.home.short_name} ${score.home}–${score.away} ${match.away.short_name}`,
-    onShowScore: () => setScoreShown(true),
     onOpen: () => setCatchUpOpen(true),
-    onClose: () => {
-      setCatchUpOpen(false);
-      setScoreShown(true);
-    },
+    onClose: () => setCatchUpOpen(false),
   };
   return (
     <div className="space-y-4">
       {header}
       {notices}
-      <Scoreboard home={match.home} away={match.away} score={score} phase={atPlayback.phase} clock={clock} hidden={scoreHidden} />
+      <Scoreboard home={match.home} away={match.away} score={atPlayback.score} phase={atPlayback.phase} clock={clock} />
       <p className="text-sm text-muted-foreground">
         {pb.waiting > 0
-          ? `Your stream is ${behind}: it reaches the replay's start in ${Math.ceil(pb.waiting / run.speed)} seconds.`
+          ? `Your stream is ${behind}: it reaches the replay's start in ${waitText(pb.waiting / run.speed)}.`
           : `Your stream: ${behind}. Nothing reaches this page before your stream shows it.`}
       </p>
       {settings.described && base && (
