@@ -32,10 +32,11 @@ _MINUTE = re.compile(r"(\d+(?:\+\d+)?)['’]")
 _FIGURE = re.compile(r"\d+(?:[.,]\d+)?")
 _WORD = re.compile(r"\w+")
 # English the Translator got wrong, said another way: "spell" came back as "hechizo" and "sort" (a
-# magic spell), and "the provider's reason" as "la razón del técnico" and "raison du joueur".
+# magic spell), "the provider's reason" as "la razón del técnico" and "raison du joueur", and "the
+# provider corrected" as "el asistente corrigió".
 _CLEARER = [
     (re.compile(r"\bspell(s?)\b"), r"period\1"),
-    (re.compile(r"\b([Tt]he) provider's\b"), r"\1 data provider's"),
+    (re.compile(r"\b([Tt]he) provider\b"), r"\1 data provider"),
 ]
 
 # The words a translation may use instead of a small number's figure, as a count or an ordinal.

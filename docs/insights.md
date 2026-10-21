@@ -229,8 +229,8 @@ a batch of them. The English is prepared for the Translator first
 - Minutes are written out: "6'" goes as "minute 6", since the Translator reads "6'" as six feet.
 - A headline goes with a full stop, taken off again after: without one, "Femi Adeyani scores" comes
   back as "Femi Adeyani puntuaciones".
-- Two words it gets wrong are said another way: "spell" as "period", "the provider's" as "the data
-  provider's".
+- Two words it gets wrong are said another way: "spell" as "period", "the provider" as "the data
+  provider".
 
 Code then checks each translation against its English: the same figures, a decimal comma read as a
 point, every name, no part empty. A small number may come back as a word ("1 shot" as "un tiro",

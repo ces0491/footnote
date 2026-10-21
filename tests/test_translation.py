@@ -31,6 +31,9 @@ def test_names_become_dictionary_entries_and_minutes_are_written_out() -> None:
 def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
     marked = protect("Long spells on top, then a spell under pressure. The provider's reason: a deflection.", [])
     assert marked == "Long periods on top, then a period under pressure. The data provider's reason: a deflection."
+    assert protect("Later the provider corrected it; the data provider's reason stands.", []) == (
+        "Later the data provider corrected it; the data provider's reason stands."
+    )
     assert protect("Spellbrook was smoothed as tracking providers report it.", []) == (
         "Spellbrook was smoothed as tracking providers report it."
     )
