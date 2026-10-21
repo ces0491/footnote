@@ -26,8 +26,8 @@ Pipeline (deployed on Azure)
       speed; player speed and distance tags when thresholds are crossed
 - [x] Match-state timeline updated live, and the state model scored against the
       answer key on held-out matches whose team styles it wasn't fitted on
-- [ ] Template overlay p95 under 1 s from event publish to browser, measured on
-      the deployed stack
+- [x] Template overlay p95 under 1 s from event publish to browser, measured on
+      the deployed stack (461 ms on 21 October, [docs/architecture.md](docs/architecture.md#latency))
 
 Explain
 
@@ -37,7 +37,7 @@ Explain
       tools; code checks every figure in their output; each claim links to event IDs
 - [x] A failed or slow agent falls back to the template, and the fallback is visible
 - [x] An amended event flags every insight that cited it, and its overlay can be withdrawn
-- [ ] Half-time and full-time recaps, and a "what did I miss" catch-up
+- [x] Half-time and full-time recaps, and a "what did I miss" catch-up
 
 Render and personalise
 
@@ -50,10 +50,10 @@ Render and personalise
       club, one chosen metric
 - [x] Casual mode explains offside, handball and VAR calls when they happen,
       using player positions at that moment
-- [ ] Described feed: text play-by-play of ball position, passes and build-up
+- [x] Described feed: text play-by-play of ball position, passes and build-up
       for screen readers, with detail and pace controls
 - [x] Calm mode: reduced motion, no flashing, overlays the viewer can hide
-- [ ] Agents write in English; Azure AI Translator renders Spanish and French;
+- [x] Agents write in English; Azure AI Translator renders Spanish and French;
       code checks that numbers, minutes and names survive translation
 - [ ] Viewer profiles stored server-side under an anonymous ID kept in the
       browser; ready-made fan profiles for judges to switch between

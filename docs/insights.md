@@ -26,7 +26,8 @@ contract in [overlay.md](overlay.md).
 
 ## Moments
 
-The showcase match produces 36 insights over the whole match, 13 of which an agent drafts.
+The showcase match produces 36 insights over the whole match, 15 of which an agent drafts. A replay
+that starts mid-match adds one more, the catch-up, which an agent drafts too.
 
 | Topic | Kind | Found when | Base rank | Agent drafts it |
 | --- | --- | --- | --- | --- |
@@ -40,12 +41,16 @@ The showcase match produces 36 insights over the whole match, 13 of which an age
 | Hardest pass yet | stat | a completed pass rated at least 0.80, harder than any before | 0.40 | no |
 | Fastest shot yet | stat | a shot other than a goal, of 100 km/h or more and faster than any before | 0.35 | no |
 | Sprint, distance | player tag | a record sprint; a player passing 10 km | 0.35, 0.25 | no |
-| Half-time, full time | recap | the whistle | 0.90 | no |
+| Half-time, full time | recap | the whistle | 0.90 | yes |
+| Catch-up | recap | a replay that starts mid-match reaches its starting point | 0.85 | yes |
 | Correction | correction | the provider amends an event | 0.95 | yes |
 
 Moments found in a run's backfill (before the point the replay jumped to) are kept as history:
 they appear in the run's snapshot for catch-up, but no agent drafts them and they never reach the
-shortlist.
+shortlist. The catch-up sums them up for the replay's viewers ("What you missed", docs/audience.md,
+P7): it is found at the backfill's last message, it is live, and it leaves the score out, which the
+viewer asks for. A recap's facts give the goals as they stand, with VAR's and the provider's changes
+applied; a recap's writer reads the rest of the story through `get_story` (below).
 
 ## Ranking
 
@@ -103,16 +108,19 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   events the card links to at least one (the card's evidence is the cited events plus those behind
   each fact used);
 - the headline fits in 60 characters, the casual line in two sentences and 240, the analyst line
-  in three and 360, filled in; no betting language, exclamation marks, links or emoji;
+  in three and 360, filled in; a recap, which tells the story of a half, gets three sentences and
+  400 characters for its casual line; no betting language, exclamation marks, links or emoji;
+- a count shows its noun once: a fact's display carries it ("44 passes"), so "{key} passes" is
+  refused;
+- a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
   can't pass the checks above in disguise (a circled digit, a fraction sign, a zero-width space
   inside "two", a look-alike letter from another alphabet, a name in small capitals).
 
 The checks catch figures and names a writer made up. A name from the match given to the wrong
-player, or a sentence that describes the facts unfairly (that a goal really was against the run of
-play), passes them: that is left to the facts themselves and to evaluations of the agents' output
-(Day 6).
+player, or a sentence that describes the facts unfairly, passes them: that is what the evaluations
+of the agents' output measure ([evaluations.md](evaluations.md)).
 
 ## The agents
 
@@ -125,13 +133,16 @@ Job -> writer --Attempt--> checker --(passes)----------> accepted: the agent's v
                               +--(fails twice)----------> rejected: the template stays
 ```
 
-The writer is an Agent Framework `Agent` on the Foundry deployment of gpt-5-mini, with two sets of
-instructions: one for moments and one for correction notices (`prompts.py`). Its only tools are
-the match tools, an MCP server (`src/footnote/tools`) the same process serves on localhost:
+The writer is an Agent Framework `Agent` on the Foundry deployment of gpt-5-mini, with three sets of
+instructions (`prompts.py`): the moment writer, the correction writer, and the recap writer, which
+tells the story of the match so far at half-time and full time and writes the catch-up. Its only
+tools are the match tools, an MCP server (`src/footnote/tools`) the same process serves on
+localhost:
 
 | Tool | Returns |
 | --- | --- |
 | `get_moment` | what happened, why it was picked, its facts and the template's wording |
+| `get_story` | the match's moments so far in order (goals, VAR decisions, red cards, spells, corrections), each with its facts under keys of its own, `story.<n>.<fact>`: what a recap is written from |
 | `get_match_stats` | the score and each club's counts, shares and model figures |
 | `get_match_state` | the state shown now and each club's share of recent minutes in each state |
 | `get_player` | one player's passing, difficulty, distance, top speed, shots and goals |
@@ -143,7 +154,9 @@ Every call is scoped by headers the service sets and the model never sees: the r
 insight. The tools rebuild the run's state from its stored feed up to the insight's seq with the
 processor's own code, so the writer sees the match as viewers had it at that moment and nothing
 later. A function middleware logs each call; the facts and events the calls returned are all the
-checker lets the draft use, and the log is kept with the run.
+checker lets the draft use, and the log is kept with the run. Besides `check`, the checker sends
+back a draft whose casual line is the template's word for word: it would add nothing, and the
+template's wording stands anyway.
 
 **Limits and fallbacks.** The template stays, and the insight's `agent_note` says why, when:
 
@@ -164,10 +177,14 @@ run that wrote it.
 latency, the problems a rejected draft had and the tool calls made. Each agent version's
 provenance names the model, prompt version, tools used and that the checks passed.
 
-Eight cards drafted locally against the deployed model on 20 October 2026 (reasoning effort low;
-goals, VAR decisions, pressure and chaos spells and the correction) were all accepted at the first
-attempt, in 6–17 seconds, using 2,200–5,600 input and 280–960 output tokens each. At the list
-prices (US$0.25 a million input tokens, US$2.00 a million output) that is under US$0.004 a card.
+**Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 20
+in all, against the deployed model, and evaluates them in code and with Azure AI Evaluation's
+groundedness evaluator; CI replays the recorded run on every push ([evaluations.md](evaluations.md)).
+In the run recorded on 21 October 2026 (reasoning effort low) all 20 were accepted, 5 after a
+revision, in a median of 13 seconds, using a median of about 6,200 input and 850 output tokens. At
+the list prices (US$0.25 a million input tokens, US$2.00 a million output) the 20 cost US$0.075,
+under US$0.004 a card. 16 passed every evaluation; the other 4 repeated a figure in both lines, kept
+too close to the template, or, in one case, misread who had been on top before a goal.
 
 ## The producer's desk
 
@@ -195,6 +212,20 @@ processor and the agents do. The desk is reachable only inside the Container App
   cache of earlier replays. A card on air with wording the producer approved is withdrawn first.
   Each card gets at most five agent runs and each replay thirty, its first drafts and corrections'
   included, so one producer can't spend the agents' daily runs; past that, the producer edits.
+
+## Translation
+
+The agents and the templates write English; Azure AI Translator renders each card in Spanish and
+French (`src/footnote/agents/translator.py`). The agents service translates the version of each
+live card viewers see, every few seconds and whenever the processor finds new cards, one request for
+a batch of them. Every name in the match (players' full names and surnames, clubs' names) is marked
+for the Translator to leave alone, and code then checks each translation against its English
+(`src/footnote/insights/translation.py`): the same figures, a decimal comma read as a point, every
+name, no part empty. A translation that passes joins the card and the card is pushed again; one that
+fails is kept with its problems and never shown, and the viewer reads the English. Translations are
+kept under a hash of the English and reused, so a replay after the first calls the Translator only
+for wording it hasn't met, such as a producer's edit. The producer sees which languages each card is
+ready in.
 
 ## VAR and corrections
 

@@ -125,34 +125,45 @@ every moment the player is involved in (P6). The chosen metric is pinned at the 
 
 ```text
 DESCRIBED FEED     Detail: Standard ▾   Pace: Normal ▾   [Pause]
-Saltmarsh 0, Kingsferry 1. 30 minutes 40.
-30:41  Saltmarsh have it in their own half, building down the left.
-30:49  Varlan, centre circle, turns and plays a long pass forward
-       to Dellow on the right edge of the box.
-30:52  Dellow shoots low. Goal.
-30:53  VAR is checking the goal for offside.
-31:40  No goal. Dellow was offside when Varlan passed.
-       Score stays Saltmarsh 0, Kingsferry 1.
+30:36  Saltmarsh win the ball in a duel, in the opposition half.
+30:47  Varlan, in the centre circle, plays a pass forward to Dellow,
+       in the final third.
+30:51  Dellow shoots with the right foot from 19 metres: goal.
+30:51  Goal for Saltmarsh, scored by Dellow. Saltmarsh 1, Kingsferry 1.
+30:51  VAR is checking the goal for offside.
+32:11  VAR decision: no goal. The decision on the field is overturned.
+       Saltmarsh 0, Kingsferry 1.
+       On screen: VAR: No goal. Marco Dellow was offside when Teo Varlan
+       played the pass, so the goal is ruled out. ...
 ```
 
 Lines come from templates over the event data, so they say only what the events
-contain. The feed is a live region that the device's screen reader reads out.
-The detail levels are key moments only, standard, and full. Pause holds new
-lines and catches up on resume (P8).
+contain, and each graphic is read out as it airs. The detail levels are key
+moments only (goals, shots, VAR, cards, the clock), standard (adds the
+build-up: changes of possession, passes and runs that take the ball forward,
+crosses, fouls and set pieces) and full (every pass and run). The device's screen
+reader speaks the feed through a live region at the pace the listener picks:
+when lines back up, in a fast replay or after a pause, it says the key moments
+among them and the latest line rather than the backlog (P8). A listener hears
+the score with every goal, so the catch-up doesn't hide it for them.
 
 ### Catch-up
 
 ```text
-WHAT DID YOU MISS · 0'–60'                          [Show score ▸]
-Kingsferry scored on the break at 23' after Saltmarsh had most of the
-ball. Saltmarsh had a goal ruled out for offside, pressed hard before
-half-time, and equalised through Varlan from distance at 52'. Since
-then the game has opened up.
-Key moments   23' goal · 31' VAR · 38'–45' pressure · 52' goal
-[Watch from 52']   [Go live]
+WHAT YOU MISSED, UP TO 59'
+Saltmarsh had long spells of possession and pinned Kingsferry back
+before the opener. Adeyani scored on the break at 23', then VAR ruled
+out a Saltmarsh goal for offside. Varlan levelled at 52' and Saltmarsh
+have controlled the game since.
+Before you joined   23'      Femi Adeyani scores
+                    33'      VAR: No goal
+                    44'–49'  Saltmarsh pinning Kingsferry back
+                    52'      Teo Varlan scores
+[Show score]   [Back to the match]
 ```
 
-The score stays hidden until the viewer asks for it.
+The recap agent writes it from the match's moments when the replay reaches its starting point, and
+leaves the score out: the scoreboard hides the score too until the viewer asks for it.
 
 ### Settings
 
@@ -188,9 +199,9 @@ moments and who has had the ball.
 **52', Varlan equalises.** Shot speed tag on the overlay. Priya's player line
 updates. Sam's "who's on top" bar moves with the shift in control.
 
-**60', Lucía joins.** Lucía opens the app in Spanish, gets "what did you miss"
-with the score hidden, reveals it, taps "Go live", and from then on gets Spanish
-versions of every card. Numbers, minutes and names in them are checked
+**60', Lucía joins.** Lucía opens the app in Spanish, gets "what you missed"
+with the score hidden, reveals it, goes back to the match, and from then on gets
+Spanish versions of every card. Numbers, minutes and names in them are checked
 against the English source.
 
 **63'–68', chaos.** The state model detects the match losing its shape: rapid

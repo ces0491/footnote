@@ -41,10 +41,17 @@ Built so far:
   sprints, corrections from the provider), ranks them with the match-state
   model and words each with a template. An agents service built with Microsoft
   Agent Framework on a Foundry model (gpt-5-mini) redrafts the ones where
-  wording adds something. Its writer reads the match only through our MCP
-  match tools, never types a figure (code fills each one in), and code checks
+  wording adds something. Its writers read the match only through our MCP
+  match tools, never type a figure (code fills each one in), and code checks
   every draft; a draft that fails or comes late leaves the template on screen,
-  saying why. How it works: [docs/insights.md](docs/insights.md).
+  saying why. A recap writer tells the story of the match at half-time and
+  full time, and writes the catch-up for a fan joining mid-match, with the
+  score hidden until they ask for it. How it works:
+  [docs/insights.md](docs/insights.md).
+- **Evaluations of the agents.** Every card the showcase asks of the agents is
+  drafted against the deployed model and evaluated in code and with Azure AI
+  Evaluation's groundedness evaluator; CI replays the recorded run through the
+  current checks on every push: [docs/evaluations.md](docs/evaluations.md).
 - **The producer console and the fan view.** Watch the replay as Nadia, the
   producer, or as one of the ready-made fans, and switch between them
   mid-match. The producer approves, edits, kills or withdraws each card, or lets
@@ -59,9 +66,18 @@ Built so far:
   in for the video; casual fans get a still of the pitch with each VAR
   decision, with the offside margin up close. What a card carries, and when it
   may show, is the overlay contract: [docs/overlay.md](docs/overlay.md).
+- **Spanish and French.** The agents service has Azure AI Translator render each
+  card fans see, with the names marked to be left alone, and code checks every
+  figure and name came through before a translation is shown; Lucía, joining
+  from Madrid at 60', reads the catch-up and the cards in Spanish.
+- **The described feed.** Tom, a blind fan, follows the match in words: lines
+  from templates over each event (where the ball is, the passes, the build-up,
+  every graphic as it airs), spoken by the phone's screen reader at a chosen
+  pace and detail, from key moments only to every pass, with a pause that
+  catches up on resume.
 
-Still to come, in the order SCOPE.md lists them: recaps and catch-up, the
-described feed, translation, evaluations, tracing and the judge quick-start.
+Still to come: tracing, viewer profiles stored server-side, and the judge
+quick-start.
 
 ## Quick start
 
@@ -90,6 +106,16 @@ Refitting generates the whole season in memory, so it takes a while (the run
 time is in [docs/models.md](docs/models.md)). The services load the fitted
 parameters committed in `src/footnote/interpret/params/`.
 
+```sh
+uv run python -m footnote.evals replay           # the agents' recorded output through today's checks, as CI runs it
+uv run --group evals python -m footnote.evals live --record --report   # draft and judge again on Foundry
+```
+
+A live evaluation needs `FOUNDRY_PROJECT_ENDPOINT` and `FOUNDRY_MODEL` from
+`azd env get-values` and an Azure CLI sign-in with the developer roles below.
+Run it after changing the agents' instructions, tools or workflow: until the
+recording matches them, CI fails.
+
 ## Deploying to Azure
 
 Needs the [Azure Developer CLI](https://aka.ms/azd) and the Azure CLI, signed
@@ -115,8 +141,13 @@ azd up
 project with a Global Standard deployment of gpt-5-mini (the subscription needs
 100K tokens a minute of that model's quota), builds the four images in the
 container registry (no local Docker needed) and deploys each container app from
-`infra/<service>.bicep`. It prints the web app's URL. To check the deployed
-pipeline end to end, as a browser would follow it:
+`infra/<service>.bicep`. It prints the web app's URL. For the cards in Spanish
+and French, run `azd env set TRANSLATOR_ENABLED true` first: it adds Azure AI
+Translator on its free tier; without it the cards stay in English. Azure refuses
+to submit the model deployment a second time, even unchanged (error 715-123420,
+"unusual activity"), so once it exists run `azd env set DEPLOY_WRITER_MODEL false`
+before provisioning again. To check the deployed pipeline end to end, as a
+browser would follow it:
 
 ```sh
 uv run python scripts/smoke_live.py <web app URL> --minute 81 --speed 4
@@ -165,14 +196,15 @@ src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per r
 src/footnote/processor/   Event Hubs to match state, insights, Postgres and Web PubSub
 src/footnote/insights/    moments found and ranked, facts, templates, the checks every card passes
 src/footnote/tools/       the match tools: an MCP server answering as of one moment of one run
-src/footnote/agents/      the agents service: the Agent Framework writer, its checks, the job loop, the producer's desk
+src/footnote/agents/      the agents service: the Agent Framework writers, their checks, the job loop, the producer's desk
+src/footnote/evals/       the agents' evaluations: every agent job in the showcase, code evaluators, the groundedness judge, the report
 src/footnote/db/          Entra-authenticated Postgres connections, migrations and roles
 frontend/                 the Next.js web app (fan view, producer console, 2D pitch), with its Vitest tests beside the code
 infra/                    Bicep: shared resources (main.bicep) and one file per container app
 scripts/check_names.py    checks every generated name against Wikidata
 scripts/smoke_live.py     follows a replay on the deployed stack: completeness, order, final state, stored pushes, tracking, latency
-tests/                    contract, consistency, physics, story, calibration, model, replay, processing, insight, agent and SQL checks
-data/                     generated output; git keeps the league, the showcase match, its recipe and the name check
-docs/                     audience, experience, data, calibration, models, insights, the overlay contract and its schema, architecture
-.github/workflows/        CI: lint, type checks, tests (with a Postgres), the web build and the Bicep on every push and pull request
+tests/                    contract, consistency, physics, story, calibration, model, replay, processing, insight, agent, evaluation and SQL checks
+data/                     generated output; git keeps the league, the showcase match, its recipe, the name check and the agents' recorded evaluation run
+docs/                     audience, experience, data, calibration, models, insights, evaluations, the overlay contract and its schema, architecture
+.github/workflows/        CI: lint, type checks, tests (with a Postgres and the agents' evaluations), the web build and the Bicep on every push and pull request
 ```

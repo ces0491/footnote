@@ -21,7 +21,7 @@ of the match in `frontend/src/components/pitch/`, and the side panel carries eve
 | Timing | `at` (when it happened), `shown_seq` and `shown_at` (the feed message behind its current state, and its match time), `ts` (that message's provider timestamp), `hold`, `duration`, `until` (when it leaves the producer's shortlist), `seq` (the message its facts are as of) |
 | Ranking | `rank` (0 to 1) and `reason` |
 | Kind | `kind`: moment, rule_call, segment, stat, player_tag, recap or correction; `topic`, which also names the graphics template |
-| Content | `card`: `headline`, `casual`, `analyst`, `plain` (one text for screen readers), the `evidence` its wording rests on and the `facts` it used; `fields`, each fact's text by key, for a graphics system filling its own template; `version` |
+| Content | `card`: `headline`, `casual`, `analyst`, `plain` (one text for screen readers), the `evidence` its wording rests on and the `facts` it used; `translations`, the wording in Spanish (`es`) and French (`fr`) once translated and checked; `fields`, each fact's text by key, for a graphics system filling its own template; `version` |
 | Provenance | `source` (template, agent or producer), `provenance` (template, agent run, model, prompt version, tools called, attempts, checks passed, cached; for an edit, the version edited), `agent_state`, `agent_note` |
 | Status | `status`, `status_by`, `status_at` |
 | Presentation | `placement` (lower_third, side_panel or full_card), `motion` (animated or still), `live` (false for a moment before the replay's start: history, for catch-up only) |
@@ -51,6 +51,10 @@ screen shows the moment (P4).
   past the moment loses the item, and one not there yet never gets it.
 - A correction issued during a break carries the clock of the whistle before it, so an item it
   changes has the whistle as its `shown_at`, and a client shows that state as soon as it arrives.
+- The catch-up of a replay that starts mid-match (`topic: "catch_up"`) names the backfill's last
+  message as its `shown_seq`, so a client shows it from the replay's start. It sums up the history
+  items and is live itself. Its wording leaves the score out, and the reference renderer hides the
+  scoreboard's score while it is open, until the viewer asks for it.
 
 The web app also holds the match itself to each viewer's playback: it serves the event pushes it
 stored, each with the replay second it was published at, and the tracking for the pitch view only up
@@ -95,10 +99,22 @@ A correction notice is an item of its own (`kind: "correction"`, `corrects` nami
 reference renderer airs the notice, never a flagged item, and marks flagged cards in the panel:
 corrected, or struck through with the reason.
 
+## Languages
+
+Cards are written in English. The agents service has Azure AI Translator render the version of each
+live card viewers see in Spanish and French, with the names marked for it to leave alone, and code
+checks that every figure and name came through ([insights.md](insights.md#translation)). A
+translation that passes joins the item's `translations` and the item is pushed again, with a new
+`updated_at`, so a client keeps it as a new state of the card. A client shows a language's wording
+once it is there and the English until then; a translation that failed the check never reaches the
+item, so its readers get the English. The reference renderer marks a card it shows in English to a
+viewer who chose another language.
+
 ## Placement and motion
 
 - **Lower third**: moments, rule calls and corrections. **Full card**: half-time and full-time
-  recaps. **Side panel**: segments, stats and player tags.
+  recaps. **Side panel**: segments, stats, player tags and the catch-up, which is for a fan's own
+  screen rather than the world feed.
 - The reference renderer runs one graphic in each place at a time, in the order they showed, the
   stronger first when two show together. One that would wait more than twice its own time on screen
   is stale by then and is dropped. It keeps each graphic up for at least four seconds of wall time,
