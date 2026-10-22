@@ -66,6 +66,26 @@ _CLEARER = [
     (re.compile(r"\bno offence\b"), "no foul"),
     # "Une contre-action" for "a counter move".
     (re.compile(r"\bcounter move\b"), "counter-attack"),
+    # "Une contre-prise" for "a counter finish", and "a late counter strike" as a counter-attack that
+    # scored by itself ("un contragolpe tardío", "une contre-attaque tardive").
+    (re.compile(r"\bcounter (strike|finish|goal|shot)\b"), r"\1 on the counter-attack"),
+    # "Un contre-but" for "after a counter", "a frappé un contre" for "hit a counter". "On the counter"
+    # stays: "broke on the counter-attack" came back as "a contre-attaqué en contre-attaque".
+    (re.compile(r"\b([Aa]) counter\b(?!-)(?! move)"), r"\1 counter-attack"),
+    # "Subissant une pression" (undergoing pressure) for "sustaining pressure".
+    (re.compile(r"\bsustaining (?:the )?pressure\b"), "keeping up the pressure"),
+    # "A concédé une concéderie" and "une place" for "conceded to Femi Adeyani".
+    (re.compile(r"\bconceded to\b"), "conceded a goal to"),
+    # "Ce qui a permis à Saltmarsh de rester 0–1 pour Kingsferry" for "so the score stayed Saltmarsh 0–1
+    # Kingsferry", as the template's "The score is unchanged:" avoids.
+    (
+        re.compile(rf"\b([Tt])he score (?:stayed|remained) (?=(?:[^\s.;:]+ ){{1,3}}\d+{EN_DASH}\d+)"),
+        r"\1he score was unchanged: ",
+    ),
+    (
+        re.compile(rf"\b([Tt])he score (?:stays|remains|is still) (?=(?:[^\s.;:]+ ){{1,3}}\d+{EN_DASH}\d+)"),
+        r"\1he score is unchanged: ",
+    ),
     # "Su pase más largo" (their longest pass) and "traversée" for "their longest passage".
     (re.compile(r"\b([Ll]ongest|[Tt]heir|[Ii]ts) passage\b"), r"\1 sequence"),
     # "A quitté la botte".
@@ -109,8 +129,15 @@ _CLEARER = [
 
 # A headline said another way, the whole headline only: "Saltmarsh pinning Kingsferry back" came back
 # as "Saltmarsh atrapa a Kingsferry" and, for the other club, "Kingsferry inmovilizando a Saltmarsh";
-# "keep ... penned in" comes back the same way for both ("mantiene a ... acorralado").
-_HEADLINE_CLEARER = [(re.compile(r"^(.+) pinning (.+) back$"), r"\1 keep \2 penned in")]
+# "keep ... penned in" comes back the same way for both ("mantiene a ... acorralado"). An agent's
+# "Saltmarsh pin Kingsferry back" came back as "Saltmarsh devuelve a Kingsferry" and "remet Kingsferry
+# au sol", and "Femi Adeyani gives Kingsferry lead", without its article, as "donne la tête".
+_HEADLINE_CLEARER = [
+    (re.compile(r"^(.+) pinning (.+) back$"), r"\1 keep \2 penned in"),
+    (re.compile(r"^(.+) pin (.+) back$"), r"\1 keep \2 penned in"),
+    (re.compile(r"^(.+) pins (.+) back$"), r"\1 keeps \2 penned in"),
+    (re.compile(r"^(.+) gives ([A-Z]\S*(?: [A-Z]\S*)?) lead$"), r"\1 gives \2 the lead"),
+]
 
 # Words the Translator gives that are never the football word, put right in its output: a penalty
 # in a short headline came back as "penalización" and "pénalité" (a penalisation), though full

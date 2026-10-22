@@ -72,6 +72,21 @@ def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
         "A later VAR check for a penalty, VAR check for offside and the VAR check for handball saw no foul."
     )
     assert protect("Adeyani finished a counter move.", []) == "Adeyani finished a counter-attack."
+    # "A counter" came back as "un contre-but" and "a counter finish" as "une contre-prise"; "on the counter"
+    # stays, and so does a counter-attack.
+    assert protect("Adeyani hit a counter with a late counter strike; A counter-attack, on the counter.", []) == (
+        "Adeyani hit a counter-attack with a late strike on the counter-attack; A counter-attack, on the counter."
+    )
+    assert protect("Saltmarsh were sustaining pressure but conceded to Femi Adeyani.", []) == (
+        "Saltmarsh were keeping up the pressure but conceded a goal to Femi Adeyani."
+    )
+    # A score said to have stayed what it was, only before a score.
+    assert protect("So the score stayed Saltmarsh 0–1 Kingsferry, and the score remains level.", []) == (
+        "So the score was unchanged: Saltmarsh 0–1 Kingsferry, and the score remains level."
+    )
+    assert protect("The score is still Saltmarsh 1–1 Kingsferry.", []) == (
+        "The score is unchanged: Saltmarsh 1–1 Kingsferry."
+    )
     assert protect("Their longest passage was 20 passes; a passage of play.", []) == (
         "Their longest sequence was 20 passes; a passage of play."
     )
@@ -214,6 +229,14 @@ def test_a_headline_goes_with_a_full_stop_that_comes_off_again() -> None:
     pinned = {**card, "headline": "Saltmarsh pinning Kingsferry back", "analyst": "Spent pinning Kingsferry back."}
     assert prepare(pinned, NAMES)[0] == f"{_entry('Saltmarsh')} keep {_entry('Kingsferry')} penned in."
     assert prepare(pinned, NAMES)[2] == f"Spent pinning {_entry('Kingsferry')} back."
+    # An agent's "pin ... back" goes the same way, and a lead gets its article ("donne la tête" without it).
+    for headline, prepared in (
+        ("Saltmarsh pin Kingsferry back", f"{_entry('Saltmarsh')} keep {_entry('Kingsferry')} penned in."),
+        ("Adeyani gives Kingsferry lead", f"{_entry('Adeyani')} gives {_entry('Kingsferry')} the lead."),
+        ("Adeyani gives Kingsferry the lead", f"{_entry('Adeyani')} gives {_entry('Kingsferry')} the lead."),
+        ("Adeyani gives Kingsferry late lead", f"{_entry('Adeyani')} gives {_entry('Kingsferry')} late lead."),
+    ):
+        assert prepare({**card, "headline": headline}, NAMES)[0] == prepared, headline
     # A headline with its own closing mark keeps it.
     asking = {**card, "headline": "Offside?"}
     assert prepare(asking, NAMES)[0] == "Offside?"
