@@ -122,7 +122,8 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
 - a count shows its noun once: a fact's display carries it ("44 passes", "2 shots on target"), so
   "{key} passes", "{key} shots", "{key} on target" or "{key} completed passes" is refused, and so is
   a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
-  "at", and no minute mark follows a minute's own ("from 17''"), a count of times follows what
+  "at", and no minute mark follows a minute's own ("from 17''"), a spell's length isn't where the
+  minute it ended would go ("from 2' to 5 minutes"), a count of times follows what
   happened ("there were 7 times" is refused), "only" doesn't go
   before a count of none ("only no shots"), and a score line,
   which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry") or "to"
@@ -130,6 +131,8 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   goal's situation ("equalise"), said of its club, doesn't follow "have" ("the goal that would have
   equalise");
 - the ball changing hands counts both sides losing it, so a card can't say one side forced it;
+- "effort" isn't written for a shot or a goal: the Translator gave "an 89.1 km/h effort on a
+  counter" as a counter-attack at that speed, and a ruled-out "effort" as an annulled shot;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name ("state model"), a count of times followed by a noun ("7 times
   changes of possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading
@@ -288,9 +291,15 @@ the Translator first
   final pass" ("hizo el último adelantamiento", an overtaking), "neither side" as "neither team",
   "left the boot" as "left the foot", "a run from 2' with 44 passes" as "a sequence" ("una carrera",
   a run on foot), "late on" as "late in the match" ("en los minutos de la tarde"), "the stretch" as
-  "the period" ("la recta final", the home straight), and a few more. The pressure headline,
-  "Saltmarsh pinning Kingsferry back", goes as "Saltmarsh keep Kingsferry penned in", which comes back
-  the same way for either club.
+  "the period" ("la recta final", the home straight), "a counter" as "a counter-attack" ("un
+  contre-but") and "a late counter strike" as "a late strike on the counter-attack" (the
+  counter-attack itself scoring), "sustaining pressure" as "keeping up the pressure" ("subissant une
+  pression", undergoing it), "conceded to" as "conceded a goal to" ("une concéderie"), "the score
+  stayed" before a score as "the score was unchanged:" (the score line broken up), and a few more.
+  The pressure headline, "Saltmarsh pinning Kingsferry back", goes as "Saltmarsh keep Kingsferry
+  penned in", which comes back the same way for either club, and so does an agent's "Saltmarsh pin
+  Kingsferry back" ("Saltmarsh devuelve a Kingsferry"); a headline's "gives Kingsferry lead" gets its
+  article ("donne la tête").
 
 What comes back has the Translator's known slips put right: a word that is never the football one
 ("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" and
