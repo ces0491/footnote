@@ -83,6 +83,11 @@ _CLEARER = [
     (re.compile(rf",? to make it(?= (?:[^\s.;:]+ ){{0,3}}\d+{EN_DASH}\d+)"), ", making it"),
 ]
 
+# A headline said another way, the whole headline only: "Saltmarsh pinning Kingsferry back" came back
+# as "Saltmarsh atrapa a Kingsferry" and, for the other club, "Kingsferry inmovilizando a Saltmarsh";
+# "keep ... penned in" comes back the same way for both ("mantiene a ... acorralado").
+_HEADLINE_CLEARER = [(re.compile(r"^(.+) pinning (.+) back$"), r"\1 keep \2 penned in")]
+
 # Words the Translator gives that are never the football word, put right in its output: a penalty
 # in a short headline came back as "penalización" and "pénalité" (a penalisation), though full
 # sentences got "penalti" and "penalty"; a handball as "balonmano" and "handball" (the sport: French
@@ -235,7 +240,14 @@ def _stops(part: str, text: str) -> bool:
 
 def prepare(card: dict[str, str], names: list[str]) -> list[str]:
     """Each part of an English card, in PARTS order, as the translator is given it."""
-    return [protect(card[part] + "." if _stops(part, card[part]) else card[part], names) for part in PARTS]
+    texts = []
+    for part in PARTS:
+        text = card[part]
+        if part == "headline":
+            for wording, clearer in _HEADLINE_CLEARER:
+                text = wording.sub(clearer, text)
+        texts.append(protect(text + "." if _stops(part, text) else text, names))
+    return texts
 
 
 def read_back(card: dict[str, str], texts: list[str]) -> dict[str, str]:

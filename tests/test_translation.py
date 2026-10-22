@@ -149,8 +149,8 @@ def test_the_translators_known_slips_are_put_right() -> None:
         ("cambió el partido a favor de", "cambió el partido a", "es"),
         ("renverse le score en faveur de", "renverse le score à", "fr"),
     ):
-        broken = {**turned, "casual": f"Femi Adeyani {favour} Saltmarsh 1–2 Kingsferry."}
-        assert mend(turned, broken, NAMES, lang)["casual"] == f"Femi Adeyani {to} Saltmarsh 1–2 Kingsferry."
+        favoured = {**turned, "casual": f"Femi Adeyani {favour} Saltmarsh 1–2 Kingsferry."}
+        assert mend(turned, favoured, NAMES, lang)["casual"] == f"Femi Adeyani {to} Saltmarsh 1–2 Kingsferry."
     club = {**turned, "casual": "Femi Adeyani cambió el partido a favor de Kingsferry: Saltmarsh 1–2 Kingsferry."}
     assert mend(turned, club, NAMES, "es") == club
 
@@ -179,6 +179,11 @@ def test_a_headline_goes_with_a_full_stop_that_comes_off_again() -> None:
         "casual": "Saltmarsh 0–1 Kingsferry en el minuto 23.",
         "analyst": "",
     }
+    # The pressure headline goes as "keep ... penned in", which comes back the same for either club;
+    # the same words in a sentence stay.
+    pinned = {**card, "headline": "Saltmarsh pinning Kingsferry back", "analyst": "Spent pinning Kingsferry back."}
+    assert prepare(pinned, NAMES)[0] == f"{_entry('Saltmarsh')} keep {_entry('Kingsferry')} penned in."
+    assert prepare(pinned, NAMES)[2] == f"Spent pinning {_entry('Kingsferry')} back."
     # A headline with its own closing mark keeps it.
     asking = {**card, "headline": "Offside?"}
     assert prepare(asking, NAMES)[0] == "Offside?"
