@@ -11,7 +11,7 @@ is given a full stop, so "Femi Adeyani scores" reads as a sentence and not as a 
 ("Femi Adeyani puntuaciones"); the stop is taken off the translation again. What comes back has the
 Translator's known slips put right (`mend`): a word that is never the football one ("penalización"
 for a penalty, "balonmano" for a handball) and a score line broken up ("0–1 para Saltmarsh y
-Kingsferry"). Code then holds each translation to the English it came from: the same figures, every
+Kingsferry") or read as one club's lead ("a favor de Saltmarsh 1–2 Kingsferry"). Code then holds each translation to the English it came from: the same figures, every
 name, each score line whole, nothing empty. A small
 number may come back as a word ("1 shot" as "un tiro", "minute 2" as "el segundo minuto"), but no
 figure may change or appear. One that fails isn't shown: the viewer reads the English
@@ -62,12 +62,32 @@ _CLEARER = [
     # "En la cima" (at the summit), "en cabeza" and "en tête" (in the lead).
     (re.compile(r"\bon top of the (game|match)\b"), r"dominating the \1"),
     (re.compile(r"\bon top\b(?! of\b)"), "dominating"),
+    # "Una carrera" and "une course", a run on foot, for "a run from 2' with 44 passes". A "run of
+    # passes" came back right ("racha", "série") and stays.
+    (re.compile(r"\b([Aa]|[Tt]he|[Tt]heir|[Ii]ts|longest) run\b(?! of\b)(?=[^.;:]*\bpasses\b)"), r"\1 sequence"),
+    # "En los minutos de la tarde": in the afternoon.
+    (re.compile(r"\blate on\b"), "late in the match"),
+    # "Originalmente llamado" and "initialement appelé" (originally called) for a goal "originally given
+    # as Jory Penhallow". Before an own goal or a possessive it stays.
+    (re.compile(r"\boriginally given as\b(?! an?\b)(?![^,.;)]*['’]s\b)"), "originally credited to"),
+    # "Una jugada regular" (a mediocre move) and "une action de jeu normale".
+    (re.compile(r"\b([Aa]) regular play\b"), r"\1n open play"),
+    (re.compile(r"\bregular play\b"), "open play"),
+    # "Bajo control y presión" and "sous contrôle et sous pression": under pressure, the wrong way round.
+    (re.compile(r"\bin control and pressure\b"), "in control and pressing"),
+    # "A largement contrôlé la seconde minute" (controlled the second minute) for "largely in control
+    # from 2'".
+    (re.compile(r"\bin control from\b"), "in control of the game from"),
+    # "Saltmarsh empatar para poner el Saltmarsh 1–1 Kingsferry" (an infinitive, and no "marcador") for
+    # "Saltmarsh equalise to make it Saltmarsh 1–1 Kingsferry".
+    (re.compile(rf",? to make it(?= (?:[^\s.;:]+ ){{0,3}}\d+{EN_DASH}\d+)"), ", making it"),
 ]
 
 # Words the Translator gives that are never the football word, put right in its output: a penalty
 # in a short headline came back as "penalización" and "pénalité" (a penalisation), though full
 # sentences got "penalti" and "penalty"; a handball as "balonmano" and "handball" (the sport: French
-# says "main"); and a pass as "pasada". The article goes with the noun, as each language needs.
+# says "main"); and a pass as "pasada" and "passage". The article and adjective go with the noun, as
+# each language needs.
 _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
     "es": [
         (re.compile(pattern), right)
@@ -93,8 +113,10 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
             (r"\bla última pasada\b", "el último pase"),
             (r"\bUna pasada\b", "Un pase"),
             (r"\buna pasada\b", "un pase"),
+            (r"\bpasadas completadas\b", "pases completados"),
             (r"\b(\d+) pasadas seguidas\b", r"\1 pases seguidos"),
             (r"\b(\d+) pasadas\b", r"\1 pases"),
+            (r"\bde pasadas\b", "de pases"),
         )
     ],
     "fr": [
@@ -117,6 +139,15 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
             (r"\bdu handball\b", "de la main"),
             (r"\bHandball\b", "Main"),
             (r"\bhandball\b", "main"),
+            (r"\bLe dernier passage\b", "La dernière passe"),
+            (r"\ble dernier passage\b", "la dernière passe"),
+            (r"\bdu dernier passage\b", "de la dernière passe"),
+            (r"\bau dernier passage\b", "à la dernière passe"),
+            (r"\bun dernier passage\b", "une dernière passe"),
+            (r"\bpassages (?:achevés|complétés)\b", "passes complétées"),
+            (r"\bpassages réussis\b", "passes réussies"),
+            (r"\b(\d+) passages\b", r"\1 passes"),
+            (r"\bde passages\b", "de passes"),
         )
     ],
 }
@@ -124,6 +155,10 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
 # score put before the clubs ("0–1 para Saltmarsh y Kingsferry", "1–1 pour Saltmarsh Kingsferry").
 _SCORE_WORD = r"(?:en|a|à|contre|contra|vs\.?|para|pour)"
 _LINE = re.compile(rf"^(.+) (\d+{EN_DASH}\d+) (.+)$")
+# "In favour of" before a whole score line, which reads as the first club's lead: "a favor de" and "en
+# faveur de Saltmarsh 1–2 Kingsferry" for "turns the game to" and "takes the score to" that line. The
+# "to" it was takes its place.
+_IN_FAVOUR = {"es": (r"a favor del?", "a"), "fr": (r"en faveur d[eu]", "à")}
 
 # The words a translation may use instead of a small number's figure, as a count or an ordinal.
 NUMBER_WORDS: dict[str, dict[str, int]] = {
@@ -141,7 +176,7 @@ NUMBER_WORDS: dict[str, dict[str, int]] = {
     },
     "fr": {
         **dict.fromkeys(("un", "une", "premier", "première"), 1),
-        **dict.fromkeys(("deux", "deuxième"), 2),
+        **dict.fromkeys(("deux", "deuxième", "second", "seconde"), 2),
         **dict.fromkeys(("trois", "troisième"), 3),
         **dict.fromkeys(("quatre", "quatrième"), 4),
         **dict.fromkeys(("cinq", "cinquième"), 5),
@@ -214,7 +249,9 @@ def read_back(card: dict[str, str], texts: list[str]) -> dict[str, str]:
 
 def mend(card: dict[str, str], translated: dict[str, str], names: list[str], lang: str) -> dict[str, str]:
     """The translation with the Translator's known slips put right: a word that is never the football
-    one, and a score line the English has whole ("Saltmarsh 1–1 Kingsferry") that came back broken up."""
+    one, and a score line the English has whole ("Saltmarsh 1–1 Kingsferry") that came back broken up
+    or "in favour of"."""
+    favour = _IN_FAVOUR.get(lang)
     out = {}
     for part in PARTS:
         text = translated.get(part, "")
@@ -226,6 +263,8 @@ def mend(card: dict[str, str], translated: dict[str, str], names: list[str], lan
             home, score, away = (re.escape(p) for p in parts.groups())
             text = re.sub(rf"(?<![\w]){home} {score} {_SCORE_WORD} {away}(?![\w])", line, text)
             text = re.sub(rf"(?<![\w]){score} {_SCORE_WORD} {home} (?:y |et )?{away}(?![\w])", line, text)
+            if favour:
+                text = re.sub(rf"\b{favour[0]} (?={re.escape(line)}(?![\w]))", f"{favour[1]} ", text)
         out[part] = text
     return out
 

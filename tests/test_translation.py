@@ -52,6 +52,27 @@ def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
     assert protect("Varlan levels, having levelled once: Saltmarsh on top, on top of the game.", []) == (
         "Varlan equalises, having equalised once: Saltmarsh dominating, dominating the game."
     )
+    # A run of passes said so it isn't a run on foot; "a run of passes" and the run of play stay.
+    assert protect("A run from 2' with 44 passes; their longest run was 20 passes.", []) == (
+        "A sequence from minute 2 with 44 passes; their longest sequence was 20 passes."
+    )
+    assert protect("A run of 7 passes against the run of play.", []) == "A run of 7 passes against the run of play."
+    assert protect("No penalty late on, after a regular play move; regular play resumed.", []) == (
+        "No penalty late in the match, after an open play move; open play resumed."
+    )
+    assert protect("Saltmarsh, in control and pressure, were in control from 2'.", []) == (
+        "Saltmarsh, in control and pressing, were in control of the game from minute 2."
+    )
+    # Only before a score.
+    assert protect("Saltmarsh equalise to make it Saltmarsh 1–1 Kingsferry, enough to make it count.", []) == (
+        "Saltmarsh equalise, making it Saltmarsh 1–1 Kingsferry, enough to make it count."
+    )
+    # The old credit as a name; before an own goal or a possessive it stays.
+    assert protect("Credited to Adeyani (originally given as Jory Penhallow).", []) == (
+        "Credited to Adeyani (originally credited to Jory Penhallow)."
+    )
+    kept = "It was originally given as an own goal, originally given as Penhallow's own goal."
+    assert protect(kept, []) == kept
 
 
 def test_the_translators_known_slips_are_put_right() -> None:
@@ -109,6 +130,29 @@ def test_the_translators_known_slips_are_put_right() -> None:
         NAMES,
         "fr",
     ) == {"headline": "Contrôle VAR : main", "casual": "Le but est annulé pour une main.", "analyst": ""}
+    passes = {"headline": "", "casual": "Their longest sequence of completed passes was 7 passes.", "analyst": ""}
+    assert mend(
+        passes,
+        {**passes, "casual": "La secuencia más larga de pasadas completadas fue de 7 pasadas."},
+        NAMES,
+        "es",
+    )["casual"] == ("La secuencia más larga de pases completados fue de 7 pases.")
+    assert mend(
+        passes,
+        {**passes, "casual": "Fut de 20 passages, de passages achevés ; Varlan a joué le dernier passage."},
+        NAMES,
+        "fr",
+    )["casual"] == ("Fut de 20 passes, de passes complétées ; Varlan a joué la dernière passe.")
+    # "In favour of" before a whole score line was "to" it; before a club it stays.
+    turned = {"headline": "", "casual": "Femi Adeyani turns the game to Saltmarsh 1–2 Kingsferry.", "analyst": ""}
+    for favour, to, lang in (
+        ("cambió el partido a favor de", "cambió el partido a", "es"),
+        ("renverse le score en faveur de", "renverse le score à", "fr"),
+    ):
+        broken = {**turned, "casual": f"Femi Adeyani {favour} Saltmarsh 1–2 Kingsferry."}
+        assert mend(turned, broken, NAMES, lang)["casual"] == f"Femi Adeyani {to} Saltmarsh 1–2 Kingsferry."
+    club = {**turned, "casual": "Femi Adeyani cambió el partido a favor de Kingsferry: Saltmarsh 1–2 Kingsferry."}
+    assert mend(turned, club, NAMES, "es") == club
 
 
 def test_a_score_line_must_come_through_whole() -> None:
@@ -166,6 +210,7 @@ def test_a_small_number_may_come_back_as_a_word() -> None:
     french = {"casual": "Saltmarsh a pressé dès la 2e minute et a forcé un tir dans les dix minutes suivantes."}
     assert check(english, spanish, NAMES, "es") == []
     assert check(english, french, NAMES, "fr") == []
+    assert check(english, {"casual": french["casual"].replace("2e", "seconde")}, NAMES, "fr") == []
     # A figure that changed, or one the English doesn't have, still fails, words or not.
     changed = {"casual": "Saltmarsh presionó desde el segundo minuto y forzó un disparo en los 12 minutos siguientes."}
     added = {

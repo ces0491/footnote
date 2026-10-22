@@ -257,12 +257,14 @@ the Translator first
 - English it got wrong, or gave word for word, is said another way: "spell" as "period" (it came
   back as a magic spell), "the provider" as "the data provider", "made the last pass" as "played the
   final pass" ("hizo el último adelantamiento", an overtaking), "neither side" as "neither team",
-  "left the boot" as "left the foot", and a few more.
+  "left the boot" as "left the foot", "a run from 2' with 44 passes" as "a sequence" ("una carrera",
+  a run on foot), "late on" as "late in the match" ("en los minutos de la tarde"), and a few more.
 
 What comes back has the Translator's known slips put right: a word that is never the football one
-("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" for a
-pass), its article changed with it, and a word put inside a score line ("Saltmarsh 1–1 en
-Kingsferry"). Code then checks each translation against its English: the same figures, a decimal
+("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" and
+"passage" for a pass), its article and adjective changed with it, a word put inside a score line
+("Saltmarsh 1–1 en Kingsferry"), and "in favour of" before one ("a favor de Saltmarsh 1–2
+Kingsferry", for a goal that "turns the game to" that score). Code then checks each translation against its English: the same figures, a decimal
 comma read as a point, every name, each score line whole (a name either side of the score, so "1–1
 pour Saltmarsh Kingsferry" fails), no part empty. A small number may come back as a word ("1 shot"
 as "un tiro", "minute 2" as "el segundo minuto"); a figure in digits that changed, or one the
