@@ -118,7 +118,8 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
 - a count shows its noun once: a fact's display carries it ("44 passes", "2 shots on target"), so
   "{key} passes", "{key} shots", "{key} on target" or "{key} completed passes" is refused, and so is
   a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
-  "at", a count of times follows what happened ("there were 7 times" is refused), and a score line,
+  "at", a count of times follows what happened ("there were 7 times" is refused), "only" doesn't go
+  before a count of none ("only no shots"), and a score line,
   which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry") or "to"
   ("turns the game to Saltmarsh 1–2 Kingsferry", which the Translator gave as "in favour of" it); a
   goal's situation ("equalise"), said of its club, doesn't follow "have" ("the goal that would have

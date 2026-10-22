@@ -17,7 +17,7 @@ and so do the agents.
   placeholder don't say the noun, or part of it, again ("31 passes completed passes"), and a word
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
   takes "at"; a count of times follows what happened, not a form of "be" ("there were 7 times");
-  and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
+  "only" doesn't go before a count of none ("only no shots"); and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
   Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); a goal's situation, said of
   its club, doesn't follow "have" ("the goal that would have equalise");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
@@ -466,6 +466,9 @@ def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
                 f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}'; write"
                 f" '{before.group(1)} at {{{m.group(1)}}}'"
             )
+        # "Only" before a count of none: "they registered only no shots".
+        if before is not None and before.group(1).lower() == "only" and fact.display.startswith("no "):
+            problems.append(f"{where}: 'only {{{m.group(1)}}}' shows as 'only {fact.display}'; leave out 'only'")
         times = fact.display == "once" or fact.display.endswith(" times")
         if before is not None and before.group(1).lower() in _BE and times:
             problems.append(

@@ -468,6 +468,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "moment.score_line": text("Saltmarsh 1–2 Kingsferry", "the score after the goal", ("e0391",)),
         "moment.play_pattern": text("counter", "how the move started", ("e0391",)),
         "moment.situation": text("equalise", "what the goal VAR ruled out would have done", ("e0391",)),
+        "segment.shots": Fact(0, "no shots", "shots by Saltmarsh in that stretch", ("e0391",)),
     }
     for casual, problem in (
         ("A goal was checked by VAR and {story.5.decision_text}.", "{story.5.decision_text} is a heading"),
@@ -490,6 +491,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         ("{story.15.after}'s goal (originally given as {story.15.before}) won it.", "in brackets, the earlier"),
         ("Adeyani finished a {moment.play_pattern} counter.", "'counter counter' once filled in"),
         ("{teams.SAL.name} and later {teams.SAL.name} were on top.", "'Saltmarsh and later Saltmarsh' once filled in"),
+        ("Despite the pressure they registered only {segment.shots}.", "leave out 'only'"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
