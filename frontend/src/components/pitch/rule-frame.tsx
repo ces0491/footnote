@@ -263,7 +263,7 @@ export function RuleFrame({
   if (!shown) return null;
   return (
     <figure className="space-y-1.5">
-      <canvas ref={canvas} className="block aspect-[111/74] w-full rounded-lg bg-[#2f6b3a]" role="img" aria-label={shown.label} />
+      <canvas ref={canvas} className="block aspect-111/74 w-full rounded-lg bg-[#2f6b3a]" role="img" aria-label={shown.label} />
       <figcaption className="text-xs text-muted-foreground">{shown.caption}</figcaption>
     </figure>
   );

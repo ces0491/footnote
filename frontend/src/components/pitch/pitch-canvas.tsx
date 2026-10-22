@@ -190,7 +190,7 @@ export function PitchCanvas({
       ref={canvas}
       role="img"
       aria-label={label}
-      className="block aspect-[111/74] w-full rounded-xl bg-[#2f6b3a]"
+      className="block aspect-111/74 w-full rounded-xl bg-[#2f6b3a]"
     />
   );
 }
