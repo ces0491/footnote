@@ -71,16 +71,17 @@ BASE_RANK = {
 
 # Topics an agent drafts; the rest keep their template. Agents go where wording adds something: a
 # recap's template can list the goals, but only a writer can tell the story of the half. A
-# correction's notice keeps its template, which says what changed plainly: in five of seven
-# recordings an agent's notice added nothing to it, and the others slipped ("It is not Jory
-# Penhallow's own goal", where the old credit reads aloud as the scorer).
+# correction's notice and a VAR decision keep their templates, which say what happened plainly. In
+# five of seven recordings an agent's notice added nothing, and the others slipped ("It is not Jory
+# Penhallow's own goal", where the old credit reads aloud as the scorer); agents' VAR cards gave a
+# penalty check to the wrong side, wrote a handball VAR had found none of, and "the goal that would
+# have equalise".
 AGENT_TOPICS = frozenset(
     {
         "goal",
         "own_goal",
         "penalty",
         "red_card",
-        "var_decision",
         "pressure",
         "chaos",
         "half_time",

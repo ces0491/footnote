@@ -467,6 +467,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "segment.changes": Fact(7, "7 times", "how often the ball changed hands", ("e0391",)),
         "moment.score_line": text("Saltmarsh 1–2 Kingsferry", "the score after the goal", ("e0391",)),
         "moment.play_pattern": text("counter", "how the move started", ("e0391",)),
+        "moment.situation": text("equalise", "what the goal VAR ruled out would have done", ("e0391",)),
     }
     for casual, problem in (
         ("A goal was checked by VAR and {story.5.decision_text}.", "{story.5.decision_text} is a heading"),
@@ -482,11 +483,13 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         ("{teams.SAL.name} were in control for {story.1.state_share} of a {segment.window}.", "leave out 'a'"),
         ("Chaos held for {story.1.state_share} of that {segment.window}.", "write 'those {segment.window}'"),
         ("The goal was later credited to {story.15.after}.", "give {story.15.before} too"),
-        ("Adeyani turns the game to {moment.score_line}.", "write 'makes it {moment.score_line}'"),
+        ("Adeyani turns the game to {moment.score_line}.", "', making it {moment.score_line}'"),
+        ("The goal that would have {moment.situation} was offside.", "the fact is said of the club"),
         ("The goal is credited to {story.15.after}, not {story.15.before}.", "after 'not', the earlier credit"),
         ("It is credited to {story.15.after} instead of Penhallow.", "after 'instead of', the earlier credit"),
         ("{story.15.after}'s goal (originally given as {story.15.before}) won it.", "in brackets, the earlier"),
         ("Adeyani finished a {moment.play_pattern} counter.", "'counter counter' once filled in"),
+        ("{teams.SAL.name} and later {teams.SAL.name} were on top.", "'Saltmarsh and later Saltmarsh' once filled in"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
@@ -499,6 +502,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "{story.15.after}'s goal, originally credited to {story.15.before}, won it.",
         "Penhallow was not the scorer after all; the goal is credited to {story.15.after} (on review).",
         "Adeyani makes it {moment.score_line}, and the move came to an end.",
+        "It would have let {teams.SAL.name} {moment.situation} before the break.",
         "Adeyani finished a {moment.play_pattern}, and Saltmarsh had had the ball for most of the spell.",
         "Goals so far: {recap.goals}.",
         "The model gave it an {moment.completion} chance, a useful pass.",

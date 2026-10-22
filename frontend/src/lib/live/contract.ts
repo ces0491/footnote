@@ -282,7 +282,7 @@ export interface Insight {
   status_by: "auto" | "producer" | "correction" | null;
   status_at: string | null;
   agent_state: AgentState;
-  agent_note: string | null; // why the template stands, when it does
+  agent_note: string | null; // why an agent's draft didn't land, and what stands instead
   version: number;
   source: WordingSource;
   card: InsightCard;

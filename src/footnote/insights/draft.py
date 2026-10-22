@@ -18,7 +18,8 @@ and so do the agents.
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
   takes "at"; a count of times follows what happened, not a form of "be" ("there were 7 times");
   and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
-  Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry");
+  Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); a goal's situation, said of
+  its club, doesn't follow "have" ("the goal that would have equalise");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
   player or its minute), so it can't pin the decision on a goal that stands;
@@ -32,7 +33,8 @@ and so do the agents.
   such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a
   recap "the last {story.3.window}", which was the stretch before that spell, not before now;
 - filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance"),
-  and no word comes twice in a row ("a counter counter");
+  no word comes twice in a row ("a counter counter"), and no name is joined to itself ("Saltmarsh
+  and later Saltmarsh");
 - a long text fact, such as the provider's reason, is given in one line, not both;
 - capitals are for names: every capitalised word except a sentence's first is a name from the facts,
   and names written next to each other must be one name as a fact gives it ("Femi Adeyani", or
@@ -393,6 +395,9 @@ _BE = frozenset("is are was were be been being".split())
 _SCORE_VERBS = frozenset("lead leads led leading trail trails trailed trailing beat beats beating".split())
 # "To" before one: "turns the game to Saltmarsh 1–2 Kingsferry" came back from the Translator as "a
 # favor de" and "en faveur de" the score line, one club's lead.
+# A goal's situation ("equalise", "take the lead") is said of its club; after "have" it read "the goal
+# that would have equalise".
+_HAVE = frozenset("have has had having".split())
 # The ball changing hands counts both sides losing it, so no side forced it.
 _FORCED = re.compile(r"\bforc\w*\s+(?:the ball to change hands|\{[\w.]*changes\})", re.IGNORECASE)
 # A text fact long enough that giving it in both lines repeats a sentence: the provider's reason.
@@ -417,6 +422,9 @@ _NEEDS_AN = re.compile(rf"\b(a) ((?!one\b|once\b|uni|use|usu|eu)(?:[aeiou]|{_AN_
 # A word twice in a row once filled in: "finished a {story.4.play_pattern} counter" read "a counter
 # counter". "Had had" and "that that" can be right.
 _TWICE = re.compile(r"\b(?!(?:had|that)\b)([^\W\d_]+)\s+\1\b", re.IGNORECASE)
+# A name joined to itself once filled in: "{story.1.club} and later {story.3.club}" read "Saltmarsh
+# and later Saltmarsh".
+_SELF_JOINED = re.compile(r"\b([A-Z][^\W\d_]+) and (?:[^\W\d_]+ ){0,2}\1\b")
 
 
 def indefinite(display: str) -> str:
@@ -471,8 +479,13 @@ def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
             )
         if before is not None and before.group(1).lower() == "to" and _score_line(m.group(1)):
             problems.append(
-                f"{where}: 'to {{{m.group(1)}}}' shows as 'to {fact.display}'; write 'makes it {{{m.group(1)}}}', or"
-                f" give the score on its own ('{{{m.group(1)}}}: ...')"
+                f"{where}: 'to {{{m.group(1)}}}' shows as 'to {fact.display}'; give the score on its own"
+                f" ('{{{m.group(1)}}}: ...'), or end the clause with ', making it {{{m.group(1)}}}'"
+            )
+        if before is not None and before.group(1).lower() in _HAVE and _named(m.group(1)) == "situation":
+            problems.append(
+                f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}'; the fact"
+                f" is said of the club, so write it after the club's name ('Saltmarsh {fact.display}')"
             )
         following = _NEXT_WORDS.match(text, m.end())
         if following is None:
@@ -669,6 +682,8 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
             problems.append(
                 f"{where}: '{twice.group(0)}' once filled in; a fact's display already says the word, so write it once"
             )
+        if (joined := _SELF_JOINED.search(filled)) is not None:
+            problems.append(f"{where}: '{joined.group(0)}' once filled in; both facts name the same, so say it once")
     card = render(draft, facts)
     for part, value, limit in (
         ("headline", card.headline, HEADLINE_CHARS),

@@ -27,6 +27,7 @@ GET  /healthz
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Literal, Protocol
@@ -62,6 +63,10 @@ _REFUSED = {
 # one replay. They keep one producer from spending the agents' daily runs (AGENT_DAILY_RUNS).
 REDRAFT_CARD_RUNS = 5
 REDRAFT_REPLAY_RUNS = 30
+# How long the producer's answer waits on the push to viewers. A push once hung for a minute on a
+# TLS handshake with Web PubSub, the web app gave up after 10 s and told the producer the desk wasn't
+# answering, though the redraft had been made.
+PUSH_SECONDS = 5.0
 
 
 class Refused(Exception):
@@ -174,7 +179,7 @@ class Desk:
             message = (await push_insights(conn, run_id, {insight_id: rev}))[0]
         log.info("run %s: producer %s %s", run_id, action, insight_id)
         try:
-            await self.push.send(run_id, message)
+            await asyncio.wait_for(self.push.send(run_id, message), PUSH_SECONDS)
         except Exception:
             # Viewers notice the gap in revisions and fetch the snapshot.
             log.exception("push failed for %s/%s", run_id, insight_id)

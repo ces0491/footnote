@@ -196,11 +196,11 @@ async def test_concurrent_drafts_on_one_client_keep_their_own_tool_logs(
     """The service shares one Foundry client between up to three jobs at once."""
     client = ReadsThenDrafts()
     async with match_tools(showcase, analysis, rows) as url:
-        goal, var = await asyncio.gather(
+        goal, other = await asyncio.gather(
             draft(Job(RUN, GOAL, "moment", "goal", 1), client, url, {}),
-            draft(Job(RUN, "var-e0534", "rule_call", "var_decision", 1), client, url, {}),
+            draft(Job(RUN, "goal-e0532", "moment", "goal", 1), client, url, {}),
         )
-    for drafted, minute in ((goal, "23'"), (var, "33'")):
+    for drafted, minute in ((goal, "23'"), (other, "31'")):
         assert drafted.outcome.accepted and [c["name"] for c in drafted.log.calls] == ["get_moment"]
         assert drafted.log.facts["moment.minute"].display == minute
 
@@ -424,8 +424,18 @@ async def test_the_template_stands_when_the_agent_doesnt_deliver(
         push = await _work(store, client, url, **settings)
     assert store.published == [] and len(store.fallbacks) == 1
     assert note in store.fallbacks[0][1] and push.sent[0]["insight"]["agent_note"] == store.fallbacks[0][1]
+    assert store.fallbacks[0][1].endswith("; the template stands.")
     (run,) = store.runs.values()
     assert run["outcome"] in ("timeout", "error", "rejected")
+
+
+async def test_a_redraft_that_fails_leaves_the_earlier_wording_and_says_so(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
+    store = Store([_claim(rows, showcase, redraft=True)])
+    async with match_tools(showcase, analysis, rows) as url:
+        await _work(store, Scripted(TYPED_FIGURE, TYPED_FIGURE), url)
+    assert store.fallbacks[0][1] == "The agent's draft failed the checks; the earlier wording stands."
 
 
 async def test_a_restated_insight_cancels_the_draft_for_its_old_facts(

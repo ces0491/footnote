@@ -35,7 +35,7 @@ export function evidenceSource(insight: Insight): "events" | "tracking" | null {
   return insight.kind === "player_tag" ? "tracking" : null;
 }
 
-/** Where an insight's wording came from, in a few words; `agent_note` says why a template stands. */
+/** Where an insight's wording came from, in a few words; `agent_note` says why an agent's draft didn't land. */
 export function provenanceLabel(insight: Insight): string {
   if (insight.agent_state === "pending" || insight.agent_state === "drafting") {
     return insight.source === "template" ? "Template · agent drafting" : "Agent redrafting";

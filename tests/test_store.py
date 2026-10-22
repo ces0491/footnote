@@ -21,6 +21,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
+from footnote.agents import desk as desk_module
 from footnote.agents.desk import REDRAFT_CARD_RUNS, REDRAFT_REPLAY_RUNS, Desk, Refused
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.agents.translator import TranslationStore, TranslationWorker
@@ -500,6 +501,23 @@ async def test_the_desk_acts_only_for_the_viewer_who_started_the_replay(
     with pytest.raises(Refused) as refused:
         await desk.act(RUN_ID, "goal-e1586", VIEWER, "approve")
     assert refused.value.status == 409
+
+
+class _Hung:
+    """A push that never completes, as one did for a minute on a TLS handshake with Web PubSub."""
+
+    async def send(self, run_id: str, message: dict) -> None:
+        await asyncio.sleep(3600)
+
+
+async def test_the_desk_answers_the_producer_without_waiting_on_a_hung_push(
+    pool: Pool, showcase: Match, analysis: Analysis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    await _agents_fall_back(pool)
+    monkeypatch.setattr(desk_module, "PUSH_SECONDS", 0.1)
+    approved = await asyncio.wait_for(Desk(pool, _Hung()).act(RUN_ID, "goal-e1586", VIEWER, "approve"), 5)
+    assert approved["insight"]["status"] == "approved"
 
 
 async def test_a_redraft_queues_a_fresh_job_past_the_cache(pool: Pool, showcase: Match, analysis: Analysis) -> None:

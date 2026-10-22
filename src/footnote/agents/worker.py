@@ -182,13 +182,13 @@ class Worker:
             _outcome("cached")
             return
         if claim.claims > MAX_CLAIMS:
-            await self._fall_back(claim, "The agent service failed on this one; the template stands.")
+            await self._fall_back(claim, "The agent service failed on this one")
             return
         if claim.waited > settings.queue_seconds:
-            await self._fall_back(claim, "It waited too long for an agent; the template stands.")
+            await self._fall_back(claim, "It waited too long for an agent")
             return
         if await self.store.runs_today() >= settings.daily_runs:
-            await self._fall_back(claim, "Today's agent budget is spent; the template stands.")
+            await self._fall_back(claim, "Today's agent budget is spent")
             return
 
         agent_run_id = uuid.uuid4().hex
@@ -208,14 +208,12 @@ class Worker:
         except TimeoutError:
             log.info("%s/%s: no draft within %.0f s", claim.run_id, claim.insight_id, settings.deadline_seconds)
             await self.store.finish_run(agent_run_id, outcome="timeout")
-            await self._fall_back(
-                claim, f"No agent draft within {settings.deadline_seconds:.0f} s; the template stands."
-            )
+            await self._fall_back(claim, f"No agent draft within {settings.deadline_seconds:.0f} s")
             return
         except Exception as exc:
             log.exception("agent run %s failed", agent_run_id)
             await self.store.finish_run(agent_run_id, outcome="error", error=f"{type(exc).__name__}: {exc}"[:2000])
-            await self._fall_back(claim, "The agent failed on this one; the template stands.")
+            await self._fall_back(claim, "The agent failed on this one")
             return
         log.info(
             "%s/%s: %s after %d attempt(s), %d ms, %d tokens in, %d out",
@@ -245,7 +243,7 @@ class Worker:
             draft=outcome.draft.model_dump() if outcome.draft else None,
         )
         if not outcome.accepted or outcome.draft is None:
-            await self._fall_back(claim, "The agent's draft failed the checks; the template stands.")
+            await self._fall_back(claim, "The agent's draft failed the checks")
             return
         await self.store.cache(key, agent_run_id, outcome.draft, drafted.log.facts, drafted.log.events)
         provenance = {
@@ -276,7 +274,9 @@ class Worker:
         await self._send(claim, await self.store.publish(claim, hit.draft, hit.facts, provenance))
         return True
 
-    async def _fall_back(self, claim: Claim, note: str) -> None:
+    async def _fall_back(self, claim: Claim, why: str) -> None:
+        # What stays on screen: the template, or after a redraft the wording the card already had.
+        note = f"{why}; {'the earlier wording' if claim.redraft else 'the template'} stands."
         _outcome("fallback", note=note)
         await self._send(claim, await self.store.fall_back(claim, note))
 

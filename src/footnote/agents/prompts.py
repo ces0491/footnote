@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from footnote.insights.draft import RECAP
 
-PROMPT_VERSION = "2026-10-22.1"
+PROMPT_VERSION = "2026-10-22.2"
 
 
 def _rules(lengths: str) -> str:
@@ -84,9 +84,7 @@ How to work:
    top, get_player for a player's line, get_events for particular events.
 3. Write the card. Its casual line says, in your own words, what the moment means for the match:
    for a goal, what it does to the game and how it came about; for a spell, what it says about the
-   play; for a VAR decision, what it undoes or keeps. A check that gives no penalty found no
-   offence, so don't write the offence as if it happened. The template's wording stands if yours
-   only repeats it, so don't reuse its sentences.
+   play. The template's wording stands if yours only repeats it, so don't reuse its sentences.
 
 {_RULES}"""
 
