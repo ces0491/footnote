@@ -183,6 +183,16 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
             (r"\bpassages réussis\b", "passes réussies"),
             (r"\b(\d+) passages\b", r"\1 passes"),
             (r"\bde passages\b", "de passes"),
+            # "Jeu libre" for "open play", which it also gives as "jeu ouvert".
+            (r"\bjeu libre\b", "jeu ouvert"),
+            # "A marqué sur un contre-attaque": the noun is feminine.
+            (r"\b([Uu])n contre-attaque\b", r"\1ne contre-attaque"),
+            (r"\bLe contre-attaque\b", "La contre-attaque"),
+            (r"\ble contre-attaque\b", "la contre-attaque"),
+            (r"\b([Dd])u contre-attaque\b", r"\1e la contre-attaque"),
+            (r"\bAu contre-attaque\b", "À la contre-attaque"),
+            (r"\bau contre-attaque\b", "à la contre-attaque"),
+            (r"\b([Cc])e contre-attaque\b", r"\1ette contre-attaque"),
         )
     ],
 }

@@ -165,6 +165,14 @@ def test_the_translators_known_slips_are_put_right() -> None:
         NAMES,
         "fr",
     )["casual"] == ("Fut de 20 passes, de passes complétées ; Varlan a joué la dernière passe.")
+    # Open play as the Translator gives it elsewhere, and a counter-attack, which is feminine.
+    countered = "Varlan a égalisé en jeu libre. Adeyani a marqué sur un contre-attaque, au bout du contre-attaque."
+    assert mend(passes, {**passes, "casual": countered}, NAMES, "fr")["casual"] == (
+        "Varlan a égalisé en jeu ouvert. Adeyani a marqué sur une contre-attaque, au bout de la contre-attaque."
+    )
+    assert mend(passes, {**passes, "casual": "Le contre-attaque, puis des contre-attaques."}, NAMES, "fr")[
+        "casual"
+    ] == ("La contre-attaque, puis des contre-attaques.")
     # "In favour of" before a whole score line was "to" it; before a club it stays.
     turned = {"headline": "", "casual": "Femi Adeyani turns the game to Saltmarsh 1–2 Kingsferry.", "analyst": ""}
     for favour, to, lang in (
