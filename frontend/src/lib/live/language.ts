@@ -2,8 +2,8 @@
 // agents service has Azure AI Translator render each card in Spanish and French, and code checks
 // every figure and name came through before a translation joins the card (src/footnote/agents/
 // translator.py). A card whose translation isn't there yet, or failed the check, stays in English,
-// unless the viewer has had an earlier wording of the same facts in their language. The page around
-// the cards stays in English.
+// unless the viewer has had an earlier wording of the same facts in their language. A card's notes
+// about itself go in its language too (`cardNote`); the page around the cards stays in English.
 
 import type { Insight } from "./contract";
 import type { Shown } from "./playback";
@@ -41,4 +41,21 @@ export function localized(shown: Shown[], lang: Language): Shown[] {
 /** The `lang` attribute for wording in `lang`: none for English, the page's own language. */
 export function langAttribute(lang: Language | undefined): Language | undefined {
   return lang === "en" ? undefined : lang;
+}
+
+// What a card says about itself, beside its wording: the processor's flags for a goal VAR took away,
+// and the note on a card the data provider corrected. They go in the card's language with it.
+const NOTES: Record<string, Record<Exclude<Language, "en">, string>> = {
+  "Corrected by the data provider": { es: "Corregido por el proveedor de datos", fr: "Corrigé par le fournisseur de données" },
+  "Ruled out by VAR": { es: "Anulado por el VAR", fr: "Annulé par la VAR" },
+  "The goal it cites was ruled out by VAR": {
+    es: "El gol que cita fue anulado por el VAR",
+    fr: "Le but cité a été annulé par la VAR",
+  },
+};
+
+/** A card's note in the card's language, and that language; a note with no translation stays English. */
+export function cardNote(note: string, lang: Language | undefined): { text: string; lang: Language } {
+  const translated = lang && lang !== "en" ? NOTES[note]?.[lang] : undefined;
+  return translated ? { text: translated, lang: lang! } : { text: note, lang: "en" };
 }

@@ -49,6 +49,35 @@ describe("Ticker", () => {
     expect(screen.getByRole("listitem").textContent).toBe("81'Goal, Kingsferry: own goal by Jory Penhallow");
   });
 
+  it("marks a goal VAR ruled out, once the decision reaches the list", () => {
+    // The showcase's 31st-minute goal, ruled out for offside at 33'.
+    const goal: FeedEvent = { ...GOAL, seq: 533, event_id: "e0532", period: 1, minute: 31, team_id: "sal", player_id: "sal-04", own_goal: false };
+    const decision: FeedEvent = {
+      seq: 535,
+      event_id: "e0534",
+      version: 1,
+      type: "var_check",
+      period: 1,
+      t: 1980,
+      clock: 1980,
+      minute: 33,
+      added_minute: null,
+      status: "complete",
+      check: "goal",
+      decision: "no_goal",
+      overturned: true,
+      goal_event_id: "e0532",
+    };
+    render(<Ticker events={[goal]} tags={[]} roster={r} />);
+    expect(screen.getByRole("listitem").textContent).toBe("31'Goal, Saltmarsh: Jory Penhallow");
+    cleanup();
+    render(<Ticker events={[goal, decision]} tags={[]} roster={r} />);
+    const [ruling, ruledOut] = screen.getAllByRole("listitem");
+    expect(ruling.textContent).toBe("33'VAR: no goal, decision overturned");
+    expect(ruledOut.textContent).toBe("31'Goal, Saltmarsh: Jory PenhallowRuled out by VAR at 33'");
+    expect(ruledOut.className).not.toContain("bg-emerald-50");
+  });
+
   it("lets the keyboard scroll the list", () => {
     render(<Ticker events={[GOAL]} tags={[]} roster={r} />);
     expect(screen.getByRole("list", { name: "Key moments, latest first" }).tabIndex).toBe(0);

@@ -35,7 +35,7 @@ describe("ProducerConsole corrections", () => {
     const restated = insightFixture("goal-e1586", {
       seq: 1620,
       shown_seq: 1620,
-      flag: { reason: "The provider amended the goal this cites", event_id: "e1619", version: 2, seq: 1620 },
+      flag: { reason: "The data provider amended the goal this cites", event_id: "e1619", version: 2, seq: 1620 },
       status: "drafted",
       status_by: "correction",
       source: "agent",
@@ -50,7 +50,7 @@ describe("ProducerConsole corrections", () => {
       },
     });
     const entry = within(corrections([restated]).getByText("Femi Adeyani scores").closest("li")!);
-    expect(entry.getByText(/The provider amended the goal this cites/)).toBeTruthy();
+    expect(entry.getByText(/The data provider amended the goal this cites/)).toBeTruthy();
     expect(entry.getByText("Kingsferry lead late on through Femi Adeyani.")).toBeTruthy();
     expect(entry.getByText("The shot was from 21 m.")).toBeTruthy();
     expect(entry.getByText("Corrected: needs approval again")).toBeTruthy();

@@ -36,7 +36,7 @@ describe("fan settings", () => {
   });
 
   it("tells a card a correction restated from one VAR or a correction undid", () => {
-    const flag = { reason: "The provider amended the goal this cites", event_id: "e1620", version: 2, seq: 1620 };
+    const flag = { reason: "The data provider amended the goal this cites", event_id: "e1620", version: 2, seq: 1620 };
     expect(undone(insightFixture("goal-e1586", { seq: 1620, flag }))).toBe("corrected");
     expect(undone(insightFixture("keypass-e1584", { seq: 1586, flag }))).toBe("undone");
     expect(undone(insightFixture("goal-e0391"))).toBeNull();

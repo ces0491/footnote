@@ -443,4 +443,5 @@ export interface InsightDetail {
   draft_from: "current" | "template";
   facts: { key: string; display: string; about: string }[];
   agent_runs: AgentRunSummary[];
+  reused_run: AgentRunSummary | null; // the run in an earlier replay that wrote the draft reused here
 }

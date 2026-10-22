@@ -12,7 +12,7 @@ import { CATCH_UP_TOPIC, type KeyMoment } from "@/lib/live/catch-up";
 import type { Club, Insight, MatchMeta, Player, StateView, TrackingLayout } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
 import { involves, metricFigures, ownFirst, playerLine, undone } from "@/lib/live/fan";
-import { type Language, langAttribute, LANGUAGES } from "@/lib/live/language";
+import { cardNote, type Language, langAttribute, LANGUAGES } from "@/lib/live/language";
 import type { Shown } from "@/lib/live/playback";
 import { METRICS, type Settings } from "@/lib/live/profiles";
 import { minuteLabel } from "@/lib/live/timeline";
@@ -37,6 +37,16 @@ export interface CatchUpView {
  * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The model's
  * estimate of the moment swings with every break; the share of recent minutes moves as the game does.
  */
+/** What VAR or the data provider did to a card, in the card's language. */
+function Note({ note, lang }: { note: string; lang: Language | undefined }) {
+  const said = cardNote(note, lang);
+  return (
+    <p className="text-sm font-medium text-amber-700 dark:text-amber-400" lang={langAttribute(said.lang)}>
+      {said.text}
+    </p>
+  );
+}
+
 function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: Club; own: string | null }) {
   const state = view.match_state;
   const [a, b] = ownFirst(home, away, own);
@@ -206,12 +216,7 @@ export function FanPanel({
                       </Badge>
                     </div>
                   </div>
-                  {undone(insight) === "undone" && (
-                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{insight.flag!.reason}</p>
-                  )}
-                  {undone(insight) === "corrected" && (
-                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Corrected by the data provider</p>
-                  )}
+                  {undone(insight) !== null && <Note note={undone(insight) === "undone" ? insight.flag!.reason : "Corrected by the data provider"} lang={lang} />}
                   <p className="text-sm" lang={wording}>
                     {analyst ? insight.card.analyst : insight.card.casual}
                   </p>

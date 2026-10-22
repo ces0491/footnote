@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Insight, InsightMessage } from "./contract";
-import { inLanguage, langAttribute, localized } from "./language";
+import { cardNote, inLanguage, langAttribute, localized } from "./language";
 import { insightsAt } from "./playback";
 import { initialRunViewState, runReducer } from "./run-reducer";
 import { translatedLabel } from "./shortlist";
@@ -42,7 +42,7 @@ describe("cards in the fan's language", () => {
   });
 
   it("shows a card a correction restated in English until its new wording is translated", () => {
-    const flag = { reason: "The provider amended the goal this cites", event_id: "e1619", version: 2, seq: 1620 };
+    const flag = { reason: "The data provider amended the goal this cites", event_id: "e1619", version: 2, seq: 1620 };
     const before = insightFixture("goal-e1586", { seq: 1587, card: english, translations: { es: spanish } });
     const restated = insightFixture("goal-e1586", { seq: 1620, flag, card: { ...english, headline: "Femi Adeyani scores" } });
     const [shown] = localized([{ insight: restated, from: 1400, earlier: [before] }], "es");
@@ -93,6 +93,13 @@ describe("cards in the fan's language", () => {
     expect(langAttribute("fr")).toBe("fr");
     expect(langAttribute("en")).toBeUndefined();
     expect(langAttribute(undefined)).toBeUndefined();
+  });
+
+  it("gives a card's notes in the card's language, and an unknown one in English", () => {
+    expect(cardNote("Corrected by the data provider", "es")).toEqual({ text: "Corregido por el proveedor de datos", lang: "es" });
+    expect(cardNote("Ruled out by VAR", "fr")).toEqual({ text: "Annulé par la VAR", lang: "fr" });
+    expect(cardNote("Ruled out by VAR", "en")).toEqual({ text: "Ruled out by VAR", lang: "en" });
+    expect(cardNote("Something new", "es")).toEqual({ text: "Something new", lang: "en" });
   });
 
   it("tells the producer which languages a card is ready in", () => {

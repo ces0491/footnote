@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { DeskRefusal, Insight, InsightDetail, InsightMessage } from "@/lib/live/contract";
+import type { AgentRunSummary, DeskRefusal, Insight, InsightDetail, InsightMessage } from "@/lib/live/contract";
 import { asLines, edited, fill } from "@/lib/live/draft";
 
 async function loadDetail(runId: string, insightId: string): Promise<InsightDetail> {
@@ -251,50 +251,64 @@ export function AgentRunsDialog({ runId, insight }: { runId: string; insight: In
         </DialogHeader>
         {error && <p className="text-destructive">Couldn&apos;t load the runs: {error}</p>}
         {!detail && !error && <p className="text-muted-foreground">Loading…</p>}
-        {detail && detail.agent_runs.length === 0 && (
+        {detail && detail.agent_runs.length === 0 && !detail.reused_run && (
           <p className="text-muted-foreground">
             No agent has run on this card{insight.provenance.cached ? ": its draft was reused from an earlier replay." : "."}
           </p>
         )}
-        <ol className="space-y-3">
-          {detail?.agent_runs.map((r) => (
-            <li key={r.agent_run_id} className="space-y-1.5 rounded-lg border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={r.outcome === "accepted" ? "secondary" : "outline"}>
-                  {r.outcome ? OUTCOME[r.outcome] : "Drafting"}
-                </Badge>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {[
-                    r.attempts !== null && `${r.attempts} ${r.attempts === 1 ? "attempt" : "attempts"}`,
-                    r.latency_ms !== null && `${(r.latency_ms / 1000).toFixed(1)} s`,
-                    r.input_tokens !== null && `${r.input_tokens.toLocaleString()} tokens in`,
-                    r.output_tokens !== null && `${r.output_tokens.toLocaleString()} out`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </div>
-              {r.tool_calls && r.tool_calls.length > 0 && (
-                <ul className="space-y-0.5 text-xs">
-                  {r.tool_calls.map((call, i) => (
-                    <li key={i} className="font-mono">
-                      {call.name}({Object.entries(call.arguments ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ")})
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {r.problems && r.problems.length > 0 && (
-                <ul className="list-disc pl-4 text-xs text-muted-foreground">
-                  {r.problems.map((p) => (
-                    <li key={p}>{p}</li>
-                  ))}
-                </ul>
-              )}
-              {r.error && <p className="text-xs text-muted-foreground">{r.error}</p>}
-            </li>
-          ))}
-        </ol>
+        {detail && detail.agent_runs.length > 0 && (
+          <ol className="space-y-3">
+            {detail.agent_runs.map((r) => (
+              <RunEntry key={r.agent_run_id} run={r} />
+            ))}
+          </ol>
+        )}
+        {detail?.reused_run && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-medium">The run in an earlier replay that wrote the draft reused here</h3>
+            <ol>
+              <RunEntry run={detail.reused_run} />
+            </ol>
+          </section>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RunEntry({ run: r }: { run: AgentRunSummary }) {
+  return (
+    <li className="space-y-1.5 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={r.outcome === "accepted" ? "secondary" : "outline"}>{r.outcome ? OUTCOME[r.outcome] : "Drafting"}</Badge>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {[
+            r.attempts !== null && `${r.attempts} ${r.attempts === 1 ? "attempt" : "attempts"}`,
+            r.latency_ms !== null && `${(r.latency_ms / 1000).toFixed(1)} s`,
+            r.input_tokens !== null && `${r.input_tokens.toLocaleString()} tokens in`,
+            r.output_tokens !== null && `${r.output_tokens.toLocaleString()} out`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </div>
+      {r.tool_calls && r.tool_calls.length > 0 && (
+        <ul className="space-y-0.5 text-xs">
+          {r.tool_calls.map((call, i) => (
+            <li key={i} className="font-mono">
+              {call.name}({Object.entries(call.arguments ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ")})
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.problems && r.problems.length > 0 && (
+        <ul className="list-disc pl-4 text-xs text-muted-foreground">
+          {r.problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      )}
+      {r.error && <p className="text-xs text-muted-foreground">{r.error}</p>}
+    </li>
   );
 }

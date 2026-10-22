@@ -104,6 +104,7 @@ export interface TickerLine extends EventLine {
   minute: number;
   addedMinute: number | null;
   correctedAt: string | null; // the minute the provider amended the event, once the list has the amendment
+  ruledOutAt: string | null; // the minute VAR ruled the goal out, once the list has the decision
 }
 
 /**
@@ -120,12 +121,24 @@ export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): Ticker
     const amendment = amendments.get(event.event_id);
     return amendment && amendment.seq > event.seq ? minuteLabel(amendment.minute, amendment.added_minute) : null;
   };
+  // A goal VAR ruled out keeps its line too, marked: the decision names the goal it took away.
+  const decisions = new Map<string, FeedEvent>();
+  for (const event of events) {
+    if (event.type === "var_check" && event.decision === "no_goal" && typeof event.goal_event_id === "string") {
+      decisions.set(event.goal_event_id, event);
+    }
+  }
+  const ruledOutAt = (event: FeedEvent) => {
+    const decision = event.type === "goal" ? decisions.get(event.event_id) : undefined;
+    return decision && decision.seq > event.seq ? minuteLabel(decision.minute, decision.added_minute) : null;
+  };
   const out: TickerLine[] = [];
   const tagLine = (tag: Tag): TickerLine => ({
     key: `tag-${tag.kind}-${tag.player_id}-${tag.period}-${tag.t}`,
     minute: tag.minute,
     addedMinute: tag.added_minute,
     correctedAt: null,
+    ruledOutAt: null,
     ...describeTag(tag, r),
   });
   let next = 0;
@@ -133,7 +146,14 @@ export function tickerLines(events: FeedEvent[], tags: Tag[], r: Roster): Ticker
     while (next < tags.length && (event.period > tags[next].period || (event.period === tags[next].period && event.t > tags[next].t))) {
       out.push(tagLine(tags[next++]));
     }
-    out.push({ key: `${event.seq}`, minute: event.minute, addedMinute: event.added_minute, correctedAt: correctedAt(event), ...describe(event, r) });
+    out.push({
+      key: `${event.seq}`,
+      minute: event.minute,
+      addedMinute: event.added_minute,
+      correctedAt: correctedAt(event),
+      ruledOutAt: ruledOutAt(event),
+      ...describe(event, r),
+    });
   }
   for (const tag of tags.slice(next)) out.push(tagLine(tag));
   return out;

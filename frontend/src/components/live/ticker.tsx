@@ -42,7 +42,7 @@ export function Ticker({ events, tags, roster }: { events: FeedEvent[]; tags: Ta
                   key={line.key}
                   className={cn(
                     "flex items-start gap-3 rounded-md px-2 py-1.5 text-sm",
-                    line.tone === "goal" && "bg-emerald-50 font-medium dark:bg-emerald-950/40",
+                    line.tone === "goal" && !line.ruledOutAt && "bg-emerald-50 font-medium dark:bg-emerald-950/40",
                     line.tone === "correction" && "bg-amber-50 dark:bg-amber-950/40",
                     (line.tone === "sprint" || line.tone === "distance") && "text-muted-foreground",
                   )}
@@ -57,6 +57,9 @@ export function Ticker({ events, tags, roster }: { events: FeedEvent[]; tags: Ta
                       <span className="block text-xs font-medium text-amber-700 dark:text-amber-400">
                         Corrected by the data provider at {line.correctedAt}
                       </span>
+                    )}
+                    {line.ruledOutAt && (
+                      <span className="block text-xs font-medium text-muted-foreground">Ruled out by VAR at {line.ruledOutAt}</span>
                     )}
                   </span>
                 </li>

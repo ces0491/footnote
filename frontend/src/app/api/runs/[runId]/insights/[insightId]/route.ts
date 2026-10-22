@@ -18,7 +18,8 @@ function usesOnly(draft: Draft, facts: Record<string, unknown>): boolean {
 }
 
 // What the producer console needs for one card: the wording to start an edit from, with its
-// placeholders, the moment's facts an edit may use, and the agents' runs on it, newest first.
+// placeholders, the moment's facts an edit may use, and the agents' runs on it, newest first, with
+// the run in an earlier replay that wrote a draft this one reused. Agent runs outlive their replays.
 // An agent's draft can use figures its match tools fetched beyond the moment's own facts; an edit
 // can't, so an edit of such a draft starts from the template's wording.
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]/insights/[insightId]">) {
@@ -29,7 +30,11 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[r
             coalesce((select jsonb_agg(to_jsonb(a) - 'run_id' - 'insight_id' - 'cache_key' - 'draft'
                                        order by a.started_at desc)
                         from agent_runs a where a.run_id = i.run_id and a.insight_id = i.insight_id), '[]'::jsonb)
-              as agent_runs
+              as agent_runs,
+            (select to_jsonb(a) - 'run_id' - 'insight_id' - 'cache_key' - 'draft'
+               from agent_runs a
+              where (v.provenance ->> 'cached')::boolean and a.agent_run_id = v.provenance ->> 'agent_run_id'
+                and a.run_id <> i.run_id) as reused_run
        from insights i
        join insight_versions v on v.run_id = i.run_id and v.insight_id = i.insight_id and v.version = i.version
       where i.run_id = $1 and i.insight_id = $2`,
@@ -44,6 +49,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[r
     draft_from: current ? "current" : "template",
     facts: Object.entries(facts).map(([key, fact]) => ({ key, display: fact.display, about: fact.about })),
     agent_runs: row.agent_runs,
+    reused_run: row.reused_run ?? null,
   };
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }
