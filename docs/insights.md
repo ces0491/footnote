@@ -140,7 +140,9 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
 - a card that says who a goal is credited to also says who it was credited to before, when its
   facts include a correction: "later credited to Femi Adeyani" alone reads as if it always had been.
   The earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets: read
-  aloud, "(originally given as Jory Penhallow)" sounds like the scorer's other name;
+  aloud, "(originally given as Jory Penhallow)" sounds like the scorer's other name. Nor is the goal
+  "corrected to" the scorer the sentence has already named ("Femi Adeyani's strike, later corrected
+  to Femi Adeyani");
 - a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name

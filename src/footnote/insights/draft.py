@@ -26,7 +26,8 @@ and so do the agents.
 - a card that says who a goal is credited to also says who it was credited to before, when its
   facts have a correction: "later credited to Femi Adeyani" alone reads as if it always had been. The
   earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets, where it
-  reads aloud as the scorer;
+  reads aloud as the scorer, and the goal isn't "corrected to" the scorer the sentence has already
+  named;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name, a count of times followed by a noun ("7 times changes of
   possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading fact
@@ -734,6 +735,20 @@ def _credit_problems(card: Card, facts: Facts) -> list[str]:
                 problems.append(
                     f"{where}, the earlier credit ({fact.display}) reads aloud as the scorer; say the goal was"
                     f" originally credited to {{{key}}}"
+                )
+                break
+    for key, fact in sorted(facts.items()):
+        if _named(key) != "after" or not isinstance(fact.value, str):
+            continue
+        # The scorer named, then the goal "corrected to" the same name: "Femi Adeyani's strike at 81',
+        # later corrected to Femi Adeyani" says nothing about what changed.
+        surname = re.escape(fact.display.split()[-1])
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            corrected = re.search(rf"\bcorrected to (?:credit )?(?:[A-Z][^\W\d_]+ )*{surname}\b", sentence)
+            if corrected is not None and re.search(rf"\b{surname}\b", sentence[: corrected.start()]):
+                problems.append(
+                    f"'{corrected.group(0)}' after naming {fact.display} as the scorer says nothing changed; say"
+                    f" the goal was originally credited to {{{key.rsplit('.', 1)[0]}.before}}"
                 )
                 break
     return problems

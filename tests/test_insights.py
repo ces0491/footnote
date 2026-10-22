@@ -492,6 +492,10 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         ("Adeyani finished a {moment.play_pattern} counter.", "'counter counter' once filled in"),
         ("{teams.SAL.name} and later {teams.SAL.name} were on top.", "'Saltmarsh and later Saltmarsh' once filled in"),
         ("Despite the pressure they registered only {segment.shots}.", "leave out 'only'"),
+        (
+            "{story.15.after}'s strike, later corrected to {story.15.after}, originally credited to {story.15.before}.",
+            "says nothing changed",
+        ),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
