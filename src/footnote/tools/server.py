@@ -42,8 +42,9 @@ INSTRUCTIONS = (
 # file and the templates in case it isn't). 2026-10-21.1: get_story. 2026-10-21.2: the state of play
 # described in clauses, the correction's facts and the templates reworded. 2026-10-22.1: how a move
 # started in football's words ("open play", not "regular play"). 2026-10-22.2: a goal's reason and a
-# correction's flag without a colon inside them.
-TOOLS_VERSION = "2026-10-22.2"
+# correction's flag without a colon inside them. 2026-10-22.3: a recap's facts and template give who
+# a goal was first credited to when the provider changed it.
+TOOLS_VERSION = "2026-10-22.3"
 
 # Read-only, and about a closed world: the match as stored.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)

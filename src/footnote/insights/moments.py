@@ -215,6 +215,9 @@ class MomentFinder:
     events: dict[str, dict] = field(init=False, default_factory=dict)  # every event so far, by ID
     difficulty: dict[str, float] = field(init=False, default_factory=dict)  # pass event ID -> rating
     goals: dict[str, _GoalContext] = field(init=False, default_factory=dict)
+    # Who each goal was first credited to, and whether as an own goal, by the goal's insight ID, once
+    # the provider has credited it to another player: a recap tells the change (templates.told).
+    first_credits: dict[str, tuple[str | None, bool]] = field(init=False, default_factory=dict)
     _possessions: dict[int, list[str]] = field(init=False, default_factory=dict)
     _onball: list[dict] = field(init=False, default_factory=list)  # in order, for spell figures
     _hardest: float = field(init=False, default=0.0)
@@ -256,6 +259,10 @@ class MomentFinder:
     def observe(self, m: dict, state: RunState) -> list[Found]:
         """The insights this message starts, once `state` has applied it."""
         kind = m["type"]
+        if kind == "amendment" and m["amends"] == "goal" and "player_id" in m["changes"]:
+            changes = m["changes"]
+            own_goal = changes.get("own_goal", {}).get("before", m["corrected_event"].get("own_goal"))
+            self.first_credits.setdefault(f"goal-{m['event_id']}", (changes["player_id"]["before"], bool(own_goal)))
         if kind in ("match_info", "amendment"):
             return []
         self.events[m["event_id"]] = m
@@ -754,8 +761,8 @@ class MomentFinder:
         )
 
     def _recap_facts(self, m: dict, state: RunState) -> Facts:
-        """What every recap may state: the score, the goals as they stand, and each club's share of the
-        passes and its shots."""
+        """What every recap may state: the score, the goals as they stand, each club's share of the
+        passes and its shots, and who a goal was first credited to when the provider changed it."""
         events = (m["event_id"],)
         teams = state.stats.view()["teams"]
         home, away = self.meta["home"]["id"], self.meta["away"]["id"]
@@ -780,6 +787,30 @@ class MomentFinder:
                 tuple(e for g in goals for e in g.facts["moment.scorer"].events),
             )
             f["recap.goal_count"] = _count_of(len(goals), "goal", "how many goals stand so far")
+        return f | self._credits_changed(goals)
+
+    def _credits_changed(self, goals: list[Insight]) -> Facts:
+        """Each goal standing that the provider credited to another player, under
+        `recap.correction.<n>`: who it was first credited to and who now. Code tells the change at the
+        end of the recap's casual line (templates.told)."""
+        changed = [
+            (goal, *self.first_credits[goal.insight_id])
+            for goal in goals
+            if goal.insight_id in self.first_credits
+            and self.name(self.first_credits[goal.insight_id][0]) != goal.facts["moment.scorer"].display
+        ]
+        f: Facts = {}
+        for n, (goal, first, own_goal) in enumerate(changed, start=1):
+            key, scorer = f"recap.correction.{n}", goal.facts["moment.scorer"]
+            f[f"{key}.minute"] = F.minute(
+                goal.at["minute"], goal.at["added_minute"], "minute of the goal credited afresh", scorer.events
+            )
+            f[f"{key}.before"] = F.text(self.name(first), "who the goal was originally credited to", scorer.events)
+            if own_goal:
+                f[f"{key}.own_goal_before"] = F.text(
+                    "own goal", "it was originally recorded as an own goal", scorer.events
+                )
+            f[f"{key}.after"] = F.text(scorer.display, "who it is credited to now", scorer.events)
         return f
 
     # --- corrections ---------------------------------------------------------------------------

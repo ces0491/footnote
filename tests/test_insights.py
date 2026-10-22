@@ -6,8 +6,20 @@ from __future__ import annotations
 import pytest
 
 from footnote.insights.book import Insight
-from footnote.insights.draft import CARD, CATCH_UP, RECAP, Draft, Sentence, check, indefinite, limits_for, render
+from footnote.insights.draft import (
+    CARD,
+    CATCH_UP,
+    RECAP,
+    Draft,
+    Sentence,
+    check,
+    indefinite,
+    limits_for,
+    render,
+    retold,
+)
 from footnote.insights.facts import NBSP, Fact, duration, minute, share, speed, text
+from footnote.insights.templates import told
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
@@ -173,6 +185,27 @@ def test_recaps_give_the_goals_as_they_stand(final: RunState) -> None:
     assert {"e0391", "e1029", "e1586"} <= set(full_time.evidence)
     assert half_time.agent and full_time.agent and full_time.placement == "full_card"
     assert full_time.card().casual.startswith("Saltmarsh 1" + chr(0x2013) + "2 Kingsferry at full time.")
+
+
+def test_a_recap_ends_with_codes_sentence_on_a_goal_credited_afresh(
+    showcase: Match, analysis: Analysis, final: RunState
+) -> None:
+    full_time = _insights(final)["ft"]
+    assert full_time.facts["recap.correction.1.before"].display == "Jory Penhallow"
+    assert full_time.facts["recap.correction.1.after"].display == "Femi Adeyani"
+    assert full_time.facts["recap.correction.1.minute"].events == ("e1586",)
+    assert full_time.card().casual.endswith(
+        " The 81' goal, originally recorded as Jory Penhallow's own goal, is now credited to Femi Adeyani."
+    )
+    # Before the correction there is nothing to tell: at half-time, and in a catch-up from 60'.
+    for recap in (_insights(final)["ht"], _insights(_from(showcase, analysis, 1137))["catchup"]):
+        assert not any(key.startswith("recap.correction.") for key in recap.facts), recap.insight_id
+        assert told(recap.facts) == []
+    # Credited first as an own goal, the sentence says so; credited first to another scorer, it names them.
+    facts = {k: v for k, v in full_time.facts.items() if k != "recap.correction.1.own_goal_before"}
+    assert render(Draft(headline="x", casual=told(facts), analyst=[]), facts).casual == (
+        "The 81' goal, originally credited to Jory Penhallow, is now credited to Femi Adeyani."
+    )
 
 
 @pytest.mark.parametrize(
@@ -418,6 +451,23 @@ def test_a_goal_ruled_out_is_named_by_its_var_decision() -> None:
     assert any("no VAR decision in the facts ruled one out" in p for p in nothing), nothing
 
 
+def test_a_penalty_check_is_never_for_the_player_it_was_about() -> None:
+    """A recorded catch-up gave the 75' check to the wrong side: "VAR rejected a penalty for Uche Asatoye"."""
+    facts = {
+        **FACTS,
+        "story.12.check": Fact("penalty", "penalty", "what VAR is checking: goal or penalty", ("e0391",)),
+        "story.12.subject": text("Uche Asatoye", "the player the check is about", ("e0391",)),
+        "story.12.incident": text("handball", "what the check is for", ("e0391",)),
+    }
+    for wrong in ("VAR rejected a penalty for {story.12.subject}.", "VAR turned down a penalty to Asatoye."):
+        assert any("gave a penalty away" in p for p in check(_draft(wrong), facts, EVENTS)), wrong
+    for right in (
+        "VAR found no {story.12.incident} by {story.12.subject}, so there was no penalty.",
+        "VAR turned down a penalty for {story.12.incident} by Asatoye.",
+    ):
+        assert check(_draft(right), facts, EVENTS) == [], right
+
+
 def test_wording_copied_from_the_tools_is_refused() -> None:
     """Each slip came from a live or recorded agent card."""
     facts = {
@@ -496,6 +546,12 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
             "{story.15.after}'s strike, later corrected to {story.15.after}, originally credited to {story.15.before}.",
             "says nothing changed",
         ),
+        (
+            "Late on {story.15.after} restored the lead; the goal was later credited to {story.15.after}, originally"
+            " credited to {story.15.before}.",
+            "says nothing changed",
+        ),
+        ("Saltmarsh were dominating possession from {story.3.start_minute}'.", "leave out the one after it"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
@@ -524,6 +580,30 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
     assert not any("leave out 'a'" in p for p in spell)
     # Templates choose the article by how the figure is read.
     assert [indefinite(d) for d in ("8%", "80%", "11%", "18%", "5%", "58%", "110%", "1%")] == (["an"] * 4 + ["a"] * 4)
+
+
+def test_a_recap_leaves_a_change_of_credit_to_codes_sentence() -> None:
+    facts = {
+        **FACTS,
+        "recap.correction.1.minute": minute(81, None, "minute of the goal credited afresh", ("e0391",)),
+        "recap.correction.1.before": text("Jory Penhallow", "who the goal was originally credited to", ("e0391",)),
+        "recap.correction.1.after": text("Femi Adeyani", "who it is credited to now", ("e0391",)),
+        "story.15.before": text("Jory Penhallow", "who it was credited to before", ("e0391",)),
+    }
+    code = told(facts)
+    for retelling in (
+        "{player.kin-07.name} won it late on, a goal later credited to {player.kin-07.name}.",
+        "The late winner was originally recorded as an own goal.",
+        "{story.15.before} was down as the scorer for a few minutes.",
+        "The data provider amended the winner.",
+    ):
+        problems = retold(_draft(retelling), code, facts)
+        assert problems == [
+            "casual sentence 1: code ends the casual line with the change of credit ('The 81' goal, originally"
+            " credited to Jory Penhallow, is now credited to Femi Adeyani.'), so leave it out of your sentences"
+        ], retelling
+    assert retold(_draft("{player.kin-07.name} won it late on the break."), code, facts) == []
+    assert retold(_draft("The data provider amended the winner."), [], facts) == []
 
 
 def test_template_cards_read_as_a_viewer_and_a_translator_need(

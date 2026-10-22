@@ -242,8 +242,11 @@ async def test_a_recap_is_told_from_the_story_with_room_to_tell_it(
     told = {
         "headline": "{recap.label}: {recap.score_line}",
         "casual": [
-            {"text": f"{{{first}.club}} opened the scoring through {{{first}.scorer}}.", "events": []},
-            {"text": f"{{{second}.scorer}} levelled for {{{second}.club}} from distance.", "events": []},
+            {
+                "text": f"{{{first}.club}} opened the scoring through {{{first}.scorer}}, and {{{second}.scorer}}"
+                f" levelled for {{{second}.club}} from distance.",
+                "events": [],
+            },
             {"text": f"{{{third}.scorer}} settled it late on the break.", "events": []},
         ],
         "analyst": [{"text": "{recap.home_club} had {recap.home_possession} of the passes.", "events": []}],
@@ -251,15 +254,51 @@ async def test_a_recap_is_told_from_the_story_with_room_to_tell_it(
     client = TellsTheStory(told)
     async with match_tools(showcase, analysis, rows) as url:
         drafted = await draft(Job(RUN, "ft", "recap", "full_time", 1), client, url, {})
-    # Three sentences: more than a moment's card may take, as a recap may.
+    # Three sentences, code's last: more than a moment's card may take, as a recap may.
     assert drafted.outcome.accepted and drafted.outcome.attempts == 1, drafted.outcome.problems
     assert [c["name"] for c in drafted.log.calls] == ["get_moment", "get_story"]
     assert drafted.outcome.draft is not None
     card = render(drafted.outcome.draft, drafted.log.facts)
     assert card.casual.startswith("Kingsferry opened the scoring through Femi Adeyani")
     assert "Teo Varlan levelled for Saltmarsh" in card.casual and "Femi Adeyani settled it" in card.casual
+    assert card.casual.endswith(
+        "on the break. The 81' goal, originally recorded as Jory Penhallow's own goal, is now credited to Femi Adeyani."
+    )
     assert {"e0391", "e1029", "e1586"} <= set(card.evidence)
     assert instructions("recap") is RECAP_WRITER and writer_name("recap") == "recap_writer"
+
+
+async def test_a_recap_leaves_the_change_of_credit_to_code(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict]
+) -> None:
+    third = _goal_keys(await _story(showcase, analysis, rows, "ft"))[-1]
+    analyst = [{"text": "{recap.home_club} had {recap.home_possession} of the passes.", "events": []}]
+    retells = {
+        "headline": "Final score",
+        "casual": [{"text": f"{{{third}.scorer}} won it, a goal later credited to {{{third}.scorer}}.", "events": []}],
+        "analyst": analyst,
+    }
+    codes = {
+        "text": "The {recap.correction.1.minute} goal, originally recorded as {recap.correction.1.before}'s own goal,"
+        " is now credited to {recap.correction.1.after}.",
+        "events": [],
+    }
+    copies = {
+        "headline": "Final score",
+        "casual": [{"text": f"{{{third}.scorer}} won it late on the break.", "events": []}, codes],
+        "analyst": analyst,
+    }
+    client = TellsTheStory(retells, copies)
+    async with match_tools(showcase, analysis, rows) as url:
+        drafted = await draft(Job(RUN, "ft", "recap", "full_time", 1), client, url, {})
+    assert drafted.outcome.accepted and drafted.outcome.attempts == 2, drafted.outcome.problems
+    assert "code ends the casual line with the change of credit" in client.prompts[-1]
+    # The writer's copy of code's sentence is kept once.
+    assert drafted.outcome.draft is not None
+    assert render(drafted.outcome.draft, drafted.log.facts).casual == (
+        "Femi Adeyani won it late on the break. The 81' goal, originally recorded as Jory Penhallow's own goal, is"
+        " now credited to Femi Adeyani."
+    )
 
 
 async def test_a_catch_up_that_gives_the_score_away_is_revised(

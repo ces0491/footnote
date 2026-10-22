@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from footnote.insights.draft import RECAP
 
-PROMPT_VERSION = "2026-10-22.2"
+PROMPT_VERSION = "2026-10-22.3"
 
 
 def _rules(lengths: str) -> str:
@@ -63,10 +63,11 @@ _RECAP_RULES = _rules(
 - headline: a recap keeps the template's heading, which code puts on it, so write it as the
   template gives it. casual: one to three sentences, {RECAP.casual_chars} characters at most once
   the placeholders are filled in, telling the story of the match so far for a casual fan, in the
-  order it happened, without jargon. analyst: one to three sentences, {RECAP.analyst_chars} characters at
-  most, with the numbers behind it, none the casual line already gives. Each club's share of the
-  passes and its shots go in the analyst line, as the template has them, so the casual line leaves
-  them out.
+  order it happened, without jargon. Code's sentence on a change of credit counts towards both
+  limits, so with one, write one or two sentences and leave it room. analyst: one to three
+  sentences, {RECAP.analyst_chars} characters at most, with the numbers behind it, none the casual
+  line already gives. Each club's share of the passes and its shots go in the analyst line, as the
+  template has them, so the casual line leaves them out.
 - The catch-up ("What you missed", for a viewer joining a match already under way) leaves the score
   line to the scoreboard beside it. Use no score fact there, such as score.line or any key ending in
   score_line; tell what happened instead."""
@@ -95,22 +96,23 @@ recap.
 
 How to work:
 1. Call get_moment and get_story together, in one step. get_moment says which recap this is, with
-   its facts (the score, the goals as they stand, each club's share of the passes and its shots)
-   and the template's wording. get_story lists the moments of the match so far in order: goals, VAR
-   decisions, red cards, spells when one side was on top, and corrections from the data provider,
-   each with its facts under keys of its own (story.<n>.<fact>), the template's wording and its
-   events. A goal VAR ruled out isn't listed as a goal; the VAR decision says what happened. To say
-   a goal was ruled out, name it with the VAR decision's own facts (its story.<n>.subject or
-   story.<n>.minute): every goal listed stands.
+   its facts (the score, the goals as they stand, each club's share of the passes and its shots,
+   and who a goal was originally credited to when the data provider changed it) and the template's
+   wording. get_story lists the moments of the match so far in order: goals, VAR decisions, red
+   cards, spells when one side was on top, and corrections from the data provider, each with its
+   facts under keys of its own (story.<n>.<fact>), the template's wording and its events. A goal VAR
+   ruled out isn't listed as a goal; the VAR decision says what happened. To say a goal was ruled
+   out, name it with the VAR decision's own facts (its story.<n>.subject or story.<n>.minute): every
+   goal listed stands.
 2. Write the recap in your own words. The template only lists the goals and the figures; yours
-   tells the story: who was on top and when, how each goal came about, and what VAR or a correction
-   changed. Don't repeat the template's sentences, and leave out what didn't matter. recap.goals is
-   the template's list; in a sentence, use each goal's own facts from get_story instead
-   (story.<n>.scorer, who finished the move, and story.<n>.minute; story.<n>.passer played the
-   final pass to the scorer). For a goal the data provider corrected, name both credits, the way
-   "{{story.<n>.after}}'s goal, originally credited to {{story.<n>.before}}" does, with the
-   correction's own facts. After "not" or "instead of", or in brackets, the earlier credit reads
-   aloud as if it were the scorer's name.
+   tells the story: who was on top and when, how each goal came about, and what VAR changed. Don't
+   repeat the template's sentences, and leave out what didn't matter. recap.goals is the template's
+   list; in a sentence, use each goal's own facts from get_story instead (story.<n>.scorer, who
+   finished the move, and story.<n>.minute; story.<n>.passer played the final pass to the scorer).
+   When the data provider credited a goal to another player, the template's casual line ends with
+   a sentence saying so, and code puts that sentence at the end of yours as it is. Tell that goal
+   with the scorer it has now, and leave the change of credit to code's sentence: write nothing
+   about credits or corrections, and don't name the earlier credit.
 3. A spell's figures cover that spell alone: its shots are the shots in those minutes, not the
    match's. Its wording in get_story is as of that moment, so "the last 5 minutes" there meant the
    five before it: say when a spell was from its story.<n>.start_minute ("a spell from 13'"). Don't

@@ -33,8 +33,9 @@ from agent_framework import (
 from pydantic import ValidationError
 
 from footnote.agents.prompts import first_prompt, instructions, revision_prompt, writer_name
-from footnote.insights.draft import Draft, check, limits_for, render, same_words
+from footnote.insights.draft import Draft, check, limits_for, render, retold, same_words
 from footnote.insights.facts import Facts, facts_from_json
+from footnote.insights.templates import told
 from footnote.tools.scope import INSIGHT_HEADER, RUN_HEADER
 
 MAX_ATTEMPTS = 2
@@ -43,12 +44,13 @@ MAX_ATTEMPTS = 2
 # a way that could change a draft or the facts it is checked against. 2026-10-20.2: tool logs no
 # longer mix between concurrent jobs (ToolLog). 2026-10-21.1: limits by topic (recaps), and a draft
 # that repeats the template's casual line is sent back. 2026-10-21.2: a recap keeps the template's
-# heading.
-WRITER_VERSION = "2026-10-21.2"
+# heading. 2026-10-22.1: a recap's casual line ends with code's sentence on a goal credited afresh.
+WRITER_VERSION = "2026-10-22.1"
 
 # A recap's heading is its graphic's fixed one ("Half-time: Saltmarsh 0–1 Kingsferry", "What you
 # missed, up to 59'"), so the template's stands whatever the writer puts there: one headed the
-# full-time recap "Insight ft.", from the job it was given.
+# full-time recap "Insight ft.", from the job it was given. Its casual line ends with code's sentence
+# on each goal credited to another player (templates.told), as the template's does.
 RECAP_TOPICS = frozenset({"half_time", "full_time", "catch_up"})
 
 
@@ -187,8 +189,8 @@ class Checker(Executor):
     async def check(self, attempt: Attempt, ctx: WorkflowContext[Revise, Outcome]) -> None:
         problems = list(attempt.problems)
         draft = attempt.draft
-        if draft is not None and attempt.job.topic in RECAP_TOPICS and self.log.template is not None:
-            draft = draft.model_copy(update={"headline": self.log.template.headline})
+        if draft is not None and attempt.job.topic in RECAP_TOPICS:
+            draft = self._as_recap(draft, problems)
         if draft is not None:
             if not self.log.read_the_moment:
                 problems.append("call get_moment first: the card has to be about the moment it was asked for")
@@ -204,6 +206,21 @@ class Checker(Executor):
             await ctx.send_message(Revise(attempt.job, attempt.number + 1, problems))
         else:
             await ctx.yield_output(Outcome(False, draft, problems, attempt.number))
+
+    def _as_recap(self, draft: Draft, problems: list[str]) -> Draft:
+        """The writer's recap with the template's heading, and code's sentences on a goal credited
+        afresh at the end of its casual line, in place of any copy of them the writer made. A sentence
+        of the writer's that tells the change again goes into `problems`."""
+        if self.log.template is not None:
+            draft = draft.model_copy(update={"headline": self.log.template.headline})
+        code = told(self.log.facts)
+        if not code:
+            return draft
+        own = [s for s in draft.casual if not any(same_words(s.text, c.text) for c in code)]
+        if not own:
+            problems.append("casual: no sentence of your own; tell the story, and code's sentence ends the line")
+        problems += retold(draft.model_copy(update={"casual": own}), code, self.log.facts)
+        return draft.model_copy(update={"casual": [*own, *code]})
 
     def _repeats_the_template(self, draft: Draft) -> bool:
         """Whether the casual line is the template's, word for word: an agent's card that adds

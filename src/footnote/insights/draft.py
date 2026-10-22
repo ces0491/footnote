@@ -16,18 +16,21 @@ and so do the agents.
 - a fact's display carries its noun ("13 shots", "2 shots on target"), so the words after its
   placeholder don't say the noun, or part of it, again ("31 passes completed passes"), and a word
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
-  takes "at"; a count of times follows what happened, not a form of "be" ("there were 7 times");
+  takes "at", and its display has the minute mark, so none follows it ("from 17''"); a count of
+  times follows what happened, not a form of "be" ("there were 7 times");
   "only" doesn't go before a count of none ("only no shots"); and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
   Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); a goal's situation, said of
   its club, doesn't follow "have" ("the goal that would have equalise");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
   player or its minute), so it can't pin the decision on a goal that stands;
+- a VAR check for a penalty is about whether its subject gave one away, so no penalty is "for" or
+  "to" that player ("VAR rejected a penalty for Uche Asatoye");
 - a card that says who a goal is credited to also says who it was credited to before, when its
   facts have a correction: "later credited to Femi Adeyani" alone reads as if it always had been. The
   earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets, where it
-  reads aloud as the scorer, and the goal isn't "corrected to" the scorer the sentence has already
-  named;
+  reads aloud as the scorer, and the goal isn't "corrected to" or "credited to" the scorer the
+  sentence has already named;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name, a count of times followed by a noun ("7 times changes of
   possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading fact
@@ -56,10 +59,15 @@ and so do the agents.
 How much a card may say depends on its topic (`limits_for`): a recap tells the story of a half and
 gets more room than a moment's card.
 
-The checks catch figures and names a writer made up, and a goal ruled out pinned on one that stands.
-Any other real name from the match given to the wrong player, or a sentence that reads the facts
-unfairly, passes them: the evaluations of the agents' output catch some of that, and reading the
-cards catches the rest (docs/evaluations.md).
+A recap's casual line ends with code's own sentence on each goal the data provider credited to
+another player (templates.told), so the writer's checker (agents/writer.py) also refuses a recap whose
+own sentences tell that change again (`retold`): one that speaks of a credit or a correction, or
+names the earlier credit through its fact.
+
+The checks catch figures and names a writer made up, a goal ruled out pinned on one that stands, and
+a penalty check's player written as the one it was for. Any other real name from the match given to
+the wrong player, or a sentence that reads the facts unfairly, passes them: the evaluations of the
+agents' output catch some of that, and reading the cards catches the rest (docs/evaluations.md).
 """
 
 from __future__ import annotations
@@ -467,6 +475,12 @@ def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
                 f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}'; write"
                 f" '{before.group(1)} at {{{m.group(1)}}}'"
             )
+        # A minute mark typed after a minute's placeholder: "dominating possession from 17''".
+        if fact.display.endswith("'") and m.end() < len(text) and text[m.end()] in _APOSTROPHES:
+            problems.append(
+                f"{where}: '{{{m.group(1)}}}{text[m.end()]}' shows as '{fact.display}{text[m.end()]}': the fact shows"
+                " its minute mark, so leave out the one after it"
+            )
         # "Only" before a count of none: "they registered only no shots".
         if before is not None and before.group(1).lower() == "only" and fact.display.startswith("no "):
             problems.append(f"{where}: 'only {{{m.group(1)}}}' shows as 'only {fact.display}'; leave out 'only'")
@@ -701,6 +715,27 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
     if not card.evidence and any(fact.events for fact in facts.values()):
         problems.append("the card links to no event; cite the events behind it, or use a fact that rests on them")
     problems += _credit_problems(card, facts)
+    problems += _penalty_side_problems(card, facts)
+    return problems
+
+
+def _penalty_side_problems(card: Card, facts: Facts) -> list[str]:
+    """A VAR check for a penalty is about whether its subject gave one away, so a penalty is never
+    "for" or "to" them: a catch-up's "VAR rejected a penalty for Uche Asatoye" gave the 75' check to
+    the wrong side."""
+    text = " ".join((card.headline, card.casual, card.analyst))
+    problems = []
+    for key, fact in sorted(facts.items()):
+        check = facts.get(key.rsplit(".", 1)[0] + ".check")
+        if _named(key) != "subject" or check is None or check.value != "penalty":
+            continue
+        surname = re.escape(fact.display.split()[-1])
+        wrong = re.search(rf"\bpenalt\w*\s+(?:for|to)\s+(?:[A-Z][^\W\d_]+\s+)*{surname}\b", text)
+        if wrong is not None:
+            problems.append(
+                f"'{wrong.group(0)}': VAR checked whether {fact.display} gave a penalty away, so the penalty"
+                f" isn't theirs; say what VAR found about {fact.display}"
+            )
     return problems
 
 
@@ -737,18 +772,46 @@ def _credit_problems(card: Card, facts: Facts) -> list[str]:
                     f" originally credited to {{{key}}}"
                 )
                 break
+    # Each part's sentences: a headline has no full stop, and "Corrected: Femi Adeyani" run into the
+    # casual line's "The 81' goal is now credited to Femi Adeyani" would read as one sentence.
+    sentences = [s for part in (card.headline, card.casual, card.analyst) for s in re.split(r"(?<=[.!?])\s+", part)]
     for key, fact in sorted(facts.items()):
         if _named(key) != "after" or not isinstance(fact.value, str):
             continue
-        # The scorer named, then the goal "corrected to" the same name: "Femi Adeyani's strike at 81',
-        # later corrected to Femi Adeyani" says nothing about what changed.
+        # The scorer named, then the goal "corrected to" or "credited to" the same name: "Femi Adeyani's
+        # strike at 81', later corrected to Femi Adeyani" and "Femi Adeyani restored Kingsferry's lead at
+        # 81'; the goal was later credited to Femi Adeyani" say nothing about what changed.
         surname = re.escape(fact.display.split()[-1])
-        for sentence in re.split(r"(?<=[.!?])\s+", text):
-            corrected = re.search(rf"\bcorrected to (?:credit )?(?:[A-Z][^\W\d_]+ )*{surname}\b", sentence)
-            if corrected is not None and re.search(rf"\b{surname}\b", sentence[: corrected.start()]):
+        for sentence in sentences:
+            again = re.search(rf"\b(?:corrected|credited) to (?:credit )?(?:[A-Z][^\W\d_]+ )*{surname}\b", sentence)
+            if again is not None and re.search(rf"\b{surname}\b", sentence[: again.start()]):
                 problems.append(
-                    f"'{corrected.group(0)}' after naming {fact.display} as the scorer says nothing changed; say"
+                    f"'{again.group(0)}' after naming {fact.display} as the scorer says nothing changed; say"
                     f" the goal was originally credited to {{{key.rsplit('.', 1)[0]}.before}}"
                 )
                 break
+    return problems
+
+
+# Words that tell a goal was credited afresh.
+_CREDIT_CHANGE = re.compile(r"\b(?:credit\w*|re-?credited|corrected|correction|amend\w*|originally)\b", re.IGNORECASE)
+
+
+def retold(draft: Draft, told: list[Sentence], facts: Facts) -> list[str]:
+    """Where a recap's writer tells a change of credit that code tells already: `told` are code's
+    sentences, which end the casual line (templates.told), and `draft` is the writer's without them.
+    A sentence of the writer's that speaks of a credit or a correction, or names the earlier credit
+    through its fact, would tell the change twice."""
+    if not told:
+        return []
+    said = " ".join(fill(s.text, facts) for s in told)
+    problems = []
+    for part, sentences in (("casual", draft.casual), ("analyst", draft.analyst)):
+        for i, sentence in enumerate(sentences, start=1):
+            earlier = [k for k in placeholders(sentence.text) if _named(k) in ("before", "own_goal_before")]
+            if earlier or _CREDIT_CHANGE.search(_own_words(sentence.text)):
+                problems.append(
+                    f"{part} sentence {i}: code ends the casual line with the change of credit ('{said}'), so"
+                    " leave it out of your sentences"
+                )
     return problems

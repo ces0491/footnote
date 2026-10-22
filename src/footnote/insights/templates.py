@@ -6,7 +6,8 @@ and names, exactly as an agent must, so `draft.check` holds templates to the sam
 (tests/test_insights.py checks every template the showcase match produces).
 
 Templates say only what the facts record. Anything that needs judgement, such as why a moment
-matters, is left to the agents and checked.
+matters, is left to the agents and checked. One template sentence ends the agents' versions too: a
+recap's on a goal the provider credited to another player (`told`).
 """
 
 from __future__ import annotations
@@ -257,13 +258,36 @@ def _goals(f: Facts, so_far: str = "") -> str:
     return f"{'Goal' if f['recap.goal_count'].value == 1 else 'Goals'}{so_far}: {{recap.goals}}."
 
 
+def told(f: Facts) -> list[Sentence]:
+    """The sentences that end a recap's casual line, the template's and an agent's alike: one for each
+    goal standing that the data provider credited to another player. Told by the agents, the change
+    kept slipping in the full-time recap's redrafts: the new scorer named twice ("Femi Adeyani restored
+    the lead; the goal was later credited to Femi Adeyani"), or no verb at all ("Femi Adeyani's goal,
+    originally credited to Jory Penhallow."). The old credit gets a clause of its own: after "not", or
+    in brackets, it read aloud as the scorer's."""
+    sentences = []
+    n = 1
+    while f"recap.correction.{n}.after" in f:
+        key = f"recap.correction.{n}"
+        if f"{key}.own_goal_before" in f:
+            # The possessive: "an own goal by" came back as "registrado por" (recorded by).
+            before = f"originally recorded as {{{key}.before}}'s own goal"
+        else:
+            before = f"originally credited to {{{key}.before}}"
+        sentences.append(
+            _s(f"The {{{key}.minute}} goal, {before}, is now credited to {{{key}.after}}.", *_event(f, f"{key}.after"))
+        )
+        n += 1
+    return sentences
+
+
 def recap(f: Facts) -> Draft:
     casual = [_s("{recap.score_line} at {recap.when}.", *_event(f, "recap.score_line"))]
     if "recap.goals" in f:
         casual.append(_s(_goals(f)))
     return Draft(
         headline="{recap.label}: {recap.score_line}",
-        casual=casual,
+        casual=[*casual, *told(f)],
         analyst=_recap_figures(final=f["recap.label"].value == "Final score"),
     )
 
@@ -274,7 +298,7 @@ def catch_up(f: Facts) -> Draft:
         casual = [_s(_goals(f, " so far"))]
     else:
         casual = [_s("No goals so far.", *_event(f, "recap.to"))]
-    return Draft(headline="What you missed, up to {recap.to}", casual=casual, analyst=_recap_figures())
+    return Draft(headline="What you missed, up to {recap.to}", casual=[*casual, *told(f)], analyst=_recap_figures())
 
 
 def correction(f: Facts) -> Draft:
