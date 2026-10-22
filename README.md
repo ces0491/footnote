@@ -293,3 +293,10 @@ data/                     generated output; git keeps the league, the showcase m
 docs/                     audience, experience, data, calibration, models, insights, evaluations, the overlay contract and its schema, architecture
 .github/workflows/        CI: lint, type checks, tests (with a Postgres and the agents' evaluations), the web build and the Bicep on every push and pull request
 ```
+
+## Licence
+
+Copyright (c) 2026 Cesaire Tobias. All rights reserved. The code is public so the hackathon can
+judge it, and that gives no right to use it: see [LICENSE](LICENSE). Entering the hackathon grants
+Microsoft and the Premier League the licence in section 7 of its official rules. Code from other
+projects keeps its own licence: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

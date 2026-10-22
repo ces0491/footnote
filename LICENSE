@@ -1,0 +1,33 @@
+Footnote
+
+Copyright (c) 2026 Cesaire Tobias. All rights reserved.
+
+This repository is public because the Microsoft Premier League Hackathon ("Inside the Game")
+requires a public code repository for an entry to be judged. Being able to read the code does not
+give anyone the right to use it.
+
+1. No licence is granted. Except as set out in paragraphs 2 to 4, no one may use, copy, modify,
+   merge, publish, distribute, sublicense, sell, host or deploy any part of this repository, create
+   works derived from it, or use it to train, fine-tune or evaluate machine-learning models,
+   without the prior written permission of the copyright holder.
+
+2. GitHub. A public repository may be viewed, and forked on GitHub, as GitHub's Terms of Service
+   provide for public repositories. Those terms give no right to use the code outside GitHub's own
+   features, and this file gives none either.
+
+3. The hackathon. Submitting an entry to the hackathon grants Microsoft Corporation and The Football
+   Association Premier League Limited the rights set out in section 7 of the hackathon's official
+   rules, and lets the Sponsor and the judges test and evaluate the project until judging ends
+   (section 4.8). Those rights come from the official rules, not from this file, and this file
+   grants them nothing further.
+
+4. Third-party code. Code that comes from other projects keeps its own licence. It is listed, with
+   its notices, in THIRD_PARTY_NOTICES.md, and nothing in this file restricts the rights those
+   licences give.
+
+5. No warranty. This repository is provided "as is", without warranty of any kind, express or
+   implied, including the warranties of merchantability, fitness for a particular purpose and
+   non-infringement. In no event shall the copyright holder be liable for any claim, damages or
+   other liability arising from, out of or in connection with it or its use.
+
+Requests for permission: https://github.com/ces0491
