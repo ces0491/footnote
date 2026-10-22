@@ -63,7 +63,7 @@ export const PROFILES: Profile[] = [
     id: "nadia",
     name: "Nadia",
     role: "producer",
-    summary: "Producer. Runs the graphics: approves, edits or kills each card before it airs.",
+    summary: "Runs the graphics: approves, edits or kills each card before it airs.",
     settings: BASE,
   },
   {

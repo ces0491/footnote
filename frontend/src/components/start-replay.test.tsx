@@ -30,7 +30,7 @@ describe("StartReplay", () => {
         .getAllByRole("radio")
         .filter((r) => r.getAttribute("aria-checked") === "true")
         .map((r) => r.textContent);
-    expect(checked("Watch as")).toEqual([expect.stringMatching(/^Sam · fan/)]);
+    expect(checked("Watch as")).toEqual([expect.stringMatching(/^SamFan/)]); // the name, then the role under it
     expect(checked("Start from")).toEqual(["23'Kingsferry scoreNadia, then Sam"]);
     expect(checked("Speed")).toEqual(["2×"]);
   });
