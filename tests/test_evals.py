@@ -12,7 +12,7 @@ import pytest
 from footnote.agents.prompts import PROMPT_VERSION
 from footnote.agents.versions import VERSIONS, fingerprint
 from footnote.agents.worker import Settings
-from footnote.evals.cases import JUMPS, cases
+from footnote.evals.cases import JUMPS, Case, cases
 from footnote.evals.groundedness import openai_endpoint, verdict
 from footnote.evals.judges import (
     Seen,
@@ -22,7 +22,7 @@ from footnote.evals.judges import (
     names_the_subject,
     one_line_per_figure,
 )
-from footnote.evals.run import PASSING_SHARE, passing, replay, stale
+from footnote.evals.run import JUDGE_TRIES, PASSING_SHARE, Result, judge_groundedness, passing, replay, stale
 from footnote.insights import facts as F
 from footnote.insights.draft import Card, Draft, Sentence, render
 from footnote.insights.facts import Facts
@@ -147,6 +147,34 @@ def test_the_judge_reaches_the_foundry_accounts_openai_endpoint(monkeypatch: pyt
     assert verdict(None) is None
     failed = verdict({"score": 2.0, "passed": False, "reason": "says the only shot of the match"})
     assert failed is not None and not failed.passed and failed.note.startswith("scored 2.0")
+
+
+class _Judge:
+    """A judge whose first `unreadable` replies can't be parsed, as the evaluator's model sometimes sends."""
+
+    def __init__(self, unreadable: int) -> None:
+        self.unreadable, self.asked = unreadable, 0
+
+    async def judge(self, card: Card, facts: Facts, reason: str) -> dict:
+        self.asked += 1
+        if self.asked <= self.unreadable:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        return {"score": 4.0, "passed": True, "reason": "supported by the facts"}
+
+
+async def test_a_judge_reply_that_cant_be_read_is_asked_again() -> None:
+    case = Case("goal-e0391/v1", {"insight_id": "goal-e0391", "reason": "Goal"})
+    card = render(_card("{moment.scorer} scores."), GOAL)
+    late = _Judge(unreadable=JUDGE_TRIES - 1)
+    judged = Result(case, "accepted", card=card)
+    await judge_groundedness([judged], late)
+    assert late.asked == JUDGE_TRIES and judged.passed
+    # A judge that never answers is a fail, said as the judge's.
+    silent = _Judge(unreadable=JUDGE_TRIES)
+    unjudged = Result(case, "accepted", card=card)
+    await judge_groundedness([unjudged], silent)
+    assert silent.asked == JUDGE_TRIES and not unjudged.passed
+    assert unjudged.groundedness is not None and unjudged.groundedness["reason"].startswith("the judge failed")
 
 
 def test_the_cases_are_every_agent_job_in_a_replay(showcase: Match, analysis: Analysis) -> None:

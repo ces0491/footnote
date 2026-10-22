@@ -45,7 +45,8 @@ no longer passes fails the build. Each part of what the writers are told and sho
 instructions, the match tools with the templates' wording they return, the writer's workflow) is
 named by its version and a fingerprint of its code, as is the model's reasoning effort, and the
 recording keeps them, so a change to any of them fails the build too until the evaluations are run
-and recorded again. The judge's verdicts are replayed as recorded.
+and recorded again. The judge's verdicts are replayed as recorded; a reply from the judge that can't
+be read is asked for again, up to three times, before it counts as a fail.
 """
 
 

@@ -129,6 +129,9 @@ async def draft_case(
     return result
 
 
+JUDGE_TRIES = 3
+
+
 async def judge_groundedness(results: list[Result], judge: Any, concurrency: int = 4) -> None:
     """Add the model-judged groundedness verdict to every accepted card."""
     slots = asyncio.Semaphore(concurrency)
@@ -137,10 +140,14 @@ async def judge_groundedness(results: list[Result], judge: Any, concurrency: int
         if result.card is None:
             return
         async with slots:
-            try:
-                result.groundedness = await judge.judge(result.card, result.facts, str(result.case.row["reason"]))
-            except Exception as exc:
-                result.groundedness = {"score": None, "passed": False, "reason": f"the judge failed: {exc}"[:300]}
+            # The judge's model now and then sends a reply the evaluator can't parse ("Expecting value"),
+            # which says nothing about the card: it's asked again before that counts as a fail.
+            for _ in range(JUDGE_TRIES):
+                try:
+                    result.groundedness = await judge.judge(result.card, result.facts, str(result.case.row["reason"]))
+                    break
+                except Exception as exc:
+                    result.groundedness = {"score": None, "passed": False, "reason": f"the judge failed: {exc}"[:300]}
         found = groundedness_verdict(result.groundedness)
         if found is not None:
             result.verdicts.append(found)

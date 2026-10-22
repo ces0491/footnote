@@ -1,12 +1,14 @@
 """Evaluate the agents on the showcase match: python -m footnote.evals.
 
-    live [--only KEY ...] [--record] [--report] [--deadline S] [--no-judge]
+    live [--only KEY ...] [--record] [--report] [--deadline S] [--effort E] [--no-judge]
         Draft every case with the Foundry model (FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL, signed
         in through the Azure CLI), as the agents service does, and have the model judge each card's
         groundedness (needs `uv run --group evals`). --record keeps the model's output in
         data/evals/drafts.json for replaying; --report writes docs/evaluations.md. --only with
         --record updates those cases in a recording made with today's versions, and refuses an
-        older one: its other cases were drafted with something else.
+        older one: its other cases were drafted with something else. --effort tries another
+        reasoning effort than the service's; CI refuses a recording made with it until the service
+        uses it too.
     replay [--report]
         Run the recorded output through today's writer workflow, checks and evaluators, as CI does,
         and pass as CI does; --report writes docs/evaluations.md from the replay.
@@ -59,7 +61,7 @@ def show(results: list[Result]) -> None:
     print(f"{passed} of {len(results)} cases accepted with every evaluation passed")
 
 
-async def live(only: list[str], record: bool, report: bool, deadline: float, judge: bool) -> int:
+async def live(only: list[str], record: bool, report: bool, deadline: float, effort: str, judge: bool) -> int:
     from agent_framework_foundry import FoundryChatClient
 
     if record and only and RECORDING.exists():
@@ -74,7 +76,7 @@ async def live(only: list[str], record: bool, report: bool, deadline: float, jud
     endpoint = cloud.require("FOUNDRY_PROJECT_ENDPOINT")
     credential = cloud.credential()
     client = FoundryChatClient(project_endpoint=endpoint, model=model, credential=credential)
-    settings = Settings(model=model)
+    settings = Settings(model=model, reasoning_effort=effort)
     try:
         results = await run(match, analysis, picked, lambda c: client, settings.options, deadline_seconds=deadline)
     finally:
@@ -144,6 +146,12 @@ def main() -> int:
         "--deadline", type=float, default=Settings.deadline_seconds, help="seconds per case, the service's by default"
     )
     live_parser.add_argument(
+        "--effort",
+        choices=("low", "medium", "high"),
+        default=Settings.reasoning_effort,
+        help="the writers' reasoning effort, the service's by default",
+    )
+    live_parser.add_argument(
         "--no-judge", action="store_true", help="skip the model-judged groundedness (no `evals` group needed)"
     )
     replay_parser = commands.add_parser("replay", help="evaluate the recorded output with today's code")
@@ -157,7 +165,7 @@ def main() -> int:
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     if args.command == "live":
-        return asyncio.run(live(args.only, args.record, args.report, args.deadline, not args.no_judge))
+        return asyncio.run(live(args.only, args.record, args.report, args.deadline, args.effort, not args.no_judge))
     return asyncio.run(replayed(args.report))
 
 
