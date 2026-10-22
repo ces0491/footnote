@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { NIGHT } from "@/lib/club-colour";
 import type { Club, TrackingLayout } from "@/lib/live/contract";
 import type { Frame } from "@/lib/live/tracking";
 
@@ -14,28 +15,50 @@ export const WIDTH = 68;
 export const MARGIN = 3; // metres of surround drawn outside the lines
 const PLAYER_RADIUS = 1.15;
 
-const GRASS = "#2f6b3a";
-const GRASS_STRIPE = "#336f3e";
-const LINE = "rgba(255,255,255,0.85)";
+// A pitch under floodlights: the grass, its mown stripes, the surround beyond the lines a shade
+// darker, and the light falling off towards the corners. The page's colours (app/globals.css) as hex,
+// for the canvas.
+const GRASS = "#285931";
+const GRASS_STRIPE = "#2d6137";
+const SURROUND = "#224f2d";
+const LINE = "rgba(255,255,255,0.78)";
+export const CITE = "#f3d350"; // the followed player, and the offside line
+export const TALLY = "#f85452";
 
 export interface PitchPlayer {
   shirt: number;
   side: 0 | 1; // 0 home, 1 away
 }
 
+let family: string | null = null;
+
+/** The page's own typeface, condensed, for shirt numbers and labels drawn on a canvas. */
+export function canvasFont(ctx: CanvasRenderingContext2D, weight: number, px: number) {
+  family ??= getComputedStyle(ctx.canvas).fontFamily || "ui-sans-serif, system-ui, sans-serif";
+  ctx.font = `${weight} ${px}px ${family}`;
+  ctx.fontStretch = "condensed";
+}
+
 export function drawPitch(ctx: CanvasRenderingContext2D, s: number, calm: boolean) {
   const w = (LENGTH + 2 * MARGIN) * s;
   const h = (WIDTH + 2 * MARGIN) * s;
-  ctx.fillStyle = GRASS;
+  ctx.fillStyle = SURROUND;
   ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = GRASS;
+  ctx.fillRect(MARGIN * s, MARGIN * s, LENGTH * s, WIDTH * s);
   if (!calm) {
     ctx.fillStyle = GRASS_STRIPE;
     for (let i = 0; i < 14; i += 2) ctx.fillRect((MARGIN + (i * LENGTH) / 14) * s, MARGIN * s, (LENGTH / 14) * s, WIDTH * s);
   }
+  const light = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, w * 0.62);
+  light.addColorStop(0, "rgba(0,0,0,0)");
+  light.addColorStop(1, "rgba(0,0,0,0.32)");
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, w, h);
   ctx.save();
   ctx.translate(MARGIN * s, MARGIN * s);
   ctx.strokeStyle = LINE;
-  ctx.lineWidth = Math.max(1, 0.15 * s);
+  ctx.lineWidth = Math.max(1, 0.12 * s);
   ctx.strokeRect(0, 0, LENGTH * s, WIDTH * s);
   ctx.beginPath();
   ctx.moveTo((LENGTH / 2) * s, 0);
@@ -44,6 +67,10 @@ export function drawPitch(ctx: CanvasRenderingContext2D, s: number, calm: boolea
   ctx.beginPath();
   ctx.arc((LENGTH / 2) * s, (WIDTH / 2) * s, 9.15 * s, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.fillStyle = LINE;
+  ctx.beginPath();
+  ctx.arc((LENGTH / 2) * s, (WIDTH / 2) * s, 0.25 * s, 0, Math.PI * 2);
+  ctx.fill();
   for (const end of [0, 1]) {
     const x = (d: number) => (end === 0 ? d : LENGTH - d) * s;
     const box = (depth: number, half: number) => {
@@ -59,7 +86,6 @@ export function drawPitch(ctx: CanvasRenderingContext2D, s: number, calm: boolea
     ctx.beginPath();
     ctx.arc(x(11), (WIDTH / 2) * s, 9.15 * s, end === 0 ? -0.927 : Math.PI - 0.927, end === 0 ? 0.927 : Math.PI + 0.927);
     ctx.stroke();
-    ctx.fillStyle = LINE;
     ctx.beginPath();
     ctx.arc(x(11), (WIDTH / 2) * s, 0.25 * s, 0, Math.PI * 2);
     ctx.fill();
@@ -68,7 +94,7 @@ export function drawPitch(ctx: CanvasRenderingContext2D, s: number, calm: boolea
     ctx.moveTo(x(0), (WIDTH / 2 - 3.66) * s);
     ctx.lineTo(x(0), (WIDTH / 2 + 3.66) * s);
     ctx.stroke();
-    ctx.lineWidth = Math.max(1, 0.15 * s);
+    ctx.lineWidth = Math.max(1, 0.12 * s);
   }
   ctx.restore();
 }
@@ -87,7 +113,7 @@ export function drawFrame(
   const lineup = layout.slot_players[frame.lineup] ?? layout.slot_players[0];
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `600 ${Math.max(8, 1.25 * s)}px ui-sans-serif, system-ui, sans-serif`;
+  canvasFont(ctx, 700, Math.max(8, 1.35 * s));
   frame.players.forEach((p, slot) => {
     if (!p) return;
     const id = lineup[slot];
@@ -96,11 +122,16 @@ export function drawFrame(
     const club = clubs[side];
     const x = p.x * s;
     const y = p.y * s;
+    // A soft shadow under each player, so the discs sit on the grass.
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.arc(x + 0.18 * s, y + 0.25 * s, PLAYER_RADIUS * s, 0, Math.PI * 2);
+    ctx.fill();
     if (id === focus) {
-      ctx.strokeStyle = "#facc15";
+      ctx.strokeStyle = CITE;
       ctx.lineWidth = Math.max(2, 0.35 * s);
       ctx.beginPath();
-      ctx.arc(x, y, (PLAYER_RADIUS + 0.7) * s, 0, Math.PI * 2);
+      ctx.arc(x, y, (PLAYER_RADIUS + 0.75) * s, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.fillStyle = club.colours[0];
@@ -112,17 +143,17 @@ export function drawFrame(
     ctx.stroke();
     if (who && s >= 5) {
       ctx.fillStyle = club.colours[1];
-      ctx.fillText(String(who.shirt), x, y + 0.05 * s);
+      ctx.fillText(String(who.shirt), x, y + 0.08 * s);
     }
   });
   // The ball's shadow stays on the ground; the ball rises above it and grows a little with height.
   const { x, y, z } = frame.ball;
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.beginPath();
   ctx.arc(x * s, y * s, 0.45 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#111111";
+  ctx.strokeStyle = NIGHT;
   ctx.lineWidth = Math.max(1, 0.1 * s);
   ctx.beginPath();
   ctx.arc(x * s, (y - Math.min(z, 12) * 0.35) * s, (0.5 + Math.min(z, 12) * 0.04) * s, 0, Math.PI * 2);
@@ -185,12 +216,5 @@ export function PitchCanvas({
     return () => cancelAnimationFrame(raf);
   }, [layout, frameAt, current, players, clubs, focus, calm]);
 
-  return (
-    <canvas
-      ref={canvas}
-      role="img"
-      aria-label={label}
-      className="block aspect-111/74 w-full rounded-xl bg-[#2f6b3a]"
-    />
-  );
+  return <canvas ref={canvas} role="img" aria-label={label} className="block aspect-111/74 w-full bg-[#224f2d]" />;
 }

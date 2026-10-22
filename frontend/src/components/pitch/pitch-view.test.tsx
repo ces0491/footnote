@@ -20,14 +20,14 @@ const match = {
 const layout: TrackingLayout = { frame_rate: 10, frames_per_chunk: 100, values_per_frame: 46, frames: { "1": 30900, "2": 30000 }, slot_players: [] };
 const run = runFixture();
 
-function pitch(graphics: Shown[], waiting = 0) {
+function pitch(graphics: Shown[], waiting = 0, at = 1360) {
   render(
     <PitchView
       runId={run.run_id}
       run={run}
       match={match}
       layout={layout}
-      position={() => ({ at: 1360, live: 1363 })}
+      position={() => ({ at, live: at + 3 })}
       graphics={graphics}
       mode="casual"
       calm={false}
@@ -57,6 +57,22 @@ describe("PitchView", () => {
     expect(screen.getByText("Femi Adeyani anota").closest("[lang]")?.getAttribute("lang")).toBe("es");
     expect(screen.getByText("Kingsferry se adelanta.").closest("[lang]")?.getAttribute("lang")).toBe("es");
     expect(screen.getByText("Kingsferry lead.").closest("[lang]")).toBeNull();
+  });
+
+  it("leaves saying it's half-time to the recap when one is on air", () => {
+    const recap = insightFixture("ht", {
+      kind: "recap",
+      topic: "half_time",
+      placement: "full_card",
+      card: { headline: "Half-time: Saltmarsh 0–1 Kingsferry", casual: "Kingsferry lead.", analyst: "", plain: "", evidence: [], facts: [] },
+    });
+    const breakTime = run.timeline.first_half_end + 12;
+    pitch([], 0, breakTime);
+    expect(screen.getByText("Half-time")).toBeTruthy();
+    cleanup();
+    pitch([{ insight: recap, from: breakTime - 5, lang: "en" }], 0, breakTime);
+    expect(screen.queryByText("Half-time")).toBeNull();
+    expect(screen.getByText("Half-time: Saltmarsh 0–1 Kingsferry")).toBeTruthy();
   });
 
   it("says how long the stream has to go before the replay's start", () => {

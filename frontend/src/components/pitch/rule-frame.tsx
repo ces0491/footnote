@@ -6,7 +6,7 @@ import type { Club, EvidenceResponse, FeedEvent, Insight, MatchMeta, TrackingLay
 import { NBSP, type Roster } from "@/lib/live/describe";
 import { type Frame, offsideLine, readFrame } from "@/lib/live/tracking";
 
-import { drawFrame, drawPitch, LENGTH, MARGIN, type PitchPlayer, WIDTH } from "./pitch-canvas";
+import { canvasFont, CITE, drawFrame, drawPitch, LENGTH, MARGIN, type PitchPlayer, TALLY, WIDTH } from "./pitch-canvas";
 
 interface Ring {
   player: string | undefined;
@@ -83,7 +83,7 @@ async function still(runId: string, insight: Insight, match: MatchMeta, layout: 
       frame,
       rings: [
         { player: pass.player_id, colour: "#ffffff" },
-        { player: pass.recipient_id as string | undefined, colour: "#f87171" },
+        { player: pass.recipient_id as string | undefined, colour: TALLY },
       ],
       line,
       inset,
@@ -101,7 +101,7 @@ async function still(runId: string, insight: Insight, match: MatchMeta, layout: 
   const spot = typeof check.x === "number" && typeof check.y === "number" ? { x: check.x, y: check.y } : null;
   return {
     frame,
-    rings: [{ player: check.subject_id as string | undefined, colour: "#f87171" }],
+    rings: [{ player: check.subject_id as string | undefined, colour: TALLY }],
     line: null,
     inset: null,
     spot,
@@ -129,7 +129,7 @@ function draw(el: HTMLCanvasElement, shown: Still, match: MatchMeta, layout: Tra
   ctx.save();
   ctx.translate(MARGIN * s, MARGIN * s);
   if (shown.line !== null) {
-    ctx.strokeStyle = "#facc15";
+    ctx.strokeStyle = CITE;
     ctx.lineWidth = Math.max(1.5, 0.3 * s);
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
@@ -140,7 +140,7 @@ function draw(el: HTMLCanvasElement, shown: Still, match: MatchMeta, layout: Tra
   }
   if (shown.spot) {
     const { x, y } = shown.spot;
-    ctx.strokeStyle = "#facc15";
+    ctx.strokeStyle = CITE;
     ctx.lineWidth = Math.max(1.5, 0.3 * s);
     ctx.beginPath();
     ctx.moveTo((x - 1.2) * s, (y - 1.2) * s);
@@ -174,7 +174,7 @@ function drawInset(ctx: CanvasRenderingContext2D, width: number, inset: Inset) {
   const left = inset.line > LENGTH / 2 ? pad : width - boxWidth - pad;
   const top = pad;
   ctx.save();
-  ctx.fillStyle = "rgba(9,9,11,0.82)";
+  ctx.fillStyle = "rgba(13,20,30,0.88)";
   ctx.strokeStyle = "rgba(255,255,255,0.35)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -188,28 +188,28 @@ function drawInset(ctx: CanvasRenderingContext2D, width: number, inset: Inset) {
   const x = (metres: number) => left + pad + ((metres - (centre - half)) / (2 * half)) * inner;
   const lineTop = top + 22;
   const lineBottom = top + boxHeight - 24;
-  ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+  canvasFont(ctx, 600, 12);
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "#facc15";
+  ctx.strokeStyle = CITE;
   ctx.setLineDash([5, 3]);
   ctx.beginPath();
   ctx.moveTo(x(inset.line), lineTop);
   ctx.lineTo(x(inset.line), lineBottom);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.strokeStyle = "#f87171";
+  ctx.strokeStyle = TALLY;
   ctx.beginPath();
   ctx.moveTo(x(inset.attacker), lineTop);
   ctx.lineTo(x(inset.attacker), lineBottom);
   ctx.stroke();
   // Each label on the outer side of its own line: the two lines can be a few pixels apart.
   const ahead = inset.attacker > inset.line;
-  ctx.fillStyle = "#facc15";
+  ctx.fillStyle = CITE;
   ctx.textAlign = ahead ? "right" : "left";
   ctx.fillText("Line", x(inset.line) + (ahead ? -3 : 3), top + 16);
-  ctx.fillStyle = "#f87171";
+  ctx.fillStyle = TALLY;
   ctx.textAlign = ahead ? "left" : "right";
   ctx.fillText(inset.name.split(" ").at(-1) ?? inset.name, x(inset.attacker) + (ahead ? 3 : -3), top + 16);
   ctx.textAlign = "center";
@@ -263,7 +263,7 @@ export function RuleFrame({
   if (!shown) return null;
   return (
     <figure className="space-y-1.5">
-      <canvas ref={canvas} className="block aspect-111/74 w-full rounded-lg bg-[#2f6b3a]" role="img" aria-label={shown.label} />
+      <canvas ref={canvas} className="block aspect-111/74 w-full rounded-lg bg-[#224f2d] ring-1 ring-border" role="img" aria-label={shown.label} />
       <figcaption className="text-xs text-muted-foreground">{shown.caption}</figcaption>
     </figure>
   );

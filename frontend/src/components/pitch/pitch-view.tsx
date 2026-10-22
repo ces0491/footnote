@@ -2,18 +2,24 @@
 
 import { useCallback, useMemo } from "react";
 
+import { clubOf, EDGE, kindOf } from "@/components/live/card-kind";
 import { useTracking } from "@/hooks/use-tracking";
+import { clubColour, inkOn, NIGHT } from "@/lib/club-colour";
 import type { Club, MatchMeta, RunDescriptor, TrackingLayout } from "@/lib/live/contract";
 import { langAttribute } from "@/lib/live/language";
 import { type Shown, waitText } from "@/lib/live/playback";
 import type { Mode } from "@/lib/live/profiles";
-import { moment } from "@/lib/live/timeline";
+import { minuteLabel, moment } from "@/lib/live/timeline";
 import { cn } from "@/lib/utils";
 
 import { PitchCanvas, type PitchPlayer } from "./pitch-canvas";
 
-/** A graphic on the pitch, as the reference renderer draws the overlay contract (docs/overlay.md). */
-function Graphic({ shown, mode, calm, clubs }: { shown: Shown; mode: Mode; calm: boolean; clubs: [Club, Club] }) {
+/**
+ * A graphic on the pitch, as the reference renderer draws the overlay contract (docs/overlay.md): a
+ * lower third led by the minute in the colour of the club it's about (or of its kind, for one that
+ * isn't about a club), or a full card over the middle of the pitch.
+ */
+function Graphic({ shown, mode, calm, match }: { shown: Shown; mode: Mode; calm: boolean; match: MatchMeta }) {
   const { insight } = shown;
   const animate = !calm && insight.motion === "animated";
   const line = mode === "analyst" ? insight.card.analyst : insight.card.casual;
@@ -23,30 +29,34 @@ function Graphic({ shown, mode, calm, clubs }: { shown: Shown; mode: Mode; calm:
       <div
         lang={wording}
         className={cn(
-          "absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-xl bg-zinc-950/90 p-5 text-zinc-50 shadow-lg ring-1 ring-white/10",
-          animate && "animate-in fade-in duration-500 motion-reduce:animate-none",
+          "absolute inset-x-6 top-1/2 -translate-y-1/2 chamfer bg-night/92 px-6 py-5 text-center shadow-2xl sm:inset-x-[12%]",
+          animate && "animate-in duration-500 fade-in zoom-in-95",
         )}
       >
-        <div className="text-lg font-semibold">{insight.card.headline}</div>
-        <p className="mt-1 text-sm text-zinc-300">{line}</p>
+        <div className="text-2xl leading-tight font-bold tracking-tight font-stretch-75% sm:text-3xl">{insight.card.headline}</div>
+        <p className="mx-auto mt-2 max-w-prose font-serif text-sm leading-relaxed text-foreground/85 sm:text-base">{line}</p>
       </div>
     );
   }
-  const accent = insight.kind === "correction" ? "#f59e0b" : insight.kind === "rule_call" ? "#38bdf8" : clubs[0].colours[0];
+  const club = clubOf(insight, match.home, match.away);
+  const accent = club ? clubColour(club) : EDGE[kindOf(insight).tone];
+  const Icon = kindOf(insight).icon;
   return (
     <div
       lang={wording}
       className={cn(
-        "absolute inset-x-3 bottom-3 overflow-hidden rounded-lg bg-zinc-950/90 text-zinc-50 shadow-lg ring-1 ring-white/10 sm:inset-x-6 sm:bottom-5",
-        animate && "animate-in slide-in-from-bottom-4 fade-in duration-500 motion-reduce:animate-none",
+        "absolute inset-x-3 bottom-3 flex chamfer-sm shadow-2xl sm:inset-x-6 sm:bottom-5",
+        animate && "animate-in duration-500 fade-in slide-in-from-bottom-4",
       )}
     >
-      <div className="flex">
-        <span aria-hidden className="w-1.5 shrink-0" style={{ background: accent }} />
-        <div className="min-w-0 px-3 py-2">
-          <div className="truncate font-semibold">{insight.card.headline}</div>
-          {line && <p className="line-clamp-2 text-xs text-zinc-300 sm:text-sm">{line}</p>}
-        </div>
+      <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1 sm:w-16" style={{ background: accent, color: club ? inkOn(accent) : NIGHT }}>
+        <Icon aria-hidden className="size-4" />
+        {/* Large text (20px bold), which needs 3:1: on a lightened kit colour neither ink reaches 4.5:1. */}
+        <span className="text-xl leading-none font-bold figures">{minuteLabel(insight.at.minute ?? 0, insight.at.added_minute ?? null)}</span>
+      </div>
+      <div className="min-w-0 flex-1 bg-night/92 px-4 py-2.5">
+        <div className="truncate text-lg leading-tight font-bold tracking-tight font-stretch-75% sm:text-xl">{insight.card.headline}</div>
+        {line && <p className="line-clamp-2 text-xs text-foreground/80 sm:text-sm">{line}</p>}
       </div>
     </div>
   );
@@ -93,9 +103,11 @@ export function PitchView({
     return out;
   }, [match]);
   const breakNow = current() === null;
+  // A recap on air says it's half-time itself; the break's own label would show through it.
+  const fullCard = graphics.some((g) => g.insight.placement === "full_card");
 
   return (
-    <figure className="relative">
+    <figure className="relative overflow-hidden rounded-xl ring-1 ring-border">
       <PitchCanvas
         layout={layout}
         frameAt={frameAt}
@@ -107,19 +119,21 @@ export function PitchView({
         label={caption}
       />
       {waiting > 0 && (
-        <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/50 p-6 text-center text-sm text-white">
-          The stream reaches the replay&apos;s start in {waitText(waiting)}.
+        <div className="absolute inset-0 grid place-items-center bg-night/70 p-6 text-center">
+          <p className="max-w-xs text-lg font-semibold tracking-tight font-stretch-85%">
+            The stream reaches the replay&apos;s start in {waitText(waiting)}.
+          </p>
         </div>
       )}
       {breakNow && waiting === 0 && (
-        <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/40 text-lg font-semibold text-white">
-          Half-time
+        <div className="absolute inset-0 grid place-items-center bg-night/55">
+          {!fullCard && <span className="text-4xl font-bold tracking-tight font-stretch-75%">Half-time</span>}
         </div>
       )}
       {/* The panel beside the pitch carries every graphic's text, for screen readers too (P8). */}
       <div aria-hidden>
         {graphics.map((g) => (
-          <Graphic key={g.insight.insight_id} shown={g} mode={mode} calm={calm} clubs={clubs} />
+          <Graphic key={g.insight.insight_id} shown={g} mode={mode} calm={calm} match={match} />
         ))}
       </div>
       <figcaption className="sr-only">{caption}</figcaption>
