@@ -349,14 +349,14 @@ insight pushes kept beside them, about fifty a replay, the largest 2,310 bytes; 
 7 MB once. The server's 32 GB holds them all. A viewer's pitch view fetches 960 bytes of
 tracking per second of match, about 6 MB for a whole match at any speed.
 
-The model costs nothing until it is called. A card cost $0.005 on average in the recorded
-evaluation run, and $0.006 at most, for the 81st-minute goal as first recorded
-([evaluations.md](evaluations.md)). A full match has 15 cards to draft (the restated goal twice),
-so a replay from kick-off costs about $0.07 the first time and close to nothing after, because later
+The model costs nothing until it is called. A card cost $0.004 on average in the recorded
+evaluation run, and $0.009 at most, for the full-time recap, which reads the whole story
+([evaluations.md](evaluations.md)). A full match has 13 cards to draft (the restated goal twice),
+so a replay from kick-off costs about $0.06 the first time and close to nothing after, because later
 replays reuse the accepted drafts, catch-ups included. A change to what the agents are told or shown
 changes the versions in the cache key, so the next replays draft afresh. The ceiling is the daily cap
-on agent runs (`AGENT_DAILY_RUNS`, 150): about $0.70 a day at that average, about $14 over the 21
-days if every day reached it. An evaluation run drafts 19 cards outside the cap, about $0.09 at list
+on agent runs (`AGENT_DAILY_RUNS`, 150): about $0.65 a day at that average, about $14 over the 21
+days if every day reached it. An evaluation run drafts 17 cards outside the cap, about $0.08 at list
 prices, plus the judge's calls; it is run by hand after such a change.
 
 Web PubSub's Free tier allows 20 concurrent connections and 20,000 outbound messages a day, counted

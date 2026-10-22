@@ -26,7 +26,7 @@ contract in [overlay.md](overlay.md).
 
 ## Moments
 
-The showcase match produces 36 insights over the whole match, 14 of which an agent drafts. A replay
+The showcase match produces 36 insights over the whole match, 12 of which an agent drafts. A replay
 that starts mid-match adds one more, the catch-up, which an agent drafts too.
 
 | Topic | Kind | Found when | Base rank | Agent drafts it |
@@ -35,7 +35,7 @@ that starts mid-match adds one more, the catch-up, which an agent drafts too.
 | Penalty | moment | a foul given as a penalty | 0.80 | yes |
 | Red card | moment | a red or second yellow | 0.70 | yes |
 | VAR check started | rule call | a check begins | 0.70 | no: the status goes out at once |
-| VAR decision | rule call | a check completes | 0.78 | yes |
+| VAR decision | rule call | a check completes | 0.78 | no: the template says what VAR decided |
 | Pressure, chaos, control | segment | the shown match state holds for long enough (below) | 0.55, 0.50, 0.45 | pressure and chaos |
 | Key pass | stat | a goal with a completed last pass to the scorer | 0.40 | no |
 | Hardest pass yet | stat | a completed pass rated at least 0.80, harder than any before | 0.40 | no |
@@ -120,7 +120,9 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
   "at", a count of times follows what happened ("there were 7 times" is refused), and a score line,
   which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry") or "to"
-  ("turns the game to Saltmarsh 1–2 Kingsferry", which the Translator gave as "in favour of" it);
+  ("turns the game to Saltmarsh 1–2 Kingsferry", which the Translator gave as "in favour of" it); a
+  goal's situation ("equalise"), said of its club, doesn't follow "have" ("the goal that would have
+  equalise");
 - the ball changing hands counts both sides losing it, so a card can't say one side forced it;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name ("state model"), a count of times followed by a noun ("7 times
@@ -128,8 +130,8 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a recap
   "the last 5 minutes" from a spell's own wording, which meant the minutes before that spell;
 - filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance"),
-  and no word comes twice in a row ("finished a {story.4.play_pattern} counter" read "a counter
-  counter");
+  no word comes twice in a row ("finished a {story.4.play_pattern} counter" read "a counter
+  counter"), and no name is joined to itself ("Saltmarsh and later Saltmarsh");
 - a long text fact, such as the provider's reason, goes in one line, not both;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out, its
   player or its minute: a recap's goals are the ones that stand, so the decision can't be pinned on
@@ -162,9 +164,11 @@ Job -> writer --Attempt--> checker --(passes)----------> accepted: the agent's v
 
 The writer is an Agent Framework `Agent` on the Foundry deployment of gpt-5-mini, with two sets of
 instructions (`prompts.py`): the moment writer, and the recap writer, which tells the story of the
-match so far at half-time and full time and writes the catch-up. (A correction's notice keeps its
-template, which says what changed plainly: in five of seven recordings an agent's notice added
-nothing to it, and the others slipped, as in "It is not Jory Penhallow's own goal".) The writer's
+match so far at half-time and full time and writes the catch-up. (A correction's notice and a VAR
+decision keep their templates, which say what happened plainly. In five of seven recordings an
+agent's notice added nothing, and the others slipped, as in "It is not Jory Penhallow's own goal";
+agents' VAR cards gave a penalty check to the wrong side, wrote a handball VAR had found none of,
+and "the goal that would have equalise".) The writer's
 only tools are the match tools, an MCP server (`src/footnote/tools`) the same process serves on
 localhost:
 
@@ -212,7 +216,7 @@ Each agent version's provenance names the model, prompt version, tools used and 
 passed. The console's Agent runs lists a card's runs in its replay and, for a reused draft, the run
 in an earlier replay that wrote it.
 
-**Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 19
+**Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 17
 in all, against the deployed model, and evaluates them in code and with Azure AI Evaluation's
 groundedness evaluator; CI replays the recorded run on every push. The recorded run, each card in
 it, its timings, tokens and cost at list prices (US$0.25 a million input tokens, US$2.00 a million
@@ -267,17 +271,21 @@ the Translator first
   back as a magic spell), "the provider" as "the data provider", "made the last pass" as "played the
   final pass" ("hizo el último adelantamiento", an overtaking), "neither side" as "neither team",
   "left the boot" as "left the foot", "a run from 2' with 44 passes" as "a sequence" ("una carrera",
-  a run on foot), "late on" as "late in the match" ("en los minutos de la tarde"), and a few more.
+  a run on foot), "late on" as "late in the match" ("en los minutos de la tarde"), "the stretch" as
+  "the period" ("la recta final", the home straight), and a few more. The pressure headline,
+  "Saltmarsh pinning Kingsferry back", goes as "Saltmarsh keep Kingsferry penned in", which comes back
+  the same way for either club.
 
 What comes back has the Translator's known slips put right: a word that is never the football one
 ("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" and
 "passage" for a pass), its article and adjective changed with it, a word put inside a score line
 ("Saltmarsh 1–1 en Kingsferry"), and "in favour of" before one ("a favor de Saltmarsh 1–2
-Kingsferry", for a goal that "turns the game to" that score). Code then checks each translation against its English: the same figures, a decimal
-comma read as a point, every name, each score line whole (a name either side of the score, so "1–1
-pour Saltmarsh Kingsferry" fails), no part empty. A small number may come back as a word ("1 shot"
-as "un tiro", "minute 2" as "el segundo minuto"); a figure in digits that changed, or one the
-English doesn't have, fails. Apart from score lines, the check counts the figures and names rather
+Kingsferry", for a goal that "turns the game to" that score). Code then checks each translation
+against its English: the same figures, a decimal comma read as a point, every name, each score line
+whole (a name either side of the score, so "1–1 pour Saltmarsh Kingsferry" fails), no part empty,
+and no word twice in a row ("déclaré déclaré hors-jeu"). A small number may come back as a word
+("1 shot" as "un tiro", "minute 2" as "el segundo minuto"); a figure in digits that changed, or one
+the English doesn't have, fails. Apart from score lines, the check counts the figures and names rather
 than placing them, so names swapped between roles, a number word the English doesn't have, or "un"
 standing in for a dropped 1 would get through. A translation that passes joins the card and the card
 is pushed again; one that fails is kept with its problems and never shown, and the viewer reads the
