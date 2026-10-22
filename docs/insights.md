@@ -26,7 +26,7 @@ contract in [overlay.md](overlay.md).
 
 ## Moments
 
-The showcase match produces 36 insights over the whole match, 15 of which an agent drafts. A replay
+The showcase match produces 36 insights over the whole match, 14 of which an agent drafts. A replay
 that starts mid-match adds one more, the catch-up, which an agent drafts too.
 
 | Topic | Kind | Found when | Base rank | Agent drafts it |
@@ -43,7 +43,7 @@ that starts mid-match adds one more, the catch-up, which an agent drafts too.
 | Sprint, distance | player tag | a record sprint; a player passing 10 km | 0.35, 0.25 | no |
 | Half-time, full time | recap | the whistle | 0.90 | yes |
 | Catch-up | recap | a replay that starts mid-match reaches its starting point | 0.85 | yes |
-| Correction | correction | the provider amends an event | 0.95 | yes |
+| Correction | correction | the provider amends an event | 0.95 | no: the template says what changed |
 
 Moments found in a run's backfill (before the point the replay jumped to) are kept as history:
 they appear in the run's snapshot for catch-up, but no agent drafts them and they never reach the
@@ -119,20 +119,25 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   "{key} passes", "{key} shots", "{key} on target" or "{key} completed passes" is refused, and so is
   a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
   "at", a count of times follows what happened ("there were 7 times" is refused), and a score line,
-  which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry");
+  which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry") or "to"
+  ("turns the game to Saltmarsh 1–2 Kingsferry", which the Translator gave as "in favour of" it);
 - the ball changing hands counts both sides losing it, so a card can't say one side forced it;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name ("state model"), a count of times followed by a noun ("7 times
   changes of possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading
   such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a recap
   "the last 5 minutes" from a spell's own wording, which meant the minutes before that spell;
-- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance");
+- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance"),
+  and no word comes twice in a row ("finished a {story.4.play_pattern} counter" read "a counter
+  counter");
 - a long text fact, such as the provider's reason, goes in one line, not both;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out, its
   player or its minute: a recap's goals are the ones that stand, so the decision can't be pinned on
   one of them;
 - a card that says who a goal is credited to also says who it was credited to before, when its
-  facts include a correction: "later credited to Femi Adeyani" alone reads as if it always had been;
+  facts include a correction: "later credited to Femi Adeyani" alone reads as if it always had been.
+  The earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets: read
+  aloud, "(originally given as Jory Penhallow)" sounds like the scorer's other name;
 - a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
@@ -155,10 +160,12 @@ Job -> writer --Attempt--> checker --(passes)----------> accepted: the agent's v
                               +--(fails twice)----------> rejected: the template stays
 ```
 
-The writer is an Agent Framework `Agent` on the Foundry deployment of gpt-5-mini, with three sets of
-instructions (`prompts.py`): the moment writer, the correction writer, and the recap writer, which
-tells the story of the match so far at half-time and full time and writes the catch-up. Its only
-tools are the match tools, an MCP server (`src/footnote/tools`) the same process serves on
+The writer is an Agent Framework `Agent` on the Foundry deployment of gpt-5-mini, with two sets of
+instructions (`prompts.py`): the moment writer, and the recap writer, which tells the story of the
+match so far at half-time and full time and writes the catch-up. (A correction's notice keeps its
+template, which says what changed plainly: in five of seven recordings an agent's notice added
+nothing to it, and the others slipped, as in "It is not Jory Penhallow's own goal".) The writer's
+only tools are the match tools, an MCP server (`src/footnote/tools`) the same process serves on
 localhost:
 
 | Tool | Returns |
@@ -199,11 +206,13 @@ facts its writer was shown; its provenance says it was reused and names the agen
 it. A kept draft that fails today's checks is drafted again, and the fresh draft replaces it, as a
 producer's redraft does.
 
-**What each run records** (`agent_runs`): outcome, attempts, input, output and reasoning tokens,
-latency, the problems a rejected draft had and the tool calls made. Each agent version's
-provenance names the model, prompt version, tools used and that the checks passed.
+**What each run records** (`agent_runs`, kept after its replay ends): outcome, attempts, input,
+output and reasoning tokens, latency, the problems a rejected draft had and the tool calls made.
+Each agent version's provenance names the model, prompt version, tools used and that the checks
+passed. The console's Agent runs lists a card's runs in its replay and, for a reused draft, the run
+in an earlier replay that wrote it.
 
-**Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 20
+**Evaluations.** `python -m footnote.evals` drafts every card the showcase asks of the agents, 19
 in all, against the deployed model, and evaluates them in code and with Azure AI Evaluation's
 groundedness evaluator; CI replays the recorded run on every push. The recorded run, each card in
 it, its timings, tokens and cost at list prices (US$0.25 a million input tokens, US$2.00 a million

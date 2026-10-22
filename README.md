@@ -27,19 +27,22 @@ any point. At 2×, each of these takes a few minutes:
 1. **23', as Nadia, the producer.** Kingsferry's goal reaches her shortlist with
    its rank from the match-state model and the reason for it. **Evidence** lists
    the events behind the card. **Agent runs** shows the agents' work on it: each
-   MCP match tool called, the checks a draft failed, the time and tokens. The
-   card shows the template's wording until the agent's draft replaces it;
-   **Approve** puts it on air, with **Edit** and **Kill** beside it. Then switch
-   to Sam, a fan whose stream runs 40 seconds behind live (20 seconds at 2×):
-   the card reaches Sam with the goal, worded as Nadia approved it, or when she
-   approves it if that comes later.
+   MCP match tool called, the checks a draft failed, the time and tokens. Drafts
+   are reused between replays, so the card usually arrives with a draft from an
+   earlier replay, marked "Agent, reused", whose run Agent runs shows;
+   **Redraft** asks the agents for a fresh one. **Approve** puts the card on
+   air, with **Edit** and **Kill** beside it. Then switch to Sam, a fan whose
+   stream runs 40 seconds behind live (20 seconds at 2×): the card reaches Sam
+   with the goal, worded as Nadia approved it, or when she approves it if that
+   comes later.
 2. **31', as Tom, a blind fan.** The described feed tells the match in words for
    a screen reader, at the detail and pace set in **Settings**. Marco Dellow's
    goal is checked by VAR and ruled out for offside; switch to Sam for the
    decision's card, with a still of the pitch at the pass.
 3. **60', as Lucía, joining late.** She reads what she missed in Spanish, then
    each card in Spanish, translated by Azure AI Translator and checked by code
-   for figures, minutes and names.
+   for figures, minutes and names. The next card, when neither side has
+   control, comes about four minutes in at 2×, two at 4×.
 4. **81', as Nadia.** The goal is first recorded as Jory Penhallow's own goal.
    At 84' the data provider credits it to Femi Adeyani: the cards that cited it
    are flagged, and the restated card comes back to Nadia under **Corrections**
@@ -54,8 +57,8 @@ and the described feed.
   its cards or stops it, and starting another replaces it. Anyone with its link
   can watch.
 - Up to six replays run at once; a seventh replaces the oldest.
-- The first time the agents draft a card takes several seconds, and later
-  replays reuse the draft. In the console, **Redraft** asks the agents again.
+- A fresh draft (a card's first, or a Redraft) takes several seconds, and
+  Approve waits for it.
 
 ## How it runs
 

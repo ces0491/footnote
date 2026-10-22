@@ -62,7 +62,7 @@ Quality and submission
 
 - [ ] `azd up` deploys from scratch; no secrets in code; Azure budget alert set
 - [x] CI runs lint, type checks, tests and agent-output evaluations
-- [ ] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
+- [x] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
 - [ ] Video under 2:00 showing the deployed app; public repo; elevator pitch
 - [ ] Live demo stays up and free for judges until 2026-11-10
