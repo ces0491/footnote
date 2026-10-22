@@ -12,6 +12,77 @@ Who it's for and why: [docs/audience.md](docs/audience.md). What each viewer
 sees: [docs/experience.md](docs/experience.md). Scope and done-list:
 [SCOPE.md](SCOPE.md).
 
+## Try it
+
+The demo runs on Azure until judging ends on 10 November 2026, free and with no
+sign-in: <https://ca-web-kwy7jucrk2pdm.whitepebble-d77f6eb9.westus3.azurecontainerapps.io>.
+It replays the showcase match, Saltmarsh Rovers v Kingsferry Athletic, as if it
+were live.
+
+On the start page, pick who to watch as, where to start and the speed, then
+**Start the replay**. A replay begins 30 seconds before the minute picked, and
+**Watch as**, above the match, switches between the producer and the fans at
+any point. At 2×, each of these takes a few minutes:
+
+1. **23', as Nadia, the producer.** Kingsferry's goal reaches her shortlist with
+   its rank from the match-state model and the reason for it. **Evidence** lists
+   the events behind the card. **Agent runs** shows the agents' work on it: each
+   MCP match tool called, the checks a draft failed, the time and tokens. The
+   card shows the template's wording until the agent's draft replaces it;
+   **Approve** puts it on air, with **Edit** and **Kill** beside it. Then switch
+   to Sam, a fan whose stream runs 40 seconds behind live (20 seconds at 2×):
+   the card reaches Sam with the goal, worded as Nadia approved it, or when she
+   approves it if that comes later.
+2. **31', as Tom, a blind fan.** The described feed tells the match in words for
+   a screen reader, at the detail and pace set in **Settings**. Marco Dellow's
+   goal is checked by VAR and ruled out for offside; switch to Sam for the
+   decision's card, with a still of the pitch at the pass.
+3. **60', as Lucía, joining late.** She reads what she missed in Spanish, then
+   each card in Spanish, translated by Azure AI Translator and checked by code
+   for figures, minutes and names.
+4. **81', as Nadia.** The goal is first recorded as Jory Penhallow's own goal.
+   At 84' the data provider credits it to Femi Adeyani: the cards that cited it
+   are flagged, and the restated card comes back to Nadia under **Corrections**
+   with the correction notice.
+
+The fifth profile, Priya, owns Teo Varlan in a fantasy league and watches in
+analyst mode, focused on him, with pass difficulty pinned. A fan's **Settings**
+change the mode, club, player, pinned figure, language, stream delay, calm mode
+and the described feed.
+
+- A replay belongs to the browser that started it: only that browser approves
+  its cards or stops it, and starting another replaces it. Anyone with its link
+  can watch.
+- Up to six replays run at once; a seventh replaces the oldest.
+- The first time the agents draft a card takes several seconds, and later
+  replays reuse the draft. In the console, **Redraft** asks the agents again.
+
+## How it runs
+
+```mermaid
+flowchart TB
+    replayer["Replayer"] -- "feed" --> eh[("Event Hubs")]
+    eh --> processor["Processor<br>models, insights, templates"]
+    processor -- "state, cards, jobs" --> pg[("Azure Database<br>for PostgreSQL")]
+    pg -- "jobs" --> agents["Agents service<br>Agent Framework writers,<br>MCP match tools, checks,<br>translation, producer's desk"]
+    agents -- "drafts, translations" --> pg
+    agents -- "Responses API" --> foundry["Foundry<br>gpt-5-mini"]
+    agents -- "cards in English" --> translator["Azure AI Translator"]
+    agents -- "traces" --> appi["Application Insights"]
+    processor -- "events, cards" --> wps["Web PubSub"]
+    agents -- "cards" --> wps
+    wps --> browser["Browser"]
+    browser --> web["Web app<br>Next.js"]
+    web -- "start, stop" --> replayer
+    web -- "snapshots, evidence" --> pg
+    web -- "producer's actions" --> agents
+```
+
+The four services run as container apps in one Azure Container Apps
+environment, with managed identities throughout. What each one does, how a
+replay flows through them, the latency measured on the deployed stack and the
+cost: [docs/architecture.md](docs/architecture.md).
+
 ## Status
 
 Built so far:
@@ -79,7 +150,7 @@ Built so far:
   pace and detail, from key moments only to every pass, with a pause that
   catches up on resume.
 
-Still to come: viewer profiles stored server-side, and the judge quick-start.
+Still to come: viewer profiles stored server-side.
 
 ## Quick start
 
