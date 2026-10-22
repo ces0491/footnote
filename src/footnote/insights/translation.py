@@ -6,7 +6,8 @@ The agents write English, as the templates do; Azure AI Translator renders it in
 dictionary entry that translates as itself: the name comes back as it is, and the sentence is still
 built around it. (A name marked notranslate comes back too, but the Translator can't then build the
 sentence: verbs are left in the infinitive.) Each minute is written out ("minute 6"), a word it has
-got wrong is said another way ("spell" as "period"), and a headline
+got wrong is said another way ("spell" as "period"), the half a card means by "the half" is named
+("late in the first half"), and a headline
 is given a full stop, so "Femi Adeyani scores" reads as a sentence and not as a name and a noun
 ("Femi Adeyani puntuaciones"); the stop is taken off the translation again. What comes back has the
 Translator's known slips put right (`mend`): a word that is never the football one ("penalización"
@@ -107,8 +108,7 @@ _CLEARER = [
     (re.compile(r"\b([Aa]|[Tt]he|[Tt]heir|[Ii]ts|longest) run\b(?! of\b)(?=[^.;:]*\bpasses\b)"), r"\1 sequence"),
     # "Largas carreras" and "longues courses" for "building long runs", with no passes after it.
     (re.compile(r"\b([Ll]ong|[Ll]onger) runs\b(?! of\b)"), r"\1 passing sequences"),
-    # "En los minutos de la tarde": in the afternoon.
-    (re.compile(r"\blate on\b"), "late in the match"),
+    # "Late on" is said as the card means it, with the half (`_halves`).
     # "Originalmente llamado" and "initialement appelé" (originally called) for a goal "originally given
     # as Jory Penhallow". Before an own goal or a possessive it stays.
     (re.compile(r"\boriginally given as\b(?! an?\b)(?![^,.;)]*['’]s\b)"), "originally credited to"),
@@ -138,6 +138,45 @@ _HEADLINE_CLEARER = [
     (re.compile(r"^(.+) pins (.+) back$"), r"\1 keeps \2 penned in"),
     (re.compile(r"^(.+) gives ([A-Z]\S*(?: [A-Z]\S*)?) lead$"), r"\1 gives \2 the lead"),
 ]
+
+# Which half "the half" is, which the Translator guesses, either way and in both languages: "late in
+# the half" came back as "en fin de seconde période" in half-time recaps, and "early in the half" in
+# a card from the second half as "en début de première période" and "al principio de la primera
+# parte". Named ("late in the first half"), it comes back right in both. A half of the pitch always
+# has an owner ("their own half", "the opposition half"), so "in the half" is a half of the match.
+# "Late on" was "en los minutos de la tarde" (in the afternoon), so it is said outright: late in the
+# first half in a card from the first half ("late in the match" came back as "en fin de match"), and
+# late in the match otherwise. "Late on the break" and "late on the counter" are late, on a
+# counter-attack: "the break" came back as half-time ("en fin de pause", "al final del descanso").
+_HALVES = {1: "first", 2: "second"}
+_LATE_COUNTER = re.compile(r"\b([Ll])ate on the (?:break|counter(?:-attack)?)\b")
+_LATE_ON_IN = re.compile(r"\b([Ll])ate on in\b")
+_LATE_ON = re.compile(r"\b([Ll])ate on\b(?! the\b)")
+_THE_HALF = re.compile(r"\b([Ii]n|[Oo]f|[Tt]hroughout|[Dd]uring|[Ff]or) the half\b(?!-)")
+
+
+def half_of(topic: str, period: int | None) -> int | None:
+    """Which half "the half" means in a card: the first in the half-time recap, the half a moment or a
+    spell happened in, and neither in the full-time recap or a catch-up from the second half, which
+    tell both halves."""
+    if topic == "half_time":
+        return 1
+    if topic == "full_time" or (topic == "catch_up" and period != 1):
+        return None
+    return period if period in _HALVES else None
+
+
+def _halves(text: str, half: int | None) -> str:
+    """The text with "the half" named as the card's half, and "late on" said as the card means it."""
+    first = half == 1
+    text = _LATE_COUNTER.sub(lambda m: f"{m[1]}ate{' in the first half' if first else ''}, on the counter-attack", text)
+    text = _LATE_ON_IN.sub(r"\1ate in", text)
+    text = _LATE_ON.sub(lambda m: f"{m[1]}ate in the {'first half' if first else 'match'}", text)
+    if half is not None and half in _HALVES:
+        name = _HALVES[half]
+        text = _THE_HALF.sub(lambda m: f"{m[1]} the {name} half", text)
+    return text
+
 
 # Words the Translator gives that are never the football word, put right in its output: a penalty
 # in a short headline came back as "penalización" and "pénalité" (a penalisation), though full
@@ -283,10 +322,11 @@ def _entry(name: str) -> str:
     return f'<mstrans:dictionary translation="{attribute}">{name}</mstrans:dictionary>'
 
 
-def protect(text: str, names: list[str]) -> str:
-    """The text as HTML for the translator: each minute written out, a word it gets wrong replaced,
-    each name a dictionary entry."""
+def protect(text: str, names: list[str], half: int | None = None) -> str:
+    """The text as HTML for the translator: each minute written out, the half named (`half_of`), a
+    word it gets wrong replaced, each name a dictionary entry."""
     text = _MINUTE.sub(r"minute \1", text)
+    text = _halves(text, half)
     for word, clearer in _CLEARER:
         text = word.sub(clearer, text)
     escaped = html.escape(text, quote=False)
@@ -305,15 +345,16 @@ def _stops(part: str, text: str) -> bool:
     return part == "headline" and bool(text.strip()) and text.rstrip()[-1] not in ".!?…"
 
 
-def prepare(card: dict[str, str], names: list[str]) -> list[str]:
-    """Each part of an English card, in PARTS order, as the translator is given it."""
+def prepare(card: dict[str, str], names: list[str], half: int | None = None) -> list[str]:
+    """Each part of an English card, in PARTS order, as the translator is given it; `half` is the half
+    the card means by "the half" (`half_of`)."""
     texts = []
     for part in PARTS:
         text = card[part]
         if part == "headline":
             for wording, clearer in _HEADLINE_CLEARER:
                 text = wording.sub(clearer, text)
-        texts.append(protect(text + "." if _stops(part, text) else text, names))
+        texts.append(protect(text + "." if _stops(part, text) else text, names, half))
     return texts
 
 

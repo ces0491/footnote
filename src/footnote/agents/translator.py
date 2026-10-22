@@ -10,7 +10,8 @@ page shows a rewording in a viewer's language only once its translation is in, k
 translation meanwhile (frontend/src/lib/live/language.ts).
 
 Every replay is the same match, so the same wording comes round again: translations are kept under
-a hash of the English, the names protected and TRANSLATION_VERSION, and reused, so a replay after
+a hash of the English, the names protected, the half the card means by "the half" (it changes what
+the Translator is given) and TRANSLATION_VERSION, and reused, so a replay after
 the first calls the Translator only for wording it hasn't met (a producer's edit, say). A failed call
 is retried with backoff; a translation that fails the check is kept with its problems and not shown.
 """
@@ -30,13 +31,13 @@ from psycopg.types.json import Jsonb
 
 from footnote.db.connect import Pool
 from footnote.db.insights import next_rev, push_insights
-from footnote.insights.translation import LANGUAGES, PARTS, check, mend, prepare, read_back
+from footnote.insights.translation import LANGUAGES, PARTS, check, half_of, mend, prepare, read_back
 from footnote.telemetry import tracer
 
 log = logging.getLogger(__name__)
 
 # Change it when the preparing or the check changes, so translations kept from before aren't reused.
-TRANSLATION_VERSION = "2026-10-22.6"
+TRANSLATION_VERSION = "2026-10-22.7"
 TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 TRANSLATE_PATH = "translator/text/v3.0/translate"
 
@@ -76,6 +77,7 @@ class Pending:
     insight_id: str
     version: int
     card: dict  # the English wording: headline, casual, analyst and the rest
+    half: int | None = None  # the half the card means by "the half" (footnote.insights.translation.half_of)
 
     @property
     def ref(self) -> tuple[str, str, int]:
@@ -85,7 +87,7 @@ class Pending:
 Results = dict[str, dict]  # by language: {"card": {...} or None, "problems": [...] or None}
 
 _PENDING = """
-select v.run_id, v.insight_id, v.version, v.card
+select v.run_id, v.insight_id, v.version, v.card, i.topic, (i.at->>'period')::int as period
   from insights i
   join runs r on r.run_id = i.run_id
   join insight_versions v on v.run_id = i.run_id and v.insight_id = i.insight_id and v.version = i.version
@@ -104,7 +106,10 @@ class TranslationStore:
     async def pending(self, limit: int) -> list[Pending]:
         async with self.pool.connection() as conn:
             rows = await (await conn.execute(_PENDING, (limit,))).fetchall()
-        return [Pending(r["run_id"], r["insight_id"], r["version"], r["card"]) for r in rows]
+        return [
+            Pending(r["run_id"], r["insight_id"], r["version"], r["card"], half_of(r["topic"], r["period"]))
+            for r in rows
+        ]
 
     async def cached(self, key: str) -> Results | None:
         async with self.pool.connection() as conn:
@@ -186,11 +191,12 @@ class TranslationWorker:
         self.batch = batch
         self.failures = 0
 
-    def key(self, card: dict) -> str:
+    def key(self, card: dict, half: int | None) -> str:
         payload = {
             "parts": [card.get(part, "") for part in PARTS],
             "names": self.names,
             "languages": list(self.languages),
+            "half": half,
             "version": TRANSLATION_VERSION,
         }
         return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
@@ -222,7 +228,7 @@ class TranslationWorker:
             results: dict[tuple[str, str, int], Results] = {}
             fresh: list[Pending] = []
             for p in pending:
-                hit = await self.store.cached(self.key(p.card))
+                hit = await self.store.cached(self.key(p.card, p.half))
                 if hit is not None:
                     results[p.ref] = hit
                 else:
@@ -231,7 +237,7 @@ class TranslationWorker:
             if fresh:
                 translated = await self._translate(fresh)
                 for p, r in zip(fresh, translated, strict=True):
-                    await self.store.cache(self.key(p.card), r)
+                    await self.store.cache(self.key(p.card, p.half), r)
                     results[p.ref] = r
             failed = sum(1 for r in results.values() for lang in r.values() if lang["card"] is None)
             span.set_attribute("footnote.failed_checks", failed)
@@ -247,7 +253,7 @@ class TranslationWorker:
     async def _translate(self, cards: list[Pending]) -> list[Results]:
         """Every part of every card in one request, checked card by card."""
         english = [{part: str(p.card.get(part) or "") for part in PARTS} for p in cards]
-        texts = [text for card in english for text in prepare(card, self.names)]
+        texts = [text for p, card in zip(cards, english, strict=True) for text in prepare(card, self.names, p.half)]
         out = await self.translator.translate(texts, self.languages)
         results = []
         for i, p in enumerate(cards):

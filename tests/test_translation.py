@@ -3,7 +3,17 @@ came through (footnote.insights.translation)."""
 
 from __future__ import annotations
 
-from footnote.insights.translation import check, figures, mend, names_of, prepare, protect, read_back, unprotect
+from footnote.insights.translation import (
+    check,
+    figures,
+    half_of,
+    mend,
+    names_of,
+    prepare,
+    protect,
+    read_back,
+    unprotect,
+)
 from footnote.live.match import load_match
 
 NAMES = ["Femi Adeyani", "Kingsferry", "Saltmarsh", "Adeyani", "Varlan"]
@@ -106,6 +116,43 @@ def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
     )
     kept = "It was originally given as an own goal, originally given as Penhallow's own goal."
     assert protect(kept, []) == kept
+
+
+def test_the_half_a_card_means_is_named_for_the_translator() -> None:
+    # In the half-time recap, as in any card from the first half, "the half" and "late on" are the
+    # first half's. A half of the pitch, which always has an owner, is left alone.
+    assert protect("Kingsferry scored late in the half and held on for the rest of the half.", [], half=1) == (
+        "Kingsferry scored late in the first half and held on for the rest of the first half."
+    )
+    assert protect("Late on, Saltmarsh pressed in their own half and the opposition half.", [], half=1) == (
+        "Late in the first half, Saltmarsh pressed in their own half and the opposition half."
+    )
+    # In a card from the second half, the second; "late on" is late in the match.
+    assert protect("Teo Varlan equalised early in the half; late on, Kingsferry led.", [], half=2) == (
+        "Teo Varlan equalised early in the second half; late in the match, Kingsferry led."
+    )
+    # Where it could be either, as in the full-time recap, "the half" stays as written.
+    assert protect("Kingsferry scored late in the half, late on in the match.", []) == (
+        "Kingsferry scored late in the half, late in the match."
+    )
+    # "Late on the break" is late, on a counter-attack, never at half-time; "late on in" says when itself.
+    assert protect("Adeyani won it late on the break, and late on the counter.", [], half=2) == (
+        "Adeyani won it late, on the counter-attack, and late, on the counter-attack."
+    )
+    assert protect("Adeyani scored late on the break; late on in the half.", [], half=1) == (
+        "Adeyani scored late in the first half, on the counter-attack; late in the first half."
+    )
+    assert protect("At the end of the half-time break.", [], half=1) == "At the end of the half-time break."
+    # Every part of a card goes with its half.
+    assert prepare({"headline": "Late on", "casual": "In the half.", "analyst": ""}, [], half=2) == [
+        "Late in the match.",
+        "In the second half.",
+        "",
+    ]
+    halves = [half_of(topic, period) for topic, period in [("half_time", 1), ("goal", 2), ("pressure", 1)]]
+    assert halves == [1, 2, 1]
+    # The full-time recap and a catch-up from the second half tell both halves.
+    assert [half_of("full_time", 2), half_of("catch_up", 2), half_of("catch_up", 1)] == [None, None, 1]
 
 
 def test_the_translators_known_slips_are_put_right() -> None:

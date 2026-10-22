@@ -284,13 +284,23 @@ the Translator first
   the sentence around it. A name marked to be left alone comes back too, but the verbs around it
   stay in the infinitive ("Saltmarsh igualar la partida").
 - Minutes are written out: "6'" goes as "minute 6", since the Translator reads "6'" as six feet.
+- "The half" goes as the half the card means, which the Translator otherwise guesses, either way and
+  in both languages: "late in the half" came back as "en fin de seconde période" in half-time
+  recaps, and "early in the half" in a card from the second half as "en début de première période".
+  It is the first half in the half-time recap and in a card from the first half, the second in a
+  card from the second half, and stays as written in the full-time recap and a catch-up from the
+  second half, which tell both halves. A half of the pitch always has an owner ("their own half"),
+  so it is never touched. "Late on" goes as "late in the first half" in a card from the first half
+  and as "late in the match" otherwise (it came back as "en los minutos de la tarde", in the
+  afternoon, and "late in the match" as "en fin de match" at half-time), and "late on the break" as
+  "late, on the counter-attack" ("the break" came back as half-time: "en fin de pause").
 - A headline goes with a full stop, taken off again after: without one, "Femi Adeyani scores" comes
   back as "Femi Adeyani puntuaciones".
 - English it got wrong, or gave word for word, is said another way: "spell" as "period" (it came
   back as a magic spell), "the provider" as "the data provider", "made the last pass" as "played the
   final pass" ("hizo el último adelantamiento", an overtaking), "neither side" as "neither team",
   "left the boot" as "left the foot", "a run from 2' with 44 passes" as "a sequence" ("una carrera",
-  a run on foot), "late on" as "late in the match" ("en los minutos de la tarde"), "the stretch" as
+  a run on foot), "the stretch" as
   "the period" ("la recta final", the home straight), "a counter" as "a counter-attack" ("un
   contre-but") and "a late counter strike" as "a late strike on the counter-attack" (the
   counter-attack itself scoring), "sustaining pressure" as "keeping up the pressure" ("subissant une
@@ -319,9 +329,9 @@ is pushed again; one that fails is kept with its problems and never shown, and t
 English. When a card is reworded, by an agent's draft or a producer's edit, a page keeps showing the
 earlier wording's translation until the new one's arrives; a card a correction restated shows the
 English, marked, until its own translation does. Translated wording carries its language for screen
-readers. Translations are kept under a hash of the English and reused, so a replay after the first
-calls the Translator only for wording it hasn't met, such as a producer's edit. The producer sees
-which languages each card is ready in.
+readers. Translations are kept under a hash of the English and the half it means, and reused, so a
+replay after the first calls the Translator only for wording it hasn't met, such as a producer's
+edit. The producer sees which languages each card is ready in.
 
 The words around the figures and names are the Translator's. The templates are worded so it gets
 them right, each rewording noted beside it in the code with the slip it avoids: the full-time recap

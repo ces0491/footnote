@@ -701,6 +701,11 @@ async def test_cards_are_translated_checked_and_pushed_again(pool: Pool, showcas
         for p in await store.pending(100)
     ]
     assert waiting == sorted(waiting, reverse=True) and True in waiting and False in waiting
+    # Each card goes with the half it means by "the half": the 23' goal's the first, the 81' goal's the
+    # second, and the catch-up from 81' tells both. The half changes what is sent, so it keys the cache.
+    halves = {p.insight_id: p.half for p in await store.pending(100)}
+    assert (halves["goal-e0391"], halves["goal-e1586"], halves["catchup"]) == (1, 2, None)
+    assert worker.key({"casual": "Late in the half."}, 1) != worker.key({"casual": "Late in the half."}, None)
     assert await worker.drain() > 0
     history = (await _one(pool, "select to_jsonb(c) as doc from insight_cards c where insight_id = 'goal-e0391'"))[
         "doc"
@@ -714,7 +719,7 @@ async def test_cards_are_translated_checked_and_pushed_again(pool: Pool, showcas
     )["doc"]
     OverlayItem.model_validate(doc)
     assert set(doc["translations"]) == {"es"}
-    english = unprotect(protect(doc["card"]["casual"], names_of(showcase.meta)))
+    english = unprotect(protect(doc["card"]["casual"], names_of(showcase.meta), half=2))
     assert doc["translations"]["es"]["casual"] == english + " [es]"
     failed = await _one(
         pool, "select problems from card_translations where insight_id = 'goal-e1586' and lang = 'fr' and card is null"
