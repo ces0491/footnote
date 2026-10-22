@@ -11,11 +11,11 @@ is given a full stop, so "Femi Adeyani scores" reads as a sentence and not as a 
 ("Femi Adeyani puntuaciones"); the stop is taken off the translation again. What comes back has the
 Translator's known slips put right (`mend`): a word that is never the football one ("penalización"
 for a penalty, "balonmano" for a handball) and a score line broken up ("0–1 para Saltmarsh y
-Kingsferry") or read as one club's lead ("a favor de Saltmarsh 1–2 Kingsferry"). Code then holds each translation to the English it came from: the same figures, every
-name, each score line whole, nothing empty. A small
-number may come back as a word ("1 shot" as "un tiro", "minute 2" as "el segundo minuto"), but no
-figure may change or appear. One that fails isn't shown: the viewer reads the English
-(docs/audience.md, P2).
+Kingsferry") or read as one club's lead ("a favor de Saltmarsh 1–2 Kingsferry"). Code then holds
+each translation to the English it came from: the same figures, every name, each score line whole,
+nothing empty, no word twice in a row. A small number may come back as a word ("1 shot" as "un
+tiro", "minute 2" as "el segundo minuto"), but no figure may change or appear. One that fails isn't
+shown: the viewer reads the English (docs/audience.md, P2).
 """
 
 from __future__ import annotations
@@ -36,10 +36,18 @@ _MINUTE = re.compile(r"(\d+(?:\+\d+)?)['’]")
 # A figure as either language writes it: "89.1", or "89,1" with a decimal comma.
 _FIGURE = re.compile(r"\d+(?:[.,]\d+)?")
 _WORD = re.compile(r"\w+")
+# A word twice in a row: "a été revu et déclaré déclaré hors-jeu". French repeats "nous" and "vous"
+# in reflexive verbs ("nous nous sommes"), which is right.
+_TWICE = re.compile(r"\b(?!(?:nous|vous)\b)([^\W\d_]+)\s+\1\b", re.IGNORECASE)
 # English the Translator got wrong, or gave word for word, said another way, each with what came back.
 _CLEARER = [
     # "hechizo" and "sort": a magic spell.
     (re.compile(r"\bspell(s?)\b"), r"period\1"),
+    # "En la recta final" and "dans la ligne droite", the home straight, for "in the stretch".
+    (re.compile(r"\b([Tt]he|[Tt]hat|[Tt]his|[Aa]|[Ee]ach) stretch\b"), r"\1 period"),
+    # "Maintenu Kingsferry au sol" (held down on the ground) for "kept Kingsferry pinned for 61%";
+    # "pinned in their own half" came back right and stays.
+    (re.compile(r"\bpinned(?= for\b)"), "penned in"),
     # "La razón del técnico", "raison du joueur", "el asistente corrigió".
     (re.compile(r"\b([Tt]he) provider\b"), r"\1 data provider"),
     # "El disparo iba a darlo".
@@ -54,6 +62,8 @@ _CLEARER = [
     (re.compile(r"\bleft the boot\b"), "left the foot"),
     # "Hizo el último adelantamiento" (an overtaking) and "le dernier passage".
     (re.compile(r"\bmade the (?:last|final) pass\b"), "played the final pass"),
+    # "La última bola" and "la dernière balle", a ball itself.
+    (re.compile(r"\bthe (last|final) ball\b"), r"the \1 pass"),
     # "Ninguna de las partes", with "4 pasadas" after it.
     (re.compile(r"\b([Nn])either side\b"), r"\1either team"),
     # "Varlan levels for Saltmarsh": "sube nivel" and "monte".
@@ -65,6 +75,8 @@ _CLEARER = [
     # "Una carrera" and "une course", a run on foot, for "a run from 2' with 44 passes". A "run of
     # passes" came back right ("racha", "série") and stays.
     (re.compile(r"\b([Aa]|[Tt]he|[Tt]heir|[Ii]ts|longest) run\b(?! of\b)(?=[^.;:]*\bpasses\b)"), r"\1 sequence"),
+    # "Largas carreras" and "longues courses" for "building long runs", with no passes after it.
+    (re.compile(r"\b([Ll]ong|[Ll]onger) runs\b(?! of\b)"), r"\1 passing sequences"),
     # "En los minutos de la tarde": in the afternoon.
     (re.compile(r"\blate on\b"), "late in the match"),
     # "Originalmente llamado" and "initialement appelé" (originally called) for a goal "originally given
@@ -81,6 +93,8 @@ _CLEARER = [
     # "Saltmarsh empatar para poner el Saltmarsh 1–1 Kingsferry" (an infinitive, and no "marcador") for
     # "Saltmarsh equalise to make it Saltmarsh 1–1 Kingsferry".
     (re.compile(rf",? to make it(?= (?:[^\s.;:]+ ){{0,3}}\d+{EN_DASH}\d+)"), ", making it"),
+    # "Entre el segundo y el minuto 17" (between them) for "spells from 2' and 17'".
+    (re.compile(r"\bfrom minute (\d+(?:\+\d+)?) and minute (\d+(?:\+\d+)?)"), r"from minute \1 and from minute \2"),
 ]
 
 # A headline said another way, the whole headline only: "Saltmarsh pinning Kingsferry back" came back
@@ -118,10 +132,15 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
             (r"\bla última pasada\b", "el último pase"),
             (r"\bUna pasada\b", "Un pase"),
             (r"\buna pasada\b", "un pase"),
+            # "Mano de balón" for "handball", and "juego libre" for "open play".
+            (r"\bmano de balón\b", "mano"),
+            (r"\bjuego libre\b", "juego abierto"),
             (r"\bpasadas completadas\b", "pases completados"),
             (r"\b(\d+) pasadas seguidas\b", r"\1 pases seguidos"),
             (r"\b(\d+) pasadas\b", r"\1 pases"),
             (r"\bde pasadas\b", "de pases"),
+            # "Superó las 4 pases": a pass is masculine.
+            (r"\b([Ll])as (\d+) pases\b", r"\1os \2 pases"),
         )
     ],
     "fr": [
@@ -323,4 +342,6 @@ def check(english: dict[str, str], translated: dict[str, str], names: list[str],
         for line in _score_lines(source, names) if names else []:
             if line not in target:
                 problems.append(f"{part}: the score line '{line}' is broken up in the translation")
+        if (twice := _TWICE.search(target)) is not None and not _TWICE.search(source):
+            problems.append(f"{part}: '{twice.group(0)}', a word twice in a row")
     return problems

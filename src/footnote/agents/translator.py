@@ -36,7 +36,7 @@ from footnote.telemetry import tracer
 log = logging.getLogger(__name__)
 
 # Change it when the preparing or the check changes, so translations kept from before aren't reused.
-TRANSLATION_VERSION = "2026-10-22.2"
+TRANSLATION_VERSION = "2026-10-22.3"
 TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 TRANSLATE_PATH = "translator/text/v3.0/translate"
 

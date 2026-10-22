@@ -57,6 +57,17 @@ def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
         "A sequence from minute 2 with 44 passes; their longest sequence was 20 passes."
     )
     assert protect("A run of 7 passes against the run of play.", []) == "A run of 7 passes against the run of play."
+    assert protect("Saltmarsh built long runs, and long runs of possession.", []) == (
+        "Saltmarsh built long passing sequences, and long runs of possession."
+    )
+    assert protect("Spells from 2' and 17'.", []) == "Spells from minute 2 and from minute 17."
+    assert protect("Ferrano provided the final ball.", []) == "Ferrano provided the final pass."
+    assert protect("Their longest sequence in the stretch; Saltmarsh stretch it.", []) == (
+        "Their longest sequence in the period; Saltmarsh stretch it."
+    )
+    assert protect("Kept pinned for 61%, then pinned in their own half.", []) == (
+        "Kept penned in for 61%, then pinned in their own half."
+    )
     assert protect("No penalty late on, after a regular play move; regular play resumed.", []) == (
         "No penalty late in the match, after an open play move; open play resumed."
     )
@@ -137,6 +148,10 @@ def test_the_translators_known_slips_are_put_right() -> None:
         NAMES,
         "es",
     )["casual"] == ("La secuencia más larga de pases completados fue de 7 pases.")
+    loose = {**passes, "casual": "Marcó desde juego libre; el VAR no vio mano de balón. Superó las 4 pases."}
+    assert mend(passes, loose, NAMES, "es")["casual"] == (
+        "Marcó desde juego abierto; el VAR no vio mano. Superó los 4 pases."
+    )
     assert mend(
         passes,
         {**passes, "casual": "Fut de 20 passages, de passages achevés ; Varlan a joué le dernier passage."},
@@ -224,6 +239,14 @@ def test_a_small_number_may_come_back_as_a_word() -> None:
     assert check(english, changed, NAMES, "es") and check(english, added, NAMES, "es")
     # A figure missing with no word for it fails too.
     assert check({"casual": "Kingsferry had 3 shots."}, {"casual": "Kingsferry tuvo disparos."}, NAMES, "es")
+
+
+def test_a_word_twice_in_a_row_fails_unless_the_english_has_it() -> None:
+    english = {"casual": "The goal was reviewed and ruled out for offside."}
+    garbled = {"casual": "Le but a été revu et déclaré déclaré hors-jeu."}
+    assert check(english, garbled, NAMES, "fr") == ["casual: 'déclaré déclaré', a word twice in a row"]
+    reflexive = {"casual": "Nous nous sommes trompés : le but a été annulé pour hors-jeu."}
+    assert check(english, reflexive, NAMES, "fr") == []
 
 
 def test_a_lost_or_changed_figure_or_name_fails() -> None:
