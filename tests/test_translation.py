@@ -155,6 +155,22 @@ def test_the_half_a_card_means_is_named_for_the_translator() -> None:
     assert [half_of("full_time", 2), half_of("catch_up", 2), half_of("catch_up", 1)] == [None, None, 1]
 
 
+def test_a_scorer_who_finished_is_said_to_have_scored() -> None:
+    # "Who finished at 23'" came back as "qui a terminé" and "que finalizó" (ended).
+    assert protect("Kingsferry broke away and scored when Ferrano fed Femi Adeyani who finished at 23'.", NAMES) == (
+        f"{_entry('Kingsferry')} raced forward and scored when Ferrano fed {_entry('Femi Adeyani')} who scored at"
+        " minute 23."
+    )
+    assert protect("Adeyani ran on and finished from 21 m; Varlan finished, too.", NAMES) == (
+        f"{_entry('Adeyani')} ran on and scored from 21 m; {_entry('Varlan')} scored, too."
+    )
+    # A finish with its description came back right, and the rest isn't a scorer's.
+    kept = "Varlan, who finished the half with 41 passes, finished low; the match finished 1–2."
+    assert unprotect(protect(kept, NAMES)) == kept
+    # "Breaks away" came back right.
+    assert protect("Adeyani breaks away.", []) == "Adeyani breaks away."
+
+
 def test_the_translators_known_slips_are_put_right() -> None:
     card = {"headline": "VAR: No penalty", "casual": "The score stays Saltmarsh 1–1 Kingsferry.", "analyst": "x"}
     spanish = {

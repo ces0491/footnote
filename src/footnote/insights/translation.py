@@ -125,7 +125,18 @@ _CLEARER = [
     (re.compile(rf",? to make it(?= (?:[^\s.;:]+ ){{0,3}}\d+{EN_DASH}\d+)"), ", making it"),
     # "Entre el segundo y el minuto 17" (between them) for "spells from 2' and 17'".
     (re.compile(r"\bfrom minute (\d+(?:\+\d+)?) and minute (\d+(?:\+\d+)?)"), r"from minute \1 and from minute \2"),
+    # "A pris le dessus" (took the upper hand) for "broke away and scored", though "s'est échappé" in
+    # another sentence. "Raced forward" came back as "a foncé vers l'avant" and "se lanzó hacia
+    # adelante" in every sentence tried; "broke forward" turned with the sentence around it ("a
+    # contre-attaqué", "a percé en avant"). "Breaks away" came back right ("s'échappe") and stays.
+    (re.compile(r"\bbroke away\b"), "raced forward"),
 ]
+
+# A scorer who "finished at 23'" or "finished from 21 m" came back as "a terminé" and "terminó" (ended),
+# so said to have scored. "Finished low into the corner" came back right ("a conclu", "remató") and
+# stays, as do "the match finished" and "finished the half": only "who", "and" or a name before it, and
+# a minute, a distance or the end of a clause after.
+_FINISHED = r"\b({}) finished\b(?= at minute \d| from \d|[,.;:)]|$)"
 
 # A headline said another way, the whole headline only: "Saltmarsh pinning Kingsferry back" came back
 # as "Saltmarsh atrapa a Kingsferry" and, for the other club, "Kingsferry inmovilizando a Saltmarsh";
@@ -327,6 +338,8 @@ def protect(text: str, names: list[str], half: int | None = None) -> str:
     word it gets wrong replaced, each name a dictionary entry."""
     text = _MINUTE.sub(r"minute \1", text)
     text = _halves(text, half)
+    scorer = "|".join(["who", "and", *(re.escape(n) for n in names)])
+    text = re.sub(_FINISHED.format(scorer), r"\1 scored", text)
     for word, clearer in _CLEARER:
         text = word.sub(clearer, text)
     escaped = html.escape(text, quote=False)

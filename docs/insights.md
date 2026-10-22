@@ -305,7 +305,9 @@ the Translator first
   contre-but") and "a late counter strike" as "a late strike on the counter-attack" (the
   counter-attack itself scoring), "sustaining pressure" as "keeping up the pressure" ("subissant une
   pression", undergoing it), "conceded to" as "conceded a goal to" ("une concéderie"), "the score
-  stayed" before a score as "the score was unchanged:" (the score line broken up), and a few more.
+  stayed" before a score as "the score was unchanged:" (the score line broken up), "broke away" as
+  "raced forward" ("a pris le dessus", took the upper hand), a scorer who "finished at 23'" or "from
+  21 m" as one who scored ("a terminé", ended), and a few more.
   The pressure headline, "Saltmarsh pinning Kingsferry back", goes as "Saltmarsh keep Kingsferry
   penned in", which comes back the same way for either club, and so does an agent's "Saltmarsh pin
   Kingsferry back" ("Saltmarsh devuelve a Kingsferry"); a headline's "gives Kingsferry lead" gets its
