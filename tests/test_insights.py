@@ -552,6 +552,8 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
             "says nothing changed",
         ),
         ("Saltmarsh were dominating possession from {story.3.start_minute}'.", "leave out the one after it"),
+        ("Adeyani finished with a fierce effort.", "write 'shot', or 'goal' for one that went in"),
+        ("Saltmarsh pressed from {story.3.start_minute} to {story.3.window}.", "how long it lasted"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
@@ -572,6 +574,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "The ball changed hands {segment.changes} as Saltmarsh pressed.",
         "{moment.score_line}: Kingsferry lead late on.",
         "The spell began at {moment.minute}, and Adeyani's late {moment.minute} strike counts.",
+        "Saltmarsh pressed for a spell of {story.3.window} from {story.3.start_minute}.",
     ):
         assert check(_draft(casual), facts, EVENTS) == [], casual
     # One piece of advice for "a 3 minutes spell": the spell's own.

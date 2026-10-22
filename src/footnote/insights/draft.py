@@ -16,12 +16,15 @@ and so do the agents.
 - a fact's display carries its noun ("13 shots", "2 shots on target"), so the words after its
   placeholder don't say the noun, or part of it, again ("31 passes completed passes"), and a word
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
-  takes "at", and its display has the minute mark, so none follows it ("from 17''"); a count of
-  times follows what happened, not a form of "be" ("there were 7 times");
+  takes "at", and its display has the minute mark, so none follows it ("from 17''"); a spell's length
+  isn't where the minute it ended would go ("from 2' to 5 minutes"); a count of times follows what
+  happened, not a form of "be" ("there were 7 times");
   "only" doesn't go before a count of none ("only no shots"); and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
   Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); a goal's situation, said of
   its club, doesn't follow "have" ("the goal that would have equalise");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
+- "effort" isn't written for a shot or a goal: the Translator gave it as a counter-attack, and as a
+  shot VAR annulled;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
   player or its minute), so it can't pin the decision on a goal that stands;
 - a VAR check for a penalty is about whether its subject gave one away, so no penalty is "for" or
@@ -379,6 +382,12 @@ def _doubled_nouns(where: str, text: str, facts: Facts) -> list[str]:
 # top") and the model's name, which means nothing to a viewer and translated as "modelo de estado
 # de coincidencia" and "modèle d'État".
 _COPIED = re.compile(r"\bshown as\b|\b(?:match[- ])?state model\b", re.IGNORECASE)
+# "Effort" for a shot or a goal: "an 89.1 km/h effort on a counter" came back as "une contre-attaque
+# de 89,1 km/h", and "ruled out a Saltmarsh effort" as "anuló un disparo" (annulled a shot).
+_EFFORT = re.compile(r"\befforts?\b", re.IGNORECASE)
+# A spell's length where the minute it ended would go: "from {story.1.start_minute} to
+# {story.1.window}" read "from 2' to 5 minutes", and came back as "from the 2nd to the 5th minute".
+_FROM_TO = re.compile(r"\bfrom \{([\w.\-]+)\} (?:to|until|till) \{([\w.\-]+)\}", re.IGNORECASE)
 # What may follow a count of times ("7 times", "once"): it says how often, so a noun after it reads
 # as "forced 7 times changes of possession".
 _AFTER_TIMES = frozenset(
@@ -608,6 +617,14 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names, limits: Li
             f"{where}: '{m.group(0)}' reads as the minutes before now; say when the spell was, from"
             f" {{{m.group(1)}.start_minute}}"
         )
+    for m in _FROM_TO.finditer(text):
+        start, length = facts.get(m.group(1)), facts.get(m.group(2))
+        if start is not None and length is not None and start.display.endswith("'") and _DURATION.match(length.display):
+            problems.append(
+                f"{where}: '{m.group(0)}' shows as 'from {start.display} to {length.display}', as if the spell ended at"
+                f" a minute; {{{m.group(2)}}} is how long it lasted, so write 'a spell of {{{m.group(2)}}} from"
+                f" {{{m.group(1)}}}'"
+            )
     if (forced := _FORCED.search(text)) is not None:
         problems.append(
             f"{where}: '{forced.group(0)}': the ball changing hands counts both sides losing it, so no side forced"
@@ -616,6 +633,11 @@ def _text_problems(where: str, text: str, facts: Facts, names: Names, limits: Li
     own = _own_words(text)
     if (copied := _COPIED.search(own)) is not None:
         problems.append(f"{where}: '{copied.group(0)}' is the tools' wording; say what it means for the match")
+    if (effort := _EFFORT.search(own)) is not None:
+        problems.append(
+            f"{where}: '{effort.group(0)}' came back from the Translator as a counter-attack, and as a shot VAR"
+            " annulled; write 'shot', or 'goal' for one that went in"
+        )
     if "{" in own or "}" in own:
         problems.append(f"{where}: a brace that isn't a whole placeholder; write placeholders as {{key}}")
     if _SENTENCE_BREAK.search(own.strip()):
