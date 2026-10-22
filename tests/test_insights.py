@@ -60,7 +60,7 @@ def test_the_first_goal_ranks_top_as_against_the_run_of_play(showcase: Match, an
     insights = _insights(_as_of(showcase, analysis, goal_seq))
     goal = insights["goal-e0391"]
     assert goal.rank == max(i.rank for i in insights.values())
-    assert goal.reason.startswith("Goal: against the run of play: Saltmarsh were on top for")
+    assert goal.reason.startswith("Goal: against the run of play, with Saltmarsh on top for")
     assert goal.facts["moment.run_of_play"].value == "against the run of play"
     assert goal.facts["moment.other_on_top"].value >= 0.45 >= 0.25 >= goal.facts["moment.club_on_top"].value
     assert goal.agent and goal.live
@@ -155,7 +155,8 @@ def test_the_amended_goal_is_restated_and_a_correction_cites_it(final: RunState)
 def test_insights_the_backfill_passed_are_history(showcase: Match, analysis: Analysis) -> None:
     insights = _insights(_from(showcase, analysis, 1500))
     assert not insights["goal-e0391"].live and not insights["goal-e0391"].agent
-    assert insights["correction-e1586-v2"].live and insights["correction-e1586-v2"].agent
+    # The correction's notice keeps its template.
+    assert insights["correction-e1586-v2"].live and not insights["correction-e1586-v2"].agent
     # The 81' goal came after the backfill: live, and drafted again once the correction restates it.
     assert insights["goal-e1586"].live and insights["goal-e1586"].agent
 
@@ -465,6 +466,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "segment.longest_move": Fact(31, "31 passes", "longest run of completed passes", ("e0391",)),
         "segment.changes": Fact(7, "7 times", "how often the ball changed hands", ("e0391",)),
         "moment.score_line": text("Saltmarsh 1–2 Kingsferry", "the score after the goal", ("e0391",)),
+        "moment.play_pattern": text("counter", "how the move started", ("e0391",)),
     }
     for casual, problem in (
         ("A goal was checked by VAR and {story.5.decision_text}.", "{story.5.decision_text} is a heading"),
@@ -480,6 +482,11 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         ("{teams.SAL.name} were in control for {story.1.state_share} of a {segment.window}.", "leave out 'a'"),
         ("Chaos held for {story.1.state_share} of that {segment.window}.", "write 'those {segment.window}'"),
         ("The goal was later credited to {story.15.after}.", "give {story.15.before} too"),
+        ("Adeyani turns the game to {moment.score_line}.", "write 'makes it {moment.score_line}'"),
+        ("The goal is credited to {story.15.after}, not {story.15.before}.", "after 'not', the earlier credit"),
+        ("It is credited to {story.15.after} instead of Penhallow.", "after 'instead of', the earlier credit"),
+        ("{story.15.after}'s goal (originally given as {story.15.before}) won it.", "in brackets, the earlier"),
+        ("Adeyani finished a {moment.play_pattern} counter.", "'counter counter' once filled in"),
     ):
         problems = check(_draft(casual), facts, EVENTS)
         assert any(problem in p for p in problems), (casual, problems)
@@ -489,6 +496,10 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
         "{teams.SAL.name} had a {story.1.state_share} share of that stretch.",
         "The goal was credited to {story.15.before}, then to {story.15.after}.",
         "It was originally an own goal by Penhallow, and is now credited to {story.15.after}.",
+        "{story.15.after}'s goal, originally credited to {story.15.before}, won it.",
+        "Penhallow was not the scorer after all; the goal is credited to {story.15.after} (on review).",
+        "Adeyani makes it {moment.score_line}, and the move came to an end.",
+        "Adeyani finished a {moment.play_pattern}, and Saltmarsh had had the ball for most of the spell.",
         "Goals so far: {recap.goals}.",
         "The model gave it an {moment.completion} chance, a useful pass.",
         "They strung together {segment.longest_move} and kept the ball.",

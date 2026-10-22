@@ -222,8 +222,8 @@ async def test_the_processor_stores_insights_with_their_feed(pool: Pool, showcas
 
 
 async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, analysis: Analysis) -> None:
-    """From 81', four moments want an agent: the catch-up for viewers joining there, the restated
-    goal, the correction notice and the full-time recap."""
+    """From 81', three moments want an agent: the catch-up for viewers joining there, the restated
+    goal and the full-time recap. The correction notice keeps its template."""
     await _play(pool, showcase, analysis, end=False)
     agents = AgentStore(pool)
     catch_up = await agents.claim(1, 60)
@@ -232,9 +232,9 @@ async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, a
     assert [c.insight_id for c in catch_up] == ["catchup"]  # oldest first: queued at the backfill's end
     assert catch_up[0].kind == "recap" and catch_up[0].topic == "catch_up"
     assert [c.insight_id for c in first] == ["goal-e1586"]
-    assert [c.insight_id for c in second] == ["correction-e1586-v2", "ft"]
-    assert await agents.claim(10, 60) == []  # all four are being drafted
-    goal, correction = first[0], second[0]
+    assert [c.insight_id for c in second] == ["ft"]
+    assert await agents.claim(10, 60) == []  # all three are being drafted
+    goal, recap = first[0], second[0]
     assert goal.claims == 1 and goal.match_id == showcase.match_id
     assert goal.facts_version == 2 and goal.facts["moment.scorer"]["display"] == "Femi Adeyani"
 
@@ -253,7 +253,7 @@ async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, a
     assert push["insight"]["card"]["headline"] == "Femi Adeyani puts Kingsferry ahead"
     assert push["insight"]["agent_state"] == "done"
 
-    fallen = await agents.fall_back(correction, "No agent draft within 30 s; the template stands.")
+    fallen = await agents.fall_back(recap, "No agent draft within 30 s; the template stands.")
     assert fallen is not None and fallen["insight"]["agent_state"] == "fallback" and fallen["rev"] == rev_before + 2
     assert fallen["insight"]["agent_note"].startswith("No agent draft") and fallen["insight"]["source"] == "template"
 
@@ -267,11 +267,11 @@ async def test_agents_claim_publish_and_fall_back(pool: Pool, showcase: Match, a
     assert await agents.publish(goal, draft, facts, {"source": "agent"}) is None
     assert await agents.fall_back(goal, "x") is None
 
-    # The replay ends: whatever is still waiting is dropped, the drafts still being written included
-    # (the catch-up and the recap).
+    # The replay ends: whatever is still waiting is dropped, a draft still being written included
+    # (the catch-up, and the goal restated meanwhile).
     async with pool.connection() as conn:
         await conn.execute("update runs set status = 'finished' where run_id = %s", (RUN_ID,))
-    assert await agents.drop_ended() == 3
+    assert await agents.drop_ended() == 2
     assert await agents.claim(10, 60) == []
 
 

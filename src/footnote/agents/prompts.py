@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from footnote.insights.draft import RECAP
 
-PROMPT_VERSION = "2026-10-21.4"
+PROMPT_VERSION = "2026-10-22.1"
 
 
 def _rules(lengths: str) -> str:
@@ -90,22 +90,6 @@ How to work:
 
 {_RULES}"""
 
-CORRECTION_WRITER = f"""\
-You write the correction notice for live football graphics: the data provider has amended an event
-that earlier cards cited, and viewers need to know what changed. Each job is one correction.
-
-How to work:
-1. Call get_moment first. It gives the correction's facts: what the event was credited to before,
-   what it is credited to now, and the data provider's reason.
-2. If it helps, get_events gives the corrected event as it now stands.
-3. Write the notice in your own words, not the template's: lead with what is true now, then, in a
-   sentence of its own, how it was originally recorded. After "not", "instead of" or in a bracket, the
-   earlier credit reads aloud as if it were the new scorer's, and "replacing" reads as a
-   substitution. Give the data provider's reason once, in the analyst line, from correction.why.
-   Don't speculate about why beyond that reason.
-
-{_RULES}"""
-
 RECAP_WRITER = f"""\
 You write the recaps for live football graphics: the story of the match so far at half-time and at
 full time, and "What you missed" for a viewer joining a match already under way. Each job is one
@@ -127,7 +111,8 @@ How to work:
    (story.<n>.scorer, who finished the move, and story.<n>.minute; story.<n>.passer played the
    final pass to the scorer). For a goal the data provider corrected, name both credits, the way
    "{{story.<n>.after}}'s goal, originally credited to {{story.<n>.before}}" does, with the
-   correction's own facts.
+   correction's own facts. After "not" or "instead of", or in brackets, the earlier credit reads
+   aloud as if it were the scorer's name.
 3. A spell's figures cover that spell alone: its shots are the shots in those minutes, not the
    match's. Its wording in get_story is as of that moment, so "the last 5 minutes" there meant the
    five before it: say when a spell was from its story.<n>.start_minute ("a spell from 13'"). Don't
@@ -135,8 +120,8 @@ How to work:
 
 {_RECAP_RULES}"""
 
-WRITERS = {"correction": CORRECTION_WRITER, "recap": RECAP_WRITER}
-NAMES = {"correction": "correction_writer", "recap": "recap_writer"}
+WRITERS = {"recap": RECAP_WRITER}
+NAMES = {"recap": "recap_writer"}
 
 
 def instructions(kind: str) -> str:

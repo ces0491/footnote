@@ -130,7 +130,9 @@ async def test_the_story_tells_the_match_as_it_stands(
     assert [g["minute"] for g in goals] == ["23'", "52'", "81'"]
     scorers = [facts[f"story.{g['moment']}.scorer"]["display"] for g in goals]
     assert scorers == ["Femi Adeyani", "Teo Varlan", "Femi Adeyani"]
-    assert goals[2]["corrected"].startswith("The provider amended the goal")
+    assert goals[2]["corrected"] == (
+        "The data provider amended the goal this cites: the shot was on target before the deflection"
+    )
     decision = next(m for m in moments if m["topic"] == "var_decision")
     assert decision["minute"] == "33'" and "e0532" in decision["events"]
     assert {m["topic"] for m in moments} >= {"control", "pressure", "chaos", "correction"}

@@ -40,8 +40,10 @@ INSTRUCTIONS = (
 # Part of the agents' cache key (agents/worker.py): change it whenever a tool's output changes, so
 # replays stop reusing drafts written from the old output (versions.py adds a fingerprint of this
 # file and the templates in case it isn't). 2026-10-21.1: get_story. 2026-10-21.2: the state of play
-# described in clauses, the correction's facts and the templates reworded.
-TOOLS_VERSION = "2026-10-21.2"
+# described in clauses, the correction's facts and the templates reworded. 2026-10-22.1: how a move
+# started in football's words ("open play", not "regular play"). 2026-10-22.2: a goal's reason and a
+# correction's flag without a colon inside them.
+TOOLS_VERSION = "2026-10-22.2"
 
 # Read-only, and about a closed world: the match as stored.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
@@ -326,7 +328,7 @@ def describe(m: dict, scope: Scope) -> str:
         to = finder.name(m.get("recipient_id")) if m.get("recipient_id") else "no one"
         return f"{who} pass to {to}: {m['outcome']}, {m['height']}" + (", a cross" if m.get("cross") else "")
     if kind == "shot":
-        return f"{who} shot: {m['outcome'].replace('_', ' ')}, {m['play_pattern'].replace('_', ' ')}"
+        return f"{who} shot: {m['outcome'].replace('_', ' ')}, {finder.play_pattern(m['play_pattern'])}"
     if kind == "goal":
         own = " (own goal)" if m["own_goal"] else ""
         return (

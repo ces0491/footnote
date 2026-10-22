@@ -33,7 +33,7 @@ def fingerprint(*modules: ModuleType, rendered: tuple[str, ...] = ()) -> str:
 
 
 # The instructions as the model gets them: prompts.py builds them from limits kept in draft.py.
-_INSTRUCTIONS = (prompts.MOMENT_WRITER, prompts.CORRECTION_WRITER, prompts.RECAP_WRITER)
+_INSTRUCTIONS = (prompts.MOMENT_WRITER, prompts.RECAP_WRITER)
 
 VERSIONS = {
     "prompt": f"{prompts.PROMPT_VERSION}+{fingerprint(prompts, rendered=_INSTRUCTIONS)}",

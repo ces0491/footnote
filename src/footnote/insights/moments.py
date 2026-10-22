@@ -70,7 +70,10 @@ BASE_RANK = {
 }
 
 # Topics an agent drafts; the rest keep their template. Agents go where wording adds something: a
-# recap's template can list the goals, but only a writer can tell the story of the half.
+# recap's template can list the goals, but only a writer can tell the story of the half. A
+# correction's notice keeps its template, which says what changed plainly: in five of seven
+# recordings an agent's notice added nothing to it, and the others slipped ("It is not Jory
+# Penhallow's own goal", where the old credit reads aloud as the scorer).
 AGENT_TOPICS = frozenset(
     {
         "goal",
@@ -80,7 +83,6 @@ AGENT_TOPICS = frozenset(
         "var_decision",
         "pressure",
         "chaos",
-        "correction",
         "half_time",
         "full_time",
         "catch_up",
@@ -150,6 +152,9 @@ _INCIDENT = {"offside": "offside", "handball": "handball", "foul": "a foul"}
 # "The goal counts" rather than "Goal stands", which the Translator gave as "Bloqueos de gol".
 _DECISION = {"goal": "The goal counts", "no_goal": "No goal", "penalty": "Penalty", "no_penalty": "No penalty"}
 _SHOT_OUTCOME = {"goal": "scored", "saved": "saved", "blocked": "blocked", "off_target": "off target"}
+# How a move started, in football's words: the generator's "regular_play" became an agent's "a regular
+# play move", and the Translator's "una jugada regular" (a mediocre move).
+_PLAY_PATTERN = {"regular_play": "open play", "kick_off": "kick-off", "throw_in": "throw-in"}
 _CARD_REASON = {"foul": "a foul", "dissent": "dissent", "second_yellow": "a second yellow card"}
 
 
@@ -240,6 +245,11 @@ class MomentFinder:
         home, away = self.meta["home"], self.meta["away"]
         return F.score_line(home["short_name"], score["home"], score["away"], away["short_name"])
 
+    @staticmethod
+    def play_pattern(pattern: str) -> str:
+        """How the move started, in football's words and without an article: "open play", "counter"."""
+        return _PLAY_PATTERN.get(pattern, pattern.replace("_", " "))
+
     # --- folding -------------------------------------------------------------------------------
 
     def observe(self, m: dict, state: RunState) -> list[Found]:
@@ -294,8 +304,9 @@ class MomentFinder:
         other = self.other(m["team_id"])
         if shares and shares[m["team_id"]] <= AGAINST_SCORERS_AT_MOST and shares[other] >= AGAINST_OTHERS_AT_LEAST:
             rank += 0.10
+            # No colon inside: the reason follows "Goal: ", and the console puts "Why it's here: " first.
             reasons.append(
-                f"against the run of play: {self.club(other)} were on top for {round(shares[other] * 100)}% of the "
+                f"against the run of play, with {self.club(other)} on top for {round(shares[other] * 100)}% of the "
                 f"{F.duration(covered, '').display} before"
             )
         if situation in ("equalise", "take the lead"):
@@ -348,7 +359,7 @@ class MomentFinder:
             f["moment.shot_speed"] = F.speed(float(shot["speed_kmh"]), "how fast the shot left the boot", shot_events)
             f["moment.shot_distance"] = F.metres(float(shot["distance"]), "distance of the shot from goal", shot_events)
             f["moment.play_pattern"] = F.text(
-                str(shot["play_pattern"]).replace("_", " "), "how the move started", shot_events
+                self.play_pattern(str(shot["play_pattern"])), "how the move started", shot_events
             )
         if context.key_pass is not None and context.key_pass_difficulty is not None:
             pass_events = (context.key_pass["event_id"],)

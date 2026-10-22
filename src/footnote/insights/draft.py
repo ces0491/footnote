@@ -18,18 +18,21 @@ and so do the agents.
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
   takes "at"; a count of times follows what happened, not a form of "be" ("there were 7 times");
   and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
-  Kingsferry");
+  Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
   player or its minute), so it can't pin the decision on a goal that stands;
 - a card that says who a goal is credited to also says who it was credited to before, when its
-  facts have a correction: "later credited to Femi Adeyani" alone reads as if it always had been;
+  facts have a correction: "later credited to Femi Adeyani" alone reads as if it always had been. The
+  earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets, where it
+  reads aloud as the scorer;
 - wording a writer would only have copied from the tools is refused: "shown as" from a fact's
   description, the model's name, a count of times followed by a noun ("7 times changes of
   possession"), a spell's length before the word for it ("a 5 minutes spell"), a heading fact
   such as "No penalty", or the template's list of goals, in the middle of a sentence, and in a
   recap "the last {story.3.window}", which was the stretch before that spell, not before now;
-- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance");
+- filled in, "a" doesn't go before a vowel or a figure said with one ("a own goal", "a 80% chance"),
+  and no word comes twice in a row ("a counter counter");
 - a long text fact, such as the provider's reason, is given in one line, not both;
 - capitals are for names: every capitalised word except a sentence's first is a name from the facts,
   and names written next to each other must be one name as a fact gives it ("Femi Adeyani", or
@@ -388,6 +391,8 @@ _AT_VERBS = frozenset(
 _BE = frozenset("is are was were be been being".split())
 # A verb before a score line, which names both clubs: "Kingsferry lead Saltmarsh 1–2 Kingsferry".
 _SCORE_VERBS = frozenset("lead leads led leading trail trails trailed trailing beat beats beating".split())
+# "To" before one: "turns the game to Saltmarsh 1–2 Kingsferry" came back from the Translator as "a
+# favor de" and "en faveur de" the score line, one club's lead.
 # The ball changing hands counts both sides losing it, so no side forced it.
 _FORCED = re.compile(r"\bforc\w*\s+(?:the ball to change hands|\{[\w.]*changes\})", re.IGNORECASE)
 # A text fact long enough that giving it in both lines repeats a sentence: the provider's reason.
@@ -409,6 +414,11 @@ _AN_FIGURE = re.compile(r"8|1[18](?!\d)")
 _NEEDS_AN = re.compile(rf"\b(a) ((?!one\b|once\b|uni|use|usu|eu)(?:[aeiou]|{_AN_FIGURE.pattern})\S*)", re.IGNORECASE)
 
 
+# A word twice in a row once filled in: "finished a {story.4.play_pattern} counter" read "a counter
+# counter". "Had had" and "that that" can be right.
+_TWICE = re.compile(r"\b(?!(?:had|that)\b)([^\W\d_]+)\s+\1\b", re.IGNORECASE)
+
+
 def indefinite(display: str) -> str:
     """The article before a figure as it is read: "an 8% chance", "a 5% chance"."""
     return "an" if _AN_FIGURE.match(display) else "a"
@@ -417,6 +427,11 @@ def indefinite(display: str) -> str:
 def _named(key: str) -> str:
     """A fact's name without its prefix: "decision_text" for `story.5.decision_text`."""
     return key.rsplit(".", 1)[-1]
+
+
+def _score_line(key: str) -> bool:
+    """Whether a fact is a score line naming both clubs: `moment.score_line`, `score.line`."""
+    return _named(key) == "score_line" or key == "score.line"
 
 
 def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
@@ -449,10 +464,15 @@ def _misplaced_counts(where: str, text: str, facts: Facts) -> list[str]:
                 f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}': say what"
                 f" happened before it ('the ball changed hands {{{m.group(1)}}}')"
             )
-        if before is not None and before.group(1).lower() in _SCORE_VERBS and _named(m.group(1)) == "score_line":
+        if before is not None and before.group(1).lower() in _SCORE_VERBS and _score_line(m.group(1)):
             problems.append(
                 f"{where}: '{before.group(1)} {{{m.group(1)}}}' shows as '{before.group(1)} {fact.display}', a club"
                 f" named twice; give the score on its own ('{{{m.group(1)}}}: ...')"
+            )
+        if before is not None and before.group(1).lower() == "to" and _score_line(m.group(1)):
+            problems.append(
+                f"{where}: 'to {{{m.group(1)}}}' shows as 'to {fact.display}'; write 'makes it {{{m.group(1)}}}', or"
+                f" give the score on its own ('{{{m.group(1)}}}: ...')"
             )
         following = _NEXT_WORDS.match(text, m.end())
         if following is None:
@@ -645,6 +665,10 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
             problems.append(f"{where}: starts in lower case once filled in ('{filled[:30]}'); start with a capital")
         if (article := _NEEDS_AN.search(filled)) is not None:
             problems.append(f"{where}: '{article.group(0)}' once filled in; write 'an' before it")
+        if (twice := _TWICE.search(filled)) is not None:
+            problems.append(
+                f"{where}: '{twice.group(0)}' once filled in; a fact's display already says the word, so write it once"
+            )
     card = render(draft, facts)
     for part, value, limit in (
         ("headline", card.headline, HEADLINE_CHARS),
@@ -664,16 +688,34 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
 # A goal the data provider credited afresh, told with its new credit alone ("later credited to Femi
 # Adeyani"), reads as if it had always been that player's.
 _CREDIT = re.compile(r"\bcredit", re.IGNORECASE)
+# The earlier credit after a word that denies it, in the same clause: "now credited to Femi Adeyani,
+# not Jory Penhallow" read aloud as if Penhallow were the scorer.
+_DENIED = re.compile(r"\b(not|instead of|rather than)\b[^.;:,()]*$", re.IGNORECASE)
 
 
 def _credit_problems(card: Card, facts: Facts) -> list[str]:
     """A card that says who a goal is credited to also says who it was credited to before, when the
-    facts it was given have a correction (`correction.before`, or a recap's `story.<n>.before`)."""
+    facts it was given have a correction (`correction.before`, or a recap's `story.<n>.before`), and
+    doesn't give the earlier credit after "not" or in brackets: "(originally given as Jory Penhallow)"
+    reads as another name for the scorer, and the Translator gave it as "originally called"."""
     text = " ".join((card.headline, card.casual, card.analyst))
-    if not _CREDIT.search(text):
-        return []
-    return [
-        f"the card says who a goal is credited to but not who it was originally credited to; give {{{key}}} too"
-        for key, fact in sorted(facts.items())
-        if _named(key) == "before" and isinstance(fact.value, str) and fact.display.split()[-1] not in text
-    ]
+    problems = []
+    for key, fact in sorted(facts.items()):
+        if _named(key) != "before" or not isinstance(fact.value, str):
+            continue
+        surname = fact.display.split()[-1]
+        if _CREDIT.search(text) and surname not in text:
+            problems.append(
+                f"the card says who a goal is credited to but not who it was originally credited to; give {{{key}}} too"
+            )
+        for m in re.finditer(rf"\b{re.escape(surname)}\b", text):
+            said = text[: m.start()]
+            denied = _DENIED.search(said)
+            if denied or (said.rfind("(") > said.rfind(")") and ")" in text[m.end() :]):
+                where = f"after '{denied.group(1)}'" if denied else "in brackets"
+                problems.append(
+                    f"{where}, the earlier credit ({fact.display}) reads aloud as the scorer; say the goal was"
+                    f" originally credited to {{{key}}}"
+                )
+                break
+    return problems

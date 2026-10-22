@@ -203,7 +203,10 @@ class InsightBook:
     def _amend(self, m: dict, live: bool) -> list[Change]:
         amended = m["event_id"]
         corrected = m["corrected_event"]
-        reason = f"The provider amended the {m['amends']} this cites: {m.get('reason', 'no reason given')}"
+        # The provider's reason without its heading: "goal credit reviewed: the shot was on target before
+        # the deflection" read as a third clause after a colon, in the console and in the writers' tools.
+        given = str(m.get("reason") or "no reason given")
+        reason = f"The data provider amended the {m['amends']} this cites: {given.partition(': ')[2] or given}"
         changes: list[Change] = []
         restated_goal: str | None = None
         for insight in self.insights.values():
