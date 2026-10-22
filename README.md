@@ -46,7 +46,8 @@ any point. At 2×, each of these takes a few minutes:
 4. **81', as Nadia.** The goal is first recorded as Jory Penhallow's own goal.
    At 84' the data provider credits it to Femi Adeyani: the cards that cited it
    are flagged, and the restated card comes back to Nadia under **Corrections**
-   with the correction notice.
+   with the correction notice. At full time the recap ends with code's own
+   sentence on the change, whoever wrote the rest.
 
 The fifth profile, Priya, owns Teo Varlan in a fantasy league and watches in
 analyst mode, focused on him, with pass difficulty pinned. A fan's **Settings**
@@ -119,8 +120,9 @@ Built so far:
   match tools, never type a figure (code fills each one in), and code checks
   every draft; a draft that fails or comes late leaves the template on screen,
   saying why. A recap writer tells the story of the match at half-time and
-  full time, and writes the catch-up for a fan joining mid-match. How it works:
-  [docs/insights.md](docs/insights.md).
+  full time, and writes the catch-up for a fan joining mid-match; a goal the
+  provider credited to another player is told at the end in code's own
+  sentence. How it works: [docs/insights.md](docs/insights.md).
 - **Evaluations of the agents.** Every card the showcase asks of the agents is
   drafted against the deployed model and evaluated in code and with Azure AI
   Evaluation's groundedness evaluator; CI replays the recorded run through the
@@ -154,6 +156,17 @@ Built so far:
   catches up on resume.
 
 Still to come: viewer profiles stored server-side.
+
+Next steps, after the hackathon:
+
+1. Testing with blind and partially sighted fans. The described feed hasn't
+   been tried with them yet.
+2. A women's league. The generator would be calibrated to a women's league
+   season's published figures, the thresholds set for the men's game (the
+   fastest-shot card's 100 km/h floor, the 10 km distance milestone) taken from
+   that data, the models fitted again, and the Spanish and French cards made to
+   agree with each player's gender, which the Translator can't tell from a
+   name.
 
 ## Quick start
 

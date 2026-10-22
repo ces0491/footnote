@@ -50,7 +50,10 @@ they appear in the run's snapshot for catch-up, but no agent drafts them and the
 shortlist. The catch-up sums them up for the replay's viewers ("What you missed", docs/audience.md,
 P7): it is found at the backfill's last message, it is live, and it tells what happened, leaving the
 score line to the scoreboard beside it. A recap's facts give the goals as they stand, with VAR's and
-the provider's changes applied; a recap's writer reads the rest of the story through `get_story`
+the provider's changes applied, and for a goal the provider credited to another player, who it was
+first credited to. Code ends the recap's casual line, the template's and the agent's alike, with a
+sentence on each such change: "The 81' goal, originally recorded as Jory Penhallow's own goal, is
+now credited to Femi Adeyani." A recap's writer reads the rest of the story through `get_story`
 (below).
 
 ## Ranking
@@ -114,11 +117,13 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
   each fact used);
 - the headline fits in 60 characters, the casual line in two sentences and 240, the analyst line
   in three and 360, filled in; a recap, which tells the story of a half, gets three sentences and
-  400 characters for its casual line; no betting language, exclamation marks, links or emoji;
+  400 characters for its casual line, code's sentence on a change of credit included; no betting
+  language, exclamation marks, links or emoji;
 - a count shows its noun once: a fact's display carries it ("44 passes", "2 shots on target"), so
   "{key} passes", "{key} shots", "{key} on target" or "{key} completed passes" is refused, and so is
   a word for one thing before it ("74% of a 5 minutes"); a minute after a verb such as "began" needs
-  "at", a count of times follows what happened ("there were 7 times" is refused), "only" doesn't go
+  "at", and no minute mark follows a minute's own ("from 17''"), a count of times follows what
+  happened ("there were 7 times" is refused), "only" doesn't go
   before a count of none ("only no shots"), and a score line,
   which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2 Kingsferry") or "to"
   ("turns the game to Saltmarsh 1–2 Kingsferry", which the Translator gave as "in favour of" it); a
@@ -137,20 +142,24 @@ Every draft, template or agent, passes `check` in `draft.py` before anyone sees 
 - a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out, its
   player or its minute: a recap's goals are the ones that stand, so the decision can't be pinned on
   one of them;
+- a VAR check for a penalty is about whether its subject gave one away, so no penalty is "for" or
+  "to" that player: a recorded catch-up's "VAR rejected a penalty for Uche Asatoye" gave the 75'
+  check to the wrong side;
 - a card that says who a goal is credited to also says who it was credited to before, when its
   facts include a correction: "later credited to Femi Adeyani" alone reads as if it always had been.
   The earlier credit doesn't come after "not", "instead of" or "rather than", or in brackets: read
   aloud, "(originally given as Jory Penhallow)" sounds like the scorer's other name. Nor is the goal
-  "corrected to" the scorer the sentence has already named ("Femi Adeyani's strike, later corrected
-  to Femi Adeyani");
+  "corrected to" or "credited to" the scorer the sentence has already named ("Femi Adeyani restored
+  the lead; the goal was later credited to Femi Adeyani");
 - a card uses no fact its topic withholds: the catch-up uses no score fact;
 - the text is plain: no markup, no characters a reader can't see, no number characters besides the
   digits already refused, and no letters from outside the Latin alphabet, so a figure or a name
   can't pass the checks above in disguise (a circled digit, a fraction sign, a zero-width space
   inside "two", a look-alike letter from another alphabet, a name in small capitals).
 
-The checks catch figures and names a writer made up, and a goal ruled out pinned on one that stands.
-Any other name from the match given to the wrong player, or a sentence that describes the facts
+The checks catch figures and names a writer made up, a goal ruled out pinned on one that stands, and
+a penalty check's player written as the one it was for. Any other name from the match given to the
+wrong player, or a sentence that describes the facts
 unfairly, passes them. The evaluations of the agents' output catch some of that
 ([evaluations.md](evaluations.md)), and reading the cards catches the rest.
 
@@ -194,6 +203,10 @@ checker lets the draft use, and the log is kept with the run. Besides `check`, t
 back a draft whose casual line is the template's word for word: it would add nothing, and the
 template's wording stands anyway. A recap keeps its template's heading ("Final score: Saltmarsh 1–2
 Kingsferry", "What you missed, up to 59'"), the graphic's fixed one, whatever the writer put there.
+Its casual line ends with code's sentence on each goal credited to another player, in place of any
+copy the writer made, and a recap whose own sentences tell that change again (a credit, a
+correction, the earlier credit's fact) is sent back. Told by the writer, the change kept slipping in
+the full-time recap's redrafts, the new scorer named twice in one sentence among them.
 
 **Limits and fallbacks.** The template stays, and the insight's `agent_note` says why, when:
 
@@ -281,7 +294,9 @@ the Translator first
 
 What comes back has the Translator's known slips put right: a word that is never the football one
 ("penalización" for a penalty, "balonmano" and, in French, "handball" for a handball, "pasada" and
-"passage" for a pass), its article and adjective changed with it, a word put inside a score line
+"passage" for a pass), its article and adjective changed with it, open play as "juego libre" or "jeu
+libre" (it also gives "juego abierto" and "jeu ouvert", which stand), a counter-attack given the
+other gender's article ("una contraataque", "sur un contre-attaque"), a word put inside a score line
 ("Saltmarsh 1–1 en Kingsferry"), and "in favour of" before one ("a favor de Saltmarsh 1–2
 Kingsferry", for a goal that "turns the game to" that score). Code then checks each translation
 against its English: the same figures, a decimal comma read as a point, every name, each score line
@@ -318,7 +333,8 @@ still meet a slip no rule above knows.
   Adeyani's, and its correction notice ranks 0.95. The notice gives the new credit first and the
   old one in a sentence of its own ("It was originally recorded as Jory Penhallow's own goal"):
   after "not", or in a bracket, the old credit read aloud, and in translation, as if it were the new
-  scorer's. The provider's reason is given once, in the analyst line. A restated card the producer
+  scorer's. The provider's reason is given once, in the analyst line. The full-time recap ends with
+  code's sentence on the change, in the same words for the old credit. A restated card the producer
   had approved by hand waits for their approval again; the console lists it under corrections, with
   the wording they are approving and its evidence, beside the notice.
 
