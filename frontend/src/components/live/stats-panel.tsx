@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { clubColour } from "@/lib/club-colour";
 import type { Club, TeamStats } from "@/lib/live/contract";
 import { NBSP } from "@/lib/live/describe";
 
@@ -52,45 +52,47 @@ export function StatsPanel({ home, away, stats }: { home: Club; away: Club; stat
   const a = stats[away.id];
   if (!h || !a) return null;
   const homeShare = h.possession ?? 0.5;
+  const [homeColour, awayColour] = [clubColour(home), clubColour(away)];
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Match stats</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <section aria-labelledby="stats-title" className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
+      <h2 id="stats-title" className="border-b px-5 py-4 text-xl font-bold tracking-tight font-stretch-75%">
+        Match stats
+      </h2>
+      <div className="space-y-5 p-5">
         <div>
-          <div className="mb-1.5 flex justify-between text-sm">
-            <span className="font-medium tabular-nums">{percent(h.possession)}</span>
-            <span className="text-muted-foreground">Possession</span>
-            <span className="font-medium tabular-nums">{percent(a.possession)}</span>
+          <div className="mb-2 flex items-end justify-between gap-2">
+            <span className="text-3xl leading-none font-bold figures">{percent(h.possession)}</span>
+            <span className="text-sm text-muted-foreground">Possession</span>
+            <span className="text-3xl leading-none font-bold figures">{percent(a.possession)}</span>
           </div>
-          <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Possession ${percent(h.possession)} to ${percent(a.possession)}`}>
-            <div style={{ width: `${homeShare * 100}%`, background: home.colours[0] }} />
-            <div style={{ width: `${(1 - homeShare) * 100}%`, background: away.colours[0] }} />
+          <div className="flex h-2 gap-0.5" role="img" aria-label={`Possession ${percent(h.possession)} to ${percent(a.possession)}`}>
+            <div className="rounded-full" style={{ width: `${homeShare * 100}%`, background: homeColour }} />
+            <div className="flex-1 rounded-full" style={{ background: awayColour }} />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Share of passes, the broadcast convention. Difficulty is one minus the modelled chance a pass reaches its
-            target; distance comes from the tracking.
+          <p className="mt-2 text-xs text-muted-foreground">
+            Share of passes, the broadcast convention. Difficulty is one minus the modelled chance a pass reaches its target; distance
+            comes from the tracking.
           </p>
         </div>
         <dl className="divide-y">
           {rows(h, a).map((row) => (
-            <div key={row.label} className="grid grid-cols-[5.5rem_1fr_5.5rem] items-center gap-3 py-2 text-sm">
-              <dd className="whitespace-nowrap font-medium tabular-nums">{row.home}</dd>
-              <dt className="text-center text-muted-foreground">
+            // The label comes first, as a description list has it, and sits between the figures.
+            <div key={row.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-3 py-2.5 text-sm">
+              <dt className="col-start-2 row-start-1 text-center text-muted-foreground">
                 {row.label}
                 {row.shares && (
-                  <span className="mt-1 flex h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-                    <span style={{ flexGrow: row.shares[0], background: home.colours[0] }} />
-                    <span style={{ flexGrow: row.shares[1], background: away.colours[0] }} />
+                  <span className="mt-1.5 flex h-1 gap-0.5" aria-hidden>
+                    <span className="rounded-full" style={{ flexGrow: row.shares[0], background: homeColour }} />
+                    <span className="rounded-full" style={{ flexGrow: row.shares[1], background: awayColour }} />
                   </span>
                 )}
               </dt>
-              <dd className="whitespace-nowrap text-right font-medium tabular-nums">{row.away}</dd>
+              <dd className="col-start-1 row-start-1 font-semibold whitespace-nowrap figures">{row.home}</dd>
+              <dd className="col-start-3 row-start-1 text-right font-semibold whitespace-nowrap figures">{row.away}</dd>
             </div>
           ))}
         </dl>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

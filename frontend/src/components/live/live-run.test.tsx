@@ -192,6 +192,29 @@ describe("Lucía joining at 60'", () => {
   });
 });
 
+describe("A replay the page can't follow", () => {
+  it("says why, and offers a new replay rather than leaving the viewer at a dead end", () => {
+    page.live = {
+      receive: () => {},
+      state: initialRunViewState,
+      view: null,
+      insights: {},
+      ended: null,
+      snapshot: null,
+      connection: "polling",
+      error: "There's no such replay.",
+      trouble: null,
+      latency: null,
+      offset: 0,
+    };
+    render(<LiveRun runId="0123456789abcdef" initialProfile="sam" />);
+    expect(screen.getByText("There's no such replay.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Start a new replay" }).getAttribute("href")).toBe("/");
+    // Nothing is being followed, so nothing says it's connecting.
+    expect(screen.queryByText(/Refreshing|Connecting|Live/)).toBeNull();
+  });
+});
+
 describe("Nadia's preview of the world feed", () => {
   it("puts a goal on air when she approves it after the preview has passed the goal", () => {
     const run = runFixture({ speed: 4 }); // the goal's message, seq 15, was published at replay second 1305

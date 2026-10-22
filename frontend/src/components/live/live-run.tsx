@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, Square } from "lucide-react";
+import { Plus, Square, Timer } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
+import { Wordmark } from "@/components/brand";
 import { PitchView } from "@/components/pitch/pitch-view";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Connection, type Latency, useLiveRun } from "@/hooks/use-live-run";
@@ -42,7 +42,7 @@ import { ProducerConsole } from "./producer-console";
 import { Scoreboard } from "./scoreboard";
 import { StatsPanel } from "./stats-panel";
 import { Ticker } from "./ticker";
-import { ProfileSwitch, SettingsDialog } from "./viewer-bar";
+import { ProfileSwitch, SettingsSheet } from "./viewer-bar";
 
 const ENDED: Record<RunEndReason, string> = {
   finished: "The replay reached full time.",
@@ -71,28 +71,42 @@ function clockAt(view: StateView, timeline: { first_half_end: number; half_time:
   return m ? clockLabel(m) : "HT";
 }
 
+// Live is the broadcast's red; anything short of a live connection is grey.
 const CONNECTION: Record<Connection, { label: string; dot: string }> = {
-  connecting: { label: "Connecting…", dot: "bg-amber-500" },
-  connected: { label: "Live", dot: "bg-emerald-500" },
-  reconnecting: { label: "Reconnecting…", dot: "bg-amber-500" },
-  polling: { label: "Refreshing every few seconds", dot: "bg-amber-500" },
-  closed: { label: "Closed", dot: "bg-zinc-400" },
+  connecting: { label: "Connecting…", dot: "animate-pulse bg-muted-foreground" },
+  connected: { label: "Live", dot: "bg-tally" },
+  reconnecting: { label: "Reconnecting…", dot: "animate-pulse bg-muted-foreground" },
+  polling: { label: "Refreshing every few seconds", dot: "bg-muted-foreground" },
+  closed: { label: "Closed", dot: "bg-edge" },
 };
 
 function ConnectionBadge({ connection, latency }: { connection: Connection; latency: Latency | null }) {
   const { label, dot } = CONNECTION[connection];
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <Badge variant="outline" className="gap-1.5">
-        <span aria-hidden className={`size-2 rounded-full ${dot}`} />
+    <div className="flex items-center gap-3 text-sm">
+      <span className="inline-flex items-center gap-2 font-medium">
+        <span aria-hidden className={cn("size-2 rounded-full", dot)} />
         {label}
-      </Badge>
+      </span>
       {/* On a phone the latency line would take much of the screen, so it shows from the sm breakpoint up. */}
       {latency && (
-        <span className="hidden text-muted-foreground sm:inline" title="From the replayer publishing an event to this browser receiving it">
-          Publish to browser: p50 {Math.round(latency.p50)} ms · p95 {Math.round(latency.p95)} ms ({latency.samples} events)
+        <span className="hidden text-xs text-muted-foreground sm:inline" title="From the replayer publishing an event to this browser receiving it">
+          Publish to browser: p50 {Math.round(latency.p50)} ms, p95 {Math.round(latency.p95)} ms ({latency.samples} events)
         </span>
       )}
+    </div>
+  );
+}
+
+/** The columns a run's page is laid out in on a wide screen: the match to the left, the viewer's
+ * panel to the right. Each block keeps its place in the page's order, which a phone shows top to
+ * bottom: what plays (the pitch, or the described feed), the panel, then the figures. */
+function Columns({ top, side, rest, wide }: { top: ReactNode; side: ReactNode; rest: ReactNode; wide: string }) {
+  return (
+    <div className={cn("grid gap-5 lg:items-start", wide, top && "lg:grid-rows-[auto_1fr]")}>
+      {top && <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-1">{top}</div>}
+      <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">{side}</div>
+      <div className={cn("min-w-0 space-y-5 lg:col-start-1", top ? "lg:row-start-2" : "lg:row-start-1")}>{rest}</div>
     </div>
   );
 }
@@ -188,67 +202,95 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   }
 
   const header = (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/">
-            <ArrowLeft /> New replay
-          </Link>
-        </Button>
-        <ProfileSwitch current={current} onPick={pick} />
-        {!producer && live.snapshot && (
-          <SettingsDialog
-            profile={current}
-            settings={settings}
-            match={live.snapshot.match}
-            onChange={change}
-            onReset={() => resetSettings(current)}
-          />
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        {/* A delayed stream is still playing after the run ends; the badge says so until it has finished. */}
-        <ConnectionBadge connection={producer || caughtUp ? live.connection : "connected"} latency={live.latency} />
-        {/* Only the browser that started the replay stops it, as only it produces it. */}
-        {canProduce && !ended && (
-          <Button variant="outline" size="sm" onClick={stop} disabled={stopping}>
-            <Square /> Stop
-          </Button>
-        )}
+    <div className="border-b bg-background/90 backdrop-blur md:sticky md:top-0 md:z-30">
+      <div className="mx-auto max-w-7xl space-y-2.5 px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Wordmark className="text-xl" />
+            {/* Icons alone on a phone, where the top row is short of room; the names stay for screen readers. */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/" aria-label="New replay">
+                <Plus /> <span className="hidden sm:inline">New replay</span>
+              </Link>
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* A delayed stream is still playing after the run ends; the badge says so until it has finished. */}
+            {!live.error && <ConnectionBadge connection={producer || caughtUp ? live.connection : "connected"} latency={live.latency} />}
+            {/* Only the browser that started the replay stops it, as only it produces it. */}
+            {canProduce && !ended && (
+              <Button variant="outline" size="sm" onClick={stop} disabled={stopping} aria-label="Stop">
+                <Square /> <span className="hidden sm:inline">Stop</span>
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="hidden shrink-0 text-sm text-muted-foreground sm:inline">
+            Watch as
+          </span>
+          <div className="min-w-0 flex-1">
+            <ProfileSwitch current={current} onPick={pick} />
+          </div>
+          {!producer && live.snapshot && (
+            <SettingsSheet
+              profile={current}
+              settings={settings}
+              match={live.snapshot.match}
+              onChange={change}
+              onReset={() => resetSettings(current)}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
 
+  const body = (children: ReactNode) => (
+    <>
+      {header}
+      <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-5 sm:px-6 sm:py-6">{children}</div>
+    </>
+  );
+
   if (live.error) {
-    return (
-      <div className="space-y-4">
-        {header}
-        <Alert variant="destructive">
-          <AlertTitle>Couldn&apos;t follow this replay</AlertTitle>
-          <AlertDescription>{live.error}</AlertDescription>
-        </Alert>
-      </div>
+    return body(
+      <Alert variant="destructive">
+        <AlertTitle>Couldn&apos;t follow this replay</AlertTitle>
+        <AlertDescription>
+          <p>{live.error}</p>
+          <Button size="sm" asChild>
+            <Link href="/">Start a new replay</Link>
+          </Button>
+        </AlertDescription>
+      </Alert>,
     );
   }
 
   if (!live.snapshot || !live.view || !atPlayback || !r || !run || !pb || !preview) {
-    return (
-      <div className="space-y-4">
-        {header}
+    return body(
+      <>
         <Skeleton className="h-28 w-full rounded-xl" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-96" />
-          <Skeleton className="h-96" />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_26rem]">
+          <Skeleton className="aspect-111/74 w-full rounded-xl" />
+          <Skeleton className="h-96 rounded-xl" />
         </div>
-      </div>
+      </>,
     );
   }
 
   const { match, tracking } = live.snapshot;
   const footer = (
-    <p className="text-xs text-muted-foreground">
-      {match.competition} {match.season} · {match.venue} · Referee {match.referee.name} · Replay from {run.start_minute}&apos; at {run.speed}×
-    </p>
+    <footer className="flex flex-wrap gap-x-6 gap-y-1 border-t pt-4 text-xs text-muted-foreground">
+      <span>
+        {match.competition} {match.season}
+      </span>
+      <span>{match.venue}</span>
+      <span>Referee {match.referee.name}</span>
+      <span>
+        Replay from {run.start_minute}&apos; at {run.speed}×
+      </span>
+    </footer>
   );
   const notices = (
     <>
@@ -271,53 +313,66 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   if (producer) {
     const view = live.view;
     const onAir = onScreenAt(airing(insightsAt(state, run, preview.at)), preview.at, run, PREVIEW_DELAY);
-    return (
-      <div className="space-y-4">
-        {header}
+    return body(
+      <>
         {notices}
         <Scoreboard home={match.home} away={match.away} score={view.score} phase={view.phase} clock={clockAt(view, run.timeline, pb.live, ended)} />
-        <MatchStatePanel home={match.home} away={match.away} state={view.match_state} timeline={view.state_timeline ?? []} />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem]">
-          <div className="space-y-2">
-            {tracking && (
-              <PitchView
-                runId={runId}
-                run={run}
-                match={match}
-                layout={tracking}
-                position={position}
-                graphics={onAir}
-                mode="casual"
-                calm={false}
-                focus={null}
-                waiting={preview.waiting / run.speed}
-                caption={`The world feed's preview, ${PREVIEW_DELAY} seconds behind live, with the graphics on air`}
-              />
-            )}
-            <p className="text-xs text-muted-foreground">
-              Preview of the world feed, {PREVIEW_DELAY} seconds behind live: our own render of the tracking, with the
-              graphics on air.{" "}
-              {onAir.length > 0 ? `On air: ${onAir.map((s) => s.insight.card.headline).join(", ")}.` : "Nothing on air."}
-            </p>
-          </div>
-          <ProducerConsole
-            runId={runId}
-            insights={live.insights}
-            clock={view.clock}
-            roster={r}
-            viewer={viewer}
-            canProduce={canProduce && !ended}
-            mode={mode}
-            onMode={switchMode}
-            onChange={(message: InsightMessage) => live.receive(message)}
-          />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <StatsPanel home={match.home} away={match.away} stats={view.teams} />
-          <Ticker events={view.key_events} tags={view.tags ?? []} roster={r} />
-        </div>
+        <Columns
+          wide="lg:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_30rem]"
+          top={
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <h2 className="text-xl font-bold tracking-tight font-stretch-75%">World feed</h2>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <span aria-hidden className={cn("size-2.5 rounded-full", onAir.length > 0 ? "bg-tally" : "bg-edge")} />
+                  {onAir.length > 0 ? `On air: ${onAir.map((s) => s.insight.card.headline).join(", ")}.` : "Nothing on air."}
+                </p>
+              </div>
+              {tracking && (
+                <PitchView
+                  runId={runId}
+                  run={run}
+                  match={match}
+                  layout={tracking}
+                  position={position}
+                  graphics={onAir}
+                  mode="casual"
+                  calm={false}
+                  focus={null}
+                  waiting={preview.waiting / run.speed}
+                  caption={`The world feed's preview, ${PREVIEW_DELAY} seconds behind live, with the graphics on air`}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Preview of the world feed, {PREVIEW_DELAY} seconds behind live: our own render of the tracking, with the graphics on air.
+              </p>
+            </div>
+          }
+          side={
+            <ProducerConsole
+              runId={runId}
+              insights={live.insights}
+              clock={view.clock}
+              roster={r}
+              viewer={viewer}
+              canProduce={canProduce && !ended}
+              mode={mode}
+              onMode={switchMode}
+              onChange={(message: InsightMessage) => live.receive(message)}
+            />
+          }
+          rest={
+            <>
+              <MatchStatePanel home={match.home} away={match.away} state={view.match_state} timeline={view.state_timeline ?? []} />
+              <div className="grid gap-5 xl:grid-cols-2">
+                <StatsPanel home={match.home} away={match.away} stats={view.teams} />
+                <Ticker events={view.key_events} tags={view.tags ?? []} roster={r} />
+              </div>
+            </>
+          }
+        />
         {footer}
-      </div>
+      </>,
     );
   }
 
@@ -338,69 +393,83 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
     onOpen: () => setCatchUpOpen(true),
     onClose: () => setCatchUpOpen(false),
   };
-  return (
-    <div className="space-y-4">
-      {header}
+  const described = settings.described && base && (
+    <DescribedFeed
+      match={match}
+      roster={r}
+      base={base}
+      startReplay={run.start_replay}
+      events={events}
+      reached={count}
+      cards={cards}
+      detail={settings.detail}
+      pace={settings.pace}
+      onDetail={(detail) => change({ ...settings, detail })}
+      onPace={(pace) => change({ ...settings, pace })}
+    />
+  );
+  return body(
+    <>
       {notices}
       <Scoreboard home={match.home} away={match.away} score={atPlayback.score} phase={atPlayback.phase} clock={clock} />
-      <p className="text-sm text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-medium text-foreground">
+          <Timer aria-hidden className="size-3.5" />
+          Your stream
+        </span>
         {pb.waiting > 0
-          ? `Your stream is ${behind}: it reaches the replay's start in ${waitText(pb.waiting / run.speed)}.`
-          : `Your stream: ${behind}. Nothing reaches this page before your stream shows it.`}
+          ? `is ${behind}: it reaches the replay's start in ${waitText(pb.waiting / run.speed)}.`
+          : `${behind}. Nothing reaches this page before your stream shows it.`}
       </p>
-      {settings.described && base && (
-        <DescribedFeed
-          match={match}
-          roster={r}
-          base={base}
-          startReplay={run.start_replay}
-          events={events}
-          reached={count}
-          cards={cards}
-          detail={settings.detail}
-          pace={settings.pace}
-          onDetail={(detail) => change({ ...settings, detail })}
-          onPace={(pace) => change({ ...settings, pace })}
-        />
-      )}
-      <div className={cn("grid gap-4", pitch && "lg:grid-cols-[minmax(0,1fr)_24rem]")}>
-        {pitch && tracking && (
-          <div>
-            <PitchView
-              runId={runId}
-              run={run}
-              match={match}
-              layout={tracking}
-              position={position}
-              graphics={graphics}
-              mode={settings.mode}
-              calm={settings.calm}
-              focus={settings.player}
-              waiting={pb.waiting / run.speed}
-              caption={`The match at ${clock} on your stream, drawn from the tracking`}
-            />
-          </div>
-        )}
-        <FanPanel
-          runId={runId}
-          match={match}
-          layout={tracking}
-          view={atPlayback}
-          cards={cards}
-          catchUp={catchUp}
-          settings={settings}
-          roster={r}
-          focus={focus}
-        />
-      </div>
-      {analyst && (
-        <MatchStatePanel home={match.home} away={match.away} state={atPlayback.match_state} timeline={atPlayback.state_timeline ?? []} />
-      )}
-      <div className="grid gap-4 md:grid-cols-2">
-        {analyst && <StatsPanel home={match.home} away={match.away} stats={atPlayback.teams} />}
-        <Ticker events={atPlayback.key_events} tags={atPlayback.tags ?? []} roster={r} />
-      </div>
+      <Columns
+        wide="lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_27rem]"
+        top={
+          (described || (pitch && tracking)) && (
+            <>
+              {described}
+              {pitch && tracking && (
+                <PitchView
+                  runId={runId}
+                  run={run}
+                  match={match}
+                  layout={tracking}
+                  position={position}
+                  graphics={graphics}
+                  mode={settings.mode}
+                  calm={settings.calm}
+                  focus={settings.player}
+                  waiting={pb.waiting / run.speed}
+                  caption={`The match at ${clock} on your stream, drawn from the tracking`}
+                />
+              )}
+            </>
+          )
+        }
+        side={
+          <FanPanel
+            key={current.id}
+            runId={runId}
+            match={match}
+            layout={tracking}
+            view={atPlayback}
+            cards={cards}
+            catchUp={catchUp}
+            settings={settings}
+            roster={r}
+            focus={focus}
+          />
+        }
+        rest={
+          <>
+            {analyst && (
+              <MatchStatePanel home={match.home} away={match.away} state={atPlayback.match_state} timeline={atPlayback.state_timeline ?? []} />
+            )}
+            {analyst && <StatsPanel home={match.home} away={match.away} stats={atPlayback.teams} />}
+            <Ticker events={atPlayback.key_events} tags={atPlayback.tags ?? []} roster={r} />
+          </>
+        }
+      />
       {footer}
-    </div>
+    </>,
   );
 }

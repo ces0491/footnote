@@ -68,14 +68,17 @@ describe("Ticker", () => {
       overturned: true,
       goal_event_id: "e0532",
     };
+    // A standing goal's line is set in bold; one VAR took away is not.
+    const line = () => screen.getByText(/^Goal, Saltmarsh: Jory Penhallow/).className.split(" ");
     render(<Ticker events={[goal]} tags={[]} roster={r} />);
     expect(screen.getByRole("listitem").textContent).toBe("31'Goal, Saltmarsh: Jory Penhallow");
+    expect(line()).toContain("font-semibold");
     cleanup();
     render(<Ticker events={[goal, decision]} tags={[]} roster={r} />);
     const [ruling, ruledOut] = screen.getAllByRole("listitem");
     expect(ruling.textContent).toBe("33'VAR: no goal, decision overturned");
     expect(ruledOut.textContent).toBe("31'Goal, Saltmarsh: Jory PenhallowRuled out by VAR at 33'");
-    expect(ruledOut.className).not.toContain("bg-emerald-50");
+    expect(line()).not.toContain("font-semibold");
   });
 
   it("lets the keyboard scroll the list", () => {

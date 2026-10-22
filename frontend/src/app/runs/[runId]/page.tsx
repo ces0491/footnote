@@ -15,7 +15,8 @@ async function Run({ params, searchParams }: PageProps<"/runs/[runId]">) {
 
 export default function RunPage(props: PageProps<"/runs/[runId]">) {
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-10">
+    // Full width: the run's page sets its own columns under a header that spans the screen.
+    <main className="w-full flex-1">
       {/* Hidden: on screen, the scoreboard says which match this is. */}
       <h1 className="sr-only">Replay of the showcase match</h1>
       <Suspense>

@@ -1,13 +1,12 @@
 "use client";
 
-import { History, MonitorPlay } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { History } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { RuleFrame } from "@/components/pitch/rule-frame";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { clubColour } from "@/lib/club-colour";
 import { CATCH_UP_TOPIC, type KeyMoment } from "@/lib/live/catch-up";
 import type { Club, Insight, MatchMeta, Player, StateView, TrackingLayout } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
@@ -18,6 +17,7 @@ import { METRICS, type Settings } from "@/lib/live/profiles";
 import { minuteLabel } from "@/lib/live/timeline";
 import { cn } from "@/lib/utils";
 
+import { clubOf, KindIcon } from "./card-kind";
 import { CatchUp } from "./catch-up";
 import { Evidence } from "./evidence";
 import { stateLine } from "./match-state";
@@ -32,21 +32,21 @@ export interface CatchUpView {
   onClose: () => void;
 }
 
-/**
- * Who's been on top over the last five minutes, counted by the processor as the cards count it
- * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The model's
- * estimate of the moment swings with every break; the share of recent minutes moves as the game does.
- */
 /** What VAR or the data provider did to a card, in the card's language. */
 function Note({ note, lang }: { note: string; lang: Language | undefined }) {
   const said = cardNote(note, lang);
   return (
-    <p className="text-sm font-medium text-amber-700 dark:text-amber-400" lang={langAttribute(said.lang)}>
+    <p className={cn("text-sm font-medium", /VAR/.test(note) ? "text-var" : "text-amend")} lang={langAttribute(said.lang)}>
       {said.text}
     </p>
   );
 }
 
+/**
+ * Who's been on top over the last five minutes, counted by the processor as the cards count it
+ * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The model's
+ * estimate of the moment swings with every break; the share of recent minutes moves as the game does.
+ */
 function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: Club; own: string | null }) {
   const state = view.match_state;
   const [a, b] = ownFirst(home, away, own);
@@ -56,28 +56,33 @@ function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: C
   const other = leader === null ? null : leader.id === home.id ? away : home;
   const label = (club: Club) => `${club.short_name} ${Math.round(share(club) * 100)}%`;
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="font-semibold">Who&apos;s on top</h3>
+        <span className="text-xs text-muted-foreground">last 5 minutes</span>
+      </div>
       {shares ? (
         <>
-          <p className="text-sm text-muted-foreground">Who&apos;s on top, last 5 minutes</p>
           <div className="flex justify-between gap-2 text-sm">
-            <span className={cn("tabular-nums", a.id === own && "font-semibold")}>{label(a)}</span>
-            <span className={cn("tabular-nums", b.id === own && "font-semibold")}>
-              {Math.round(share(b) * 100)}% {b.short_name}
+            <span className={cn(a.id === own && "font-semibold")}>
+              {a.short_name} <span className="figures">{Math.round(share(a) * 100)}%</span>
+            </span>
+            <span className={cn(b.id === own && "font-semibold")}>
+              <span className="figures">{Math.round(share(b) * 100)}%</span> {b.short_name}
             </span>
           </div>
           <div
-            className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+            className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-secondary"
             role="img"
             aria-label={`Who's on top over the last five minutes: ${label(a)}, ${label(b)}; the rest neither`}
           >
-            <div style={{ width: `${share(a) * 100}%`, background: a.colours[0] }} />
+            <div className="rounded-full" style={{ width: `${share(a) * 100}%`, background: clubColour(a) }} />
             <div className="flex-1" />
-            <div style={{ width: `${share(b) * 100}%`, background: b.colours[0] }} />
+            <div className="rounded-full" style={{ width: `${share(b) * 100}%`, background: clubColour(b) }} />
           </div>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Who&apos;s on top shows once a minute of the half has been played.</p>
+        <p className="text-sm text-muted-foreground">Shows once a minute of the half has been played.</p>
       )}
       {state && <p className="text-sm text-muted-foreground">Now: {stateLine(state.state, leader, other)}</p>}
     </div>
@@ -116,6 +121,9 @@ export function FanPanel({
   const analyst = settings.mode === "analyst";
   // The catch-up has a place of its own at the top.
   const listed = cards.filter((s) => s.insight.topic !== CATCH_UP_TOPIC);
+  // Cards already here when the panel opened are the match so far; only those that reach the
+  // stream after it come in with a movement (none in calm mode).
+  const [first] = useState(() => new Set(listed.map((s) => s.insight.insight_id)));
   // Opening the catch-up and closing it each take away the button pressed, so keyboard focus goes to
   // the catch-up's heading as it opens and to the button that reopens it as it closes.
   const heading = useRef<HTMLHeadingElement>(null);
@@ -128,15 +136,16 @@ export function FanPanel({
     target?.focus();
   }, [open]);
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle>{analyst ? `Analyst · ${METRICS[settings.metric]}` : "Why it matters"}</CardTitle>
+    <section aria-labelledby="panel-title" className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
+        <h2 id="panel-title" className="text-xl font-bold tracking-tight font-stretch-75%">
+          {analyst ? `Analyst: ${METRICS[settings.metric]}` : "Why it matters"}
+        </h2>
         {catchUp && !catchUp.open && (
           <Button
             ref={reopen}
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-7"
             onClick={() => {
               focusNext.current = "heading";
               catchUp.onOpen();
@@ -145,8 +154,8 @@ export function FanPanel({
             <History aria-hidden /> What you missed
           </Button>
         )}
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+      <div className="space-y-5 px-5 py-5">
         {catchUp?.open && (
           <CatchUp
             runId={runId}
@@ -163,17 +172,23 @@ export function FanPanel({
           />
         )}
         {analyst ? (
-          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 rounded-lg bg-muted/60 px-3 py-2 text-sm" aria-label={METRICS[settings.metric]}>
+          <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-2" aria-label={METRICS[settings.metric]}>
             {metric.clubs.map(({ club, figure }) => (
               <div key={club.id} className="contents">
-                <dt className={cn(club.id === settings.club && "font-semibold")}>{club.short_name}</dt>
-                <dd className="text-right tabular-nums">{figure}</dd>
+                <dt className={cn("flex items-center gap-2 text-sm", club.id === settings.club && "font-semibold")}>
+                  <span aria-hidden className="size-2.5 rounded-full" style={{ background: clubColour(club) }} />
+                  {club.short_name}
+                </dt>
+                <dd className="text-right text-lg font-semibold figures">{figure}</dd>
               </div>
             ))}
             {metric.player && (
               <div className="contents">
-                <dt className="font-semibold">{metric.player.name}</dt>
-                <dd className="text-right tabular-nums">{metric.player.figure}</dd>
+                <dt className="flex items-center gap-2 text-sm font-semibold">
+                  <span aria-hidden className="size-2.5 rounded-full ring-2 ring-cite" />
+                  {metric.player.name}
+                </dt>
+                <dd className="text-right text-lg font-semibold figures">{metric.player.figure}</dd>
               </div>
             )}
           </dl>
@@ -181,43 +196,56 @@ export function FanPanel({
           <OnTop view={view} home={match.home} away={match.away} own={settings.club} />
         )}
         {focus && (
-          <div className="rounded-lg border px-3 py-2 text-sm">
-            <div className="font-medium">
-              In focus: {focus.name} ({focus.shirt})
+          <div className="flex gap-3 rounded-lg bg-secondary px-3 py-2.5">
+            <span aria-hidden className="mt-1 size-3 shrink-0 rounded-full ring-2 ring-cite" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">
+                In focus: {focus.name} ({focus.shirt})
+              </div>
+              <p className="text-xs text-muted-foreground">{playerLine(focusLine).join(", ") || "No touches yet."}</p>
             </div>
-            <p className="text-xs text-muted-foreground">{playerLine(focusLine).join(" · ") || "No touches yet."}</p>
           </div>
         )}
-        {listed.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Cards appear here as the moments reach your stream.</p>
-        ) : (
-          <ol className="space-y-3" aria-label="Cards">
-            {listed.map(({ insight, lang }) => {
-              const own = settings.club !== null && Object.values(insight.fields).includes(clubs[0].short_name);
-              const mine = focus !== null && involves(insight, focus.name);
-              const Icon = insight.kind === "correction" ? History : insight.kind === "rule_call" ? MonitorPlay : null;
-              // The card's own wording carries its language; the page's words around it are English.
-              const wording = langAttribute(lang);
-              return (
-                <li key={insight.insight_id} className={cn("space-y-1 rounded-lg border p-3", own && "border-l-4")} style={own ? { borderLeftColor: clubs[0].colours[0] } : undefined}>
+      </div>
+      {listed.length === 0 ? (
+        <p className="border-t px-5 py-6 text-sm text-muted-foreground">Cards appear here as the moments reach your stream.</p>
+      ) : (
+        <ol className="border-t" aria-label="Cards">
+          {listed.map(({ insight, lang }) => {
+            const club = clubOf(insight, match.home, match.away);
+            const own = settings.club !== null && club?.id === settings.club;
+            const mine = focus !== null && involves(insight, focus.name);
+            const state = undone(insight);
+            // The card's own wording carries its language; the page's words around it are English.
+            const wording = langAttribute(lang);
+            return (
+              <li
+                key={insight.insight_id}
+                className={cn(
+                  "relative grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 border-b px-5 py-4 last:border-0",
+                  !first.has(insight.insight_id) && "animate-in duration-700 fade-in slide-in-from-top-2",
+                )}
+              >
+                {own && club && <span aria-hidden className="absolute inset-y-0 left-0 w-0.75" style={{ background: clubColour(club) }} />}
+                <div className="flex flex-col items-center gap-1.5 pt-0.5">
+                  <KindIcon insight={insight} />
+                  <span className="text-xs font-semibold text-muted-foreground figures">
+                    {minuteLabel(insight.at.minute ?? 0, insight.at.added_minute ?? null)}
+                  </span>
+                </div>
+                <div className="min-w-0 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <div className={cn("font-medium", undone(insight) === "undone" && "line-through decoration-1")} lang={wording}>
-                      {Icon && <Icon aria-hidden className="mr-1.5 inline size-4 align-[-2px] text-muted-foreground" />}
+                    <h3 className={cn("text-[17px] leading-snug font-semibold font-stretch-90%", state === "undone" && "line-through decoration-1")} lang={wording}>
                       {insight.card.headline}
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      {settings.language !== "en" && lang === "en" && (
-                        <Badge variant="secondary" title={`Not yet in ${LANGUAGES[settings.language]}: the English for now`}>
-                          {LANGUAGES.en}
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="font-mono tabular-nums">
-                        {minuteLabel(insight.at.minute ?? 0, insight.at.added_minute ?? null)}
+                    </h3>
+                    {settings.language !== "en" && lang === "en" && (
+                      <Badge variant="secondary" className="shrink-0" title={`Not yet in ${LANGUAGES[settings.language]}: the English for now`}>
+                        {LANGUAGES.en}
                       </Badge>
-                    </div>
+                    )}
                   </div>
-                  {undone(insight) !== null && <Note note={undone(insight) === "undone" ? insight.flag!.reason : "Corrected by the data provider"} lang={lang} />}
-                  <p className="text-sm" lang={wording}>
+                  {state !== null && <Note note={state === "undone" ? insight.flag!.reason : "Corrected by the data provider"} lang={lang} />}
+                  <p className="font-serif text-[15.5px] leading-relaxed text-foreground/90" lang={wording}>
                     {analyst ? insight.card.analyst : insight.card.casual}
                   </p>
                   {!analyst && layout && insight.topic === "var_decision" && (
@@ -225,16 +253,16 @@ export function FanPanel({
                   )}
                   {mine && focusLine && (
                     <p className="text-xs text-muted-foreground">
-                      {focus!.name}: {playerLine(focusLine).join(" · ")}
+                      {focus!.name}: {playerLine(focusLine).join(", ")}
                     </p>
                   )}
                   <Evidence runId={runId} insight={insight} roster={roster} />
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </CardContent>
-    </Card>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }

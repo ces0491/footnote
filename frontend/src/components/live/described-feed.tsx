@@ -4,13 +4,13 @@ import { Pause, Play } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { EventMessage, MatchMeta, StateView } from "@/lib/live/contract";
 import { NBSP, type Roster } from "@/lib/live/describe";
 import { atDetail, cardLines, type Detail, DETAILS, eventLines, merged, nextSaying, type Pace, PACES, type Part } from "@/lib/live/described";
 import type { Shown } from "@/lib/live/playback";
+import { cn } from "@/lib/utils";
 
 // Lines kept on screen; the screen reader hears them as they come (nextSaying, lib/live/described.ts),
 // and the list is for reading back.
@@ -120,15 +120,18 @@ export function DescribedFeed({
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <CardTitle>
-          <h2>Described feed</h2>
-        </CardTitle>
+    <section aria-labelledby="feed-title" className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b px-5 py-4">
+        <div>
+          <h2 id="feed-title" className="text-xl font-bold tracking-tight font-stretch-75%">
+            Described feed
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">Read out by your screen reader as your stream reaches each moment.</p>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-1">
+          <div className="grid gap-1.5">
             <Label htmlFor="feed-detail">Detail</Label>
-            <NativeSelect id="feed-detail" value={detail} onChange={(e) => onDetail(e.target.value as Detail)}>
+            <NativeSelect id="feed-detail" value={detail} onChange={(e) => onDetail(e.target.value as Detail)} className="h-9">
               {Object.entries(DETAILS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -136,9 +139,9 @@ export function DescribedFeed({
               ))}
             </NativeSelect>
           </div>
-          <div className="grid gap-1">
+          <div className="grid gap-1.5">
             <Label htmlFor="feed-pace">Pace</Label>
-            <NativeSelect id="feed-pace" value={pace} onChange={(e) => onPace(e.target.value as Pace)}>
+            <NativeSelect id="feed-pace" value={pace} onChange={(e) => onPace(e.target.value as Pace)} className="h-9">
               {Object.entries(PACES).map(([value, p]) => (
                 <option key={value} value={value}>
                   {p.label}
@@ -147,36 +150,46 @@ export function DescribedFeed({
             </NativeSelect>
           </div>
           {/* The label says what the button does now; a pressed state as well would be read as "Resume, pressed". */}
-          <Button variant="outline" onClick={toggle}>
+          <Button variant={paused ? "default" : "outline"} className="h-9" onClick={toggle}>
             {paused ? <Play aria-hidden /> : <Pause aria-hidden />} {paused ? "Resume" : "Pause"}
           </Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div aria-live="polite" aria-atomic="true" className="sr-only">
-          <Spoken parts={saying.parts} />
-          {saying.echo && NBSP}
-        </div>
-        {/* Focusable, so the list scrolls from the keyboard too. */}
-        <ol
-          tabIndex={0}
-          aria-label="The match so far, latest first"
-          className="max-h-96 space-y-1.5 overflow-y-auto rounded-md pr-1 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          {lines
-            .slice(-SHOWN_LINES)
-            .reverse()
-            .map((line) => (
-              <li key={line.key} className="flex gap-3">
-                <span className="w-12 shrink-0 font-mono text-xs leading-5 tabular-nums text-muted-foreground">{line.clock}</span>
-                <span className={line.level === "key" ? "font-medium" : undefined}>
+      </div>
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        <Spoken parts={saying.parts} />
+        {saying.echo && NBSP}
+      </div>
+      {paused && (
+        <p className="border-b bg-secondary/60 px-5 py-2 text-xs text-muted-foreground">
+          Paused: new lines wait, and you hear what you missed when you resume.
+        </p>
+      )}
+      {/* Focusable, so the list scrolls from the keyboard too. */}
+      <ol
+        tabIndex={0}
+        aria-label="The match so far, latest first"
+        className="max-h-112 space-y-1 overflow-y-auto px-5 py-4 text-[15px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+      >
+        {lines
+          .slice(-SHOWN_LINES)
+          .reverse()
+          .map((line) => {
+            const graphic = line.key.startsWith("card-");
+            return (
+              <li key={line.key} className={cn("grid grid-cols-[3.25rem_minmax(0,1fr)] gap-3 py-0.5", graphic && "my-1.5")}>
+                <span className="pt-px text-sm text-muted-foreground figures">{line.clock}</span>
+                <span
+                  className={cn(
+                    line.level === "key" && "font-semibold",
+                    graphic && "chamfer-sm bg-secondary px-3 py-2 font-normal",
+                  )}
+                >
                   <Spoken parts={line.parts} />
                 </span>
               </li>
-            ))}
-        </ol>
-        {paused && <p className="mt-2 text-xs text-muted-foreground">Paused: new lines wait, and you hear what you missed when you resume.</p>}
-      </CardContent>
-    </Card>
+            );
+          })}
+      </ol>
+    </section>
   );
 }

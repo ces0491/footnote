@@ -4,8 +4,8 @@ import { History } from "lucide-react";
 import type { Ref } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { Insight } from "@/lib/live/contract";
 import type { KeyMoment } from "@/lib/live/catch-up";
+import type { Insight } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
 import { type Language, langAttribute } from "@/lib/live/language";
 
@@ -37,42 +37,44 @@ export function CatchUp({
 }) {
   const wording = langAttribute(lang);
   return (
-    <section aria-labelledby="catch-up-title" className="space-y-2 rounded-lg border bg-muted/40 p-3">
+    <section aria-labelledby="catch-up-title" className="space-y-3 rounded-lg bg-secondary p-4">
       <h3
         id="catch-up-title"
         ref={headingRef}
         tabIndex={-1}
         lang={wording}
-        className="flex items-center gap-1.5 rounded-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="flex items-center gap-2 rounded-sm text-lg leading-tight font-bold tracking-tight font-stretch-75% outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        <History aria-hidden className="size-4 text-muted-foreground" />
+        <History aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         {insight.card.headline}
       </h3>
-      <p className="text-sm" lang={wording}>
+      <p className="font-serif text-[15.5px] leading-relaxed" lang={wording}>
         {insight.card.casual}
       </p>
       {analyst && (
-        <p className="text-sm text-muted-foreground" lang={wording}>
+        <p className="font-serif text-sm leading-relaxed text-muted-foreground" lang={wording}>
           {insight.card.analyst}
         </p>
       )}
       {moments.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground">Before you joined</p>
-          <ul className="mt-1 space-y-0.5 text-sm">
+          <p className="text-xs font-semibold text-muted-foreground">Before you joined</p>
+          <ul className="mt-2 space-y-1 border-l border-edge pl-3 text-sm">
             {moments.map((m) => (
-              <li key={m.key} className="flex gap-2" lang={langAttribute(m.lang)}>
-                <span className="w-16 shrink-0 font-mono text-xs leading-5 tabular-nums text-muted-foreground">{m.minutes}</span>
+              <li key={m.key} className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-2" lang={langAttribute(m.lang)}>
+                <span className="font-semibold text-muted-foreground figures">{m.minutes}</span>
                 <span>{m.label}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      <Evidence runId={runId} insight={insight} roster={roster} />
-      <Button size="sm" onClick={onClose}>
-        Back to the match
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <Evidence runId={runId} insight={insight} roster={roster} />
+        <Button size="sm" onClick={onClose}>
+          Back to the match
+        </Button>
+      </div>
     </section>
   );
 }

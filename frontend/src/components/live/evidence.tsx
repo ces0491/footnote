@@ -1,18 +1,19 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { FootnoteMark } from "@/components/brand";
 import type { EvidenceResponse, FeedEvent, Insight } from "@/lib/live/contract";
 import { describe, type Roster } from "@/lib/live/describe";
 import { evidenceSource } from "@/lib/live/shortlist";
 import { minuteLabel } from "@/lib/live/timeline";
+import { cn } from "@/lib/utils";
 
 /**
- * The events behind a card, each as it stood at the card's current state (its `shown_seq`): a fan
- * whose stream hasn't reached a correction sees the event as it was, and once the card shows the
- * correction, the list is fetched again and shows the corrected event.
+ * The events behind a card, as its footnotes, each as it stood at the card's current state (its
+ * `shown_seq`): a fan whose stream hasn't reached a correction sees the event as it was, and once the
+ * card shows the correction, the list is fetched again and shows the corrected event.
  */
 export function Evidence({ runId, insight, roster }: { runId: string; insight: Insight; roster: Roster }) {
   const [open, setOpen] = useState(false);
@@ -41,28 +42,41 @@ export function Evidence({ runId, insight, roster }: { runId: string; insight: I
     };
   }, [open, source, key, loaded, runId]);
 
-  if (source === "tracking") return <p className="text-xs text-muted-foreground">From the player tracking: no event behind it.</p>;
+  if (source === "tracking") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <FootnoteMark className="h-3 w-auto text-cite" />
+        From the player tracking: no event behind it.
+      </p>
+    );
+  }
   if (source === null) return null;
 
   const events = loaded?.key === key ? loaded.events : null;
-  const Icon = open ? ChevronDown : ChevronRight;
   return (
     <div>
-      <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <Icon aria-hidden /> Evidence ({ids.length} {ids.length === 1 ? "event" : "events"})
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="-mx-1 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <FootnoteMark className="h-3 w-auto text-cite" />
+        Evidence ({ids.length} {ids.length === 1 ? "event" : "events"})
+        <ChevronDown aria-hidden className={cn("size-3 transition-transform", open && "rotate-180")} />
+      </button>
       {open && (
-        <ul className="mt-1 space-y-1 border-l pl-3 text-xs text-muted-foreground">
-          {error && <li>Couldn&apos;t load the events: {error}</li>}
-          {!error && !events && <li>Loading…</li>}
+        <ol className="mt-2 space-y-1.5 border-l-2 border-cite/60 pl-3 text-xs">
+          {error && <li className="text-muted-foreground">Couldn&apos;t load the events: {error}</li>}
+          {!error && !events && <li className="text-muted-foreground">Loading…</li>}
           {events?.map((e) => (
-            <li key={e.event_id} className="flex gap-2">
-              <span className="w-12 shrink-0 font-mono tabular-nums">{minuteLabel(e.minute, e.added_minute)}</span>
+            <li key={e.event_id} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-baseline gap-2">
+              <span className="font-semibold text-muted-foreground figures">{minuteLabel(e.minute, e.added_minute)}</span>
               <span>{describe(e, roster).text}</span>
-              <code className="ml-auto shrink-0">{e.event_id}</code>
+              <code className="text-[11px] text-muted-foreground">{e.event_id}</code>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
     </div>
   );
