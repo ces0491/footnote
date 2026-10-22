@@ -58,6 +58,16 @@ _CLEARER = [
     (re.compile(r"\bfound no\b"), "saw no"),
     # "Tient toujours".
     (re.compile(r"\bdecision stands\b"), "decision is upheld"),
+    # "Una posterior penalti" and "un penalty ultérieure" for "a later penalty check" (the check
+    # dropped), "la prise de main" for "the handball check".
+    (re.compile(r"\b(?:VAR's |VAR )?penalty check(s?)\b"), r"VAR check\1 for a penalty"),
+    (re.compile(r"\b(?:VAR's |VAR )?(offside|handball) check(s?)\b"), r"VAR check\2 for \1"),
+    # "Ninguna ofensa" and "aucune offense": an insult.
+    (re.compile(r"\bno offence\b"), "no foul"),
+    # "Une contre-action" for "a counter move".
+    (re.compile(r"\bcounter move\b"), "counter-attack"),
+    # "Su pase más largo" (their longest pass) and "traversée" for "their longest passage".
+    (re.compile(r"\b([Ll]ongest|[Tt]heir|[Ii]ts) passage\b"), r"\1 sequence"),
     # "A quitté la botte".
     (re.compile(r"\bleft the boot\b"), "left the foot"),
     # "Hizo el último adelantamiento" (an overtaking) and "le dernier passage".
@@ -139,8 +149,9 @@ _FOOTBALL_WORDS: dict[str, list[tuple[re.Pattern[str], str]]] = {
             (r"\b(\d+) pasadas seguidas\b", r"\1 pases seguidos"),
             (r"\b(\d+) pasadas\b", r"\1 pases"),
             (r"\bde pasadas\b", "de pases"),
-            # "Superó las 4 pases": a pass is masculine.
+            # "Superó las 4 pases" and "culminó una contraataque": both are masculine.
             (r"\b([Ll])as (\d+) pases\b", r"\1os \2 pases"),
+            (r"\b([Uu])na contraataque\b", r"\1n contraataque"),
         )
     ],
     "fr": [

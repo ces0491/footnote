@@ -68,6 +68,13 @@ def test_words_the_translator_gets_wrong_are_said_another_way() -> None:
     assert protect("Kept pinned for 61%, then pinned in their own half.", []) == (
         "Kept penned in for 61%, then pinned in their own half."
     )
+    assert protect("A later penalty check, VAR's offside check and the handball check saw no offence.", []) == (
+        "A later VAR check for a penalty, VAR check for offside and the VAR check for handball saw no foul."
+    )
+    assert protect("Adeyani finished a counter move.", []) == "Adeyani finished a counter-attack."
+    assert protect("Their longest passage was 20 passes; a passage of play.", []) == (
+        "Their longest sequence was 20 passes; a passage of play."
+    )
     assert protect("No penalty late on, after a regular play move; regular play resumed.", []) == (
         "No penalty late in the match, after an open play move; open play resumed."
     )
@@ -148,9 +155,9 @@ def test_the_translators_known_slips_are_put_right() -> None:
         NAMES,
         "es",
     )["casual"] == ("La secuencia más larga de pases completados fue de 7 pases.")
-    loose = {**passes, "casual": "Marcó desde juego libre; el VAR no vio mano de balón. Superó las 4 pases."}
+    loose = {**passes, "casual": "Desde juego libre, no vio mano de balón. Superó las 4 pases en una contraataque."}
     assert mend(passes, loose, NAMES, "es")["casual"] == (
-        "Marcó desde juego abierto; el VAR no vio mano. Superó los 4 pases."
+        "Desde juego abierto, no vio mano. Superó los 4 pases en un contraataque."
     )
     assert mend(
         passes,
