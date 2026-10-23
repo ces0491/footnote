@@ -286,8 +286,8 @@ export function ProducerConsole({
           Producer console
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          The strongest moments still current, by rank. A card shows its template wording until an
-          agent&apos;s checked draft replaces it; fans see a card once it&apos;s approved and their stream reaches it.
+          The strongest moments still current, by rank. A graphic shows its template wording until an
+          agent&apos;s checked draft replaces it; fans see a graphic once it&apos;s approved and their stream reaches it.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-secondary/50 px-5 py-3">

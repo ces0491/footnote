@@ -253,7 +253,7 @@ export function AgentRunsDialog({ runId, insight }: { runId: string; insight: In
         {!detail && !error && <p className="text-muted-foreground">Loading…</p>}
         {detail && detail.agent_runs.length === 0 && !detail.reused_run && (
           <p className="text-muted-foreground">
-            No agent has run on this card{insight.provenance.cached ? ": its draft was reused from an earlier replay." : "."}
+            No agent has run on this graphic{insight.provenance.cached ? ": its draft was reused from an earlier replay." : "."}
           </p>
         )}
         {detail && detail.agent_runs.length > 0 && (

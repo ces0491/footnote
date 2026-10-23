@@ -107,7 +107,7 @@ export default function Home() {
       <StartReplay />
       <section aria-labelledby="how-title" className="mt-16 border-t py-12">
         <h2 id="how-title" className="text-3xl font-bold tracking-tight font-stretch-75%">
-          How a card is made
+          How a graphic is made
         </h2>
         <ol className="mt-6 grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((step, i) => (
