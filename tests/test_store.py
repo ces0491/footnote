@@ -22,6 +22,7 @@ from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from footnote.agents import desk as desk_module
+from footnote.agents import translator as translator_module
 from footnote.agents.desk import (
     EDIT_CARD_VERSIONS,
     EDIT_REPLAY_VERSIONS,
@@ -799,6 +800,24 @@ async def test_a_failing_translator_leaves_the_cards_to_try_again(
         await worker.drain()
     assert (await _one(pool, "select count(*) as n from card_translations"))["n"] == 0
     assert len(await TranslationStore(pool).pending(50)) > 0
+
+
+class Stuck:
+    """A push that never finishes, as one did on a TLS handshake with Web PubSub."""
+
+    async def send(self, run_id: str, message: dict) -> None:
+        await asyncio.Event().wait()
+
+
+async def test_a_stuck_push_holds_the_translations_up_for_seconds_only(
+    pool: Pool, showcase: Match, analysis: Analysis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _play(pool, showcase, analysis, end=False)
+    monkeypatch.setattr(translator_module, "PUSH_SECONDS", 0.05)
+    worker = TranslationWorker(TranslationStore(pool), Stuck(), Mirror(), names_of(showcase.meta), batch=50)
+    assert await asyncio.wait_for(worker.drain(), 30) > 0
+    # The translations are stored all the same, for the snapshot a page fetches when it sees the gap.
+    assert (await _one(pool, "select count(*) as n from card_translations where card is not null"))["n"] > 0
 
 
 async def test_the_tracking_is_stored_once_per_file(pool: Pool, showcase: Match) -> None:

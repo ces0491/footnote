@@ -44,6 +44,7 @@ from footnote.db.insights import AGENT_CHANNEL, Connection, next_rev, push_insig
 from footnote.insights.draft import Draft, check, limits_for, render
 from footnote.insights.facts import facts_from_json
 from footnote.live.contract import VIEWER_PATTERN
+from footnote.processor.push import PUSH_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +71,6 @@ REDRAFT_REPLAY_RUNS = 30
 # tier's monthly characters.
 EDIT_CARD_VERSIONS = 5
 EDIT_REPLAY_VERSIONS = 30
-# How long the producer's answer waits on the push to viewers. A push once hung for a minute on a
-# TLS handshake with Web PubSub, the web app gave up after 10 s and told the producer the desk wasn't
-# answering, though the redraft had been made.
-PUSH_SECONDS = 5.0
 
 
 class Refused(Exception):

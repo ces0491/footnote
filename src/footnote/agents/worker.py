@@ -44,6 +44,7 @@ from footnote.agents.versions import VERSIONS
 from footnote.agents.writer import Drafted, Job, draft
 from footnote.insights.draft import Draft, check, limits_for
 from footnote.insights.facts import Facts
+from footnote.processor.push import PUSH_SECONDS
 from footnote.telemetry import tracer
 
 log = logging.getLogger(__name__)
@@ -285,6 +286,6 @@ class Worker:
         if message is None:
             return
         try:
-            await self.push.send(claim.run_id, message)
+            await asyncio.wait_for(self.push.send(claim.run_id, message), PUSH_SECONDS)
         except Exception:
             log.exception("push failed for %s/%s", claim.run_id, claim.insight_id)

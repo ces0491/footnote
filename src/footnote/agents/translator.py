@@ -33,6 +33,7 @@ from psycopg.types.json import Jsonb
 from footnote.db.connect import Pool
 from footnote.db.insights import next_rev, push_insights
 from footnote.insights.translation import LANGUAGES, PARTS, check, half_of, mend, prepare, read_back
+from footnote.processor.push import PUSH_SECONDS
 from footnote.telemetry import tracer
 
 log = logging.getLogger(__name__)
@@ -246,7 +247,7 @@ class TranslationWorker:
                 message = await self.store.store(p, results[p.ref])
                 if message is not None:
                     try:
-                        await self.push.send(p.run_id, message)
+                        await asyncio.wait_for(self.push.send(p.run_id, message), PUSH_SECONDS)
                     except Exception:
                         log.exception("push failed for %s/%s", p.run_id, p.insight_id)
         return len(pending)

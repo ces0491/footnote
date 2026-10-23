@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from footnote.agents import worker as worker_module
 from footnote.agents.prompts import RECAP_WRITER, instructions, writer_name
 from footnote.agents.store import Cached, Claim
 from footnote.agents.worker import Settings, Worker, cache_key
@@ -397,6 +398,30 @@ async def _work(store: Store, client: Scripted, url: str, **settings: Any) -> Pu
     while await worker.drain():
         await worker.wait_idle()
     return push
+
+
+class StuckPush:
+    """A push that never finishes, as one did on a TLS handshake with Web PubSub."""
+
+    async def send(self, run_id: str, message: dict) -> None:
+        await asyncio.Event().wait()
+
+
+async def test_a_stuck_push_holds_a_job_up_for_seconds_only(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker_module, "PUSH_SECONDS", 0.05)
+    store = Store([_claim(rows, showcase)])
+    async with match_tools(showcase, analysis, rows) as url:
+        worker = Worker(store, StuckPush(), Scripted(GOOD), url, Settings(model="gpt-5-mini", concurrency=1))
+
+        async def work() -> None:
+            while await worker.drain():
+                await worker.wait_idle()
+
+        await asyncio.wait_for(work(), 30)
+    # The draft is published all the same, for the snapshot a page fetches when it sees the gap.
+    assert len(store.published) == 1
 
 
 async def test_an_accepted_draft_is_published_and_reused(
