@@ -1,6 +1,6 @@
 # The web app: Next.js built as a standalone server.
 
-FROM node:24.22.0-alpine AS build
+FROM node:24.22.1-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:24.22.0-alpine
+FROM node:24.22.1-alpine
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/.next/standalone ./

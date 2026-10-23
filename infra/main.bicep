@@ -34,7 +34,7 @@ param translatorEnabled bool = false
 @description('Translator tier. F0 is free for 2 million characters a month, and a subscription can have only one; S1 is billed by the character')
 param translatorSku string = 'F0'
 
-@description('Create the writers\' model deployment. Azure refuses to submit one that exists again, even unchanged (error 715-123420), so set it false once the deployment is there')
+@description('Create the writers\' model deployment. On this project\'s subscription Azure refused to submit the existing one again, even unchanged (error 715-123420, twice on 21 October 2026), and a new one in a fresh account on 23 October; if yours does too, set it false once the deployment is there')
 param deployWriterModel bool = true
 
 var tags = { 'azd-env-name': environmentName }

@@ -9,11 +9,13 @@ run's viewers, like every other change to an insight (footnote.db.insights).
     approve   a drafted, killed or withdrawn graphic may air, once no agent is drafting it
     kill      a drafted graphic never airs
     withdraw  an approved graphic comes off air
-    redraft   an agent drafts the card afresh, past the cache of earlier replays; a graphic the
-              producer approved comes off air first, and each card and each replay has a limit
+    redraft   an agent drafts the card again, past the cache of earlier replays; the desk refuses a
+              redraft of a graphic on air with wording the producer approved until the producer
+              withdraws it, and each card and each replay has a limit
     edit      the producer's own wording, written as a draft with placeholders for the figures; it
               passes the same checks as an agent's draft (insights/draft.py), against the moment's
-              facts and the events its card already links to, and is never cached for other replays
+              facts and the events its card already links to, is never cached for other replays,
+              and each card and each replay has a limit
     mode      approve each graphic automatically as it is found, or leave it to the producer
 
 A run starts in the mode its viewer chose; switching applies to the insights found from then on.
@@ -63,6 +65,11 @@ _REFUSED = {
 # one replay. They keep one producer from spending the agents' daily runs (AGENT_DAILY_RUNS).
 REDRAFT_CARD_RUNS = 5
 REDRAFT_REPLAY_RUNS = 30
+# Edits a producer may make: on one card, and on one replay. Each edit's wording goes to the
+# Translator in both languages (translator.py), so they keep one producer from spending the free
+# tier's monthly characters.
+EDIT_CARD_VERSIONS = 5
+EDIT_REPLAY_VERSIONS = 30
 # How long the producer's answer waits on the push to viewers. A push once hung for a minute on a
 # TLS handshake with Web PubSub, the web app gave up after 10 s and told the producer the desk wasn't
 # answering, though the redraft had been made.
@@ -213,6 +220,16 @@ class Desk:
     async def _edit(self, conn: Connection, key: tuple[str, str], insight: _Insight, draft: Draft) -> None:
         if insight.agent_state in ("pending", "drafting"):
             raise Refused(409, "An agent is drafting it; wait for its draft before editing.")
+        cur = await conn.execute(
+            "select count(*) filter (where insight_id = %s) as card, count(*) as replay from insight_versions"
+            " where run_id = %s and source = 'producer'",
+            (key[1], key[0]),
+        )
+        used = await cur.fetchone() or {"card": 0, "replay": 0}
+        if used["card"] >= EDIT_CARD_VERSIONS:
+            raise Refused(409, "This card has had all the edits it gets.")
+        if used["replay"] >= EDIT_REPLAY_VERSIONS:
+            raise Refused(409, "This replay has used all its edits.")
         facts = facts_from_json(insight.facts)
         events = {*insight.evidence, *insight.card_evidence, *(e for f in facts.values() for e in f.events)}
         problems = check(draft, facts, events, limits_for(insight.topic))

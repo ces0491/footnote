@@ -9,6 +9,7 @@ Settings come from the environment (set by infra/processor.bicep in Azure):
     WEB_DB_ROLE, WEB_DB_OBJECT_ID         the web app's identity, granted read access at start-up
     AGENTS_DB_ROLE, AGENTS_DB_OBJECT_ID   the agents service's identity, granted what it writes
     AZURE_CLIENT_ID                       the processor's managed identity
+    FOOTNOTE_MATCH_ID                     the match processed, the showcase unless set
 """
 
 from __future__ import annotations

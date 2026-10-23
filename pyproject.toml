@@ -15,6 +15,7 @@ dependencies = [
     "azure-monitor-opentelemetry>=1.8",
     "certifi>=2026.10.18",
     "fastapi>=0.148.0",
+    # Agent Framework 1.22's MCP client reads MCP 1's field names, so MCP 2 breaks the match tools.
     "mcp>=1.30.0,<2",
     "numpy>=2.4.6",
     "psycopg-pool>=3.3.3",

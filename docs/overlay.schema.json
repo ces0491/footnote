@@ -10,7 +10,7 @@
           "type": "string"
         },
         "casual": {
-          "description": "For a casual fan: why it matters, in one or two sentences",
+          "description": "For a casual fan: why it matters, in one or two sentences (up to three in a recap)",
           "title": "Casual",
           "type": "string"
         },
@@ -372,7 +372,7 @@
       "type": "string"
     },
     "rank": {
-      "description": "From the match-state model and the moment's figures",
+      "description": "A base for the topic, raised by the match state and the moment's figures",
       "maximum": 1,
       "minimum": 0,
       "title": "Rank",

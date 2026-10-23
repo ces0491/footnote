@@ -3,7 +3,7 @@
 # tracking. The answer key stays out (see .dockerignore).
 
 FROM python:3.11.17-slim AS build
-COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./

@@ -22,7 +22,14 @@ from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from footnote.agents import desk as desk_module
-from footnote.agents.desk import REDRAFT_CARD_RUNS, REDRAFT_REPLAY_RUNS, Desk, Refused
+from footnote.agents.desk import (
+    EDIT_CARD_VERSIONS,
+    EDIT_REPLAY_VERSIONS,
+    REDRAFT_CARD_RUNS,
+    REDRAFT_REPLAY_RUNS,
+    Desk,
+    Refused,
+)
 from footnote.agents.store import AgentStore, PostgresSource
 from footnote.agents.translator import TranslationStore, TranslationWorker
 from footnote.db.connect import Pool
@@ -618,6 +625,47 @@ async def test_redrafts_are_limited_per_card_and_per_replay(pool: Pool, showcase
     with pytest.raises(Refused) as refused:
         await desk.act(RUN_ID, other["insight_id"], VIEWER, "redraft")
     assert refused.value.status == 409 and "This replay has used all its agent drafts" in refused.value.message
+
+
+async def test_edits_are_limited_per_card_and_per_replay(pool: Pool, showcase: Match, analysis: Analysis) -> None:
+    """Each edit's wording goes to the Translator, so a producer gets a limited number of them."""
+    await _play(pool, showcase, analysis, end=False, viewer=VIEWER, producer="manual")
+    await _agents_fall_back(pool)
+    desk = Desk(pool, Pushed())
+    edit = Draft(
+        headline="{moment.scorer} strikes late",
+        casual=[Sentence(text="A late winner for {moment.club}.", events=["e1586"])],
+        analyst=[Sentence(text="The shot came at {moment.shot_speed}.", events=["e1585"])],
+    )
+    async with pool.connection() as conn:
+        rows = await (
+            await conn.execute(
+                "select insight_id from insights where run_id = %s and live and insight_id <> 'goal-e1586'"
+                " and agent_state not in ('pending', 'drafting') order by seq limit 2",
+                (RUN_ID,),
+            )
+        ).fetchall()
+    filler, target = (row["insight_id"] for row in rows)
+
+    async def producer_versions(insight_id: str, count: int) -> None:
+        async with pool.connection() as conn:
+            for _ in range(count):
+                await conn.execute(
+                    "insert into insight_versions (run_id, insight_id, version, source, facts_version, draft, card,"
+                    " provenance) select run_id, insight_id, max(version) + 1, 'producer', 1, '{}', '{}', '{}'"
+                    " from insight_versions where run_id = %s and insight_id = %s group by run_id, insight_id",
+                    (RUN_ID, insight_id),
+                )
+
+    await producer_versions("goal-e1586", EDIT_CARD_VERSIONS)
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, "goal-e1586", VIEWER, "edit", edit)
+    assert refused.value.status == 409 and "all the edits it gets" in refused.value.message
+
+    await producer_versions(filler, EDIT_REPLAY_VERSIONS - EDIT_CARD_VERSIONS)
+    with pytest.raises(Refused) as refused:
+        await desk.act(RUN_ID, target, VIEWER, "edit", edit)  # none of its own, but the replay's are spent
+    assert refused.value.status == 409 and "This replay has used all its edits" in refused.value.message
 
 
 async def test_every_insight_push_is_stored_as_it_was_sent(pool: Pool, showcase: Match, analysis: Analysis) -> None:

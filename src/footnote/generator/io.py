@@ -49,8 +49,3 @@ def write_match(gm: GeneratedMatch, out_dir: Path) -> Path:
         gm.tracking.save(str(match_dir / "tracking.npz"))
     _dump(out_dir / "answer_key" / f"{out.meta['match_id']}.json", out.answer_key)
     return match_dir
-
-
-def read_feed(match_dir: Path) -> list[dict]:
-    with (match_dir / "feed.jsonl").open(encoding="utf-8") as fh:
-        return [json.loads(line) for line in fh if line.strip()]

@@ -42,7 +42,9 @@ class Card(_Strict):
     """The item's wording, with code's figures filled in."""
 
     headline: str = Field(description="For a lower third: 60 characters at most")
-    casual: str = Field(description="For a casual fan: why it matters, in one or two sentences")
+    casual: str = Field(
+        description="For a casual fan: why it matters, in one or two sentences (up to three in a recap)"
+    )
     analyst: str = Field(description="For an analyst: the numbers behind it, in one to three sentences")
     plain: str = Field(description="The headline and the casual line as one text, for screen readers")
     evidence: list[str] = Field(description="Event IDs the wording rests on: those cited, then those behind its facts")
@@ -86,7 +88,9 @@ class OverlayItem(_Strict):
     # What it is, and its rank
     kind: Literal["moment", "rule_call", "segment", "stat", "player_tag", "recap", "correction"]
     topic: str = Field(description="What happened, and the graphics template that shows it")
-    rank: float = Field(ge=0, le=1, description="From the match-state model and the moment's figures")
+    rank: float = Field(
+        ge=0, le=1, description="A base for the topic, raised by the match state and the moment's figures"
+    )
     reason: str = Field(description="Why it ranks where it does")
     live: bool = Field(description="False for a moment the replay's start passed: history, for catch-up only")
     # Timing

@@ -1,8 +1,11 @@
 // A model deployment on a Foundry account, as its own nested deployment.
 //
-// Azure's checks refuse a model deployment validated in the same request as its account (error
-// 715-123420, "unusual activity"). Taking a value that exists only once the account does
-// (`accountEndpoint`) makes Azure check this deployment when it runs, after the account is there.
+// On this project's subscription, Azure's checks refused a model deployment validated in the same
+// request as its account (error 715-123420, "unusual activity"). The only public explanation, an
+// answer on Microsoft Q&A, puts the error down to fraud protection on new pay-as-you-go
+// subscriptions. Taking a value that exists only once the account does (`accountEndpoint`) makes
+// Azure check this deployment when it runs, after the account is there, which got the deployment
+// through on 20 October 2026. On 23 October a new one in a fresh account was refused all the same.
 
 param accountName string
 

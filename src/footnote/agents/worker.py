@@ -11,9 +11,9 @@ For each job, in order:
 2. The limits. A job that waited too long for a worker, or that would take today's agent runs past
    `daily_runs`, falls back without calling the model.
 3. The workflow (writer.py), under `deadline_seconds`, long enough for one revision. An accepted
-   draft becomes the version viewers see. A rejected one, a timeout or an error leaves the template's
-   version and records why in the insight's `agent_note`, which viewers and the producer see
-   (docs/audience.md, P2 and P3).
+   draft becomes the version viewers see. A rejected one, a timeout or an error leaves the wording
+   already there (the template's, or after a redraft the earlier one) and records why in the
+   insight's `agent_note`, which the producer console shows (docs/audience.md, P2 and P3).
 
 A correction can restate an insight while its draft is being written; the insight is then a fresh
 job, pending with new facts, its wait and claims counted from the restatement. Claiming it cancels
@@ -243,7 +243,7 @@ class Worker:
             draft=outcome.draft.model_dump() if outcome.draft else None,
         )
         if not outcome.accepted or outcome.draft is None:
-            await self._fall_back(claim, "The agent's draft failed the checks")
+            await self._fall_back(claim, "The agent's draft failed the checks", outcome="rejected")
             return
         await self.store.cache(key, agent_run_id, outcome.draft, drafted.log.facts, drafted.log.events)
         provenance = {
@@ -274,10 +274,11 @@ class Worker:
         await self._send(claim, await self.store.publish(claim, hit.draft, hit.facts, provenance))
         return True
 
-    async def _fall_back(self, claim: Claim, why: str) -> None:
-        # What stays on screen: the template, or after a redraft the wording the card already had.
+    async def _fall_back(self, claim: Claim, why: str, outcome: str = "fallback") -> None:
+        # What stays on screen: the template, or after a redraft the wording the card already had. A
+        # rejected draft's trace keeps "rejected" as its outcome, with the note beside it.
         note = f"{why}; {'the earlier wording' if claim.redraft else 'the template'} stands."
-        _outcome("fallback", note=note)
+        _outcome(outcome, note=note)
         await self._send(claim, await self.store.fall_back(claim, note))
 
     async def _send(self, claim: Claim, message: dict | None) -> None:

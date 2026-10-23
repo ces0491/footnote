@@ -1,6 +1,9 @@
 node_modules
 .next
 .env*
+*.pem
+*.key
+*.pfx
 npm-debug.log*
 *.tsbuildinfo
 Dockerfile

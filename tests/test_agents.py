@@ -533,6 +533,19 @@ async def test_each_card_drafted_is_a_trace_with_its_outcome(
     assert inside and all(s.context.trace_id == card.context.trace_id for s in inside)
 
 
+async def test_a_rejected_draft_ends_its_trace_as_rejected_with_the_note(
+    showcase: Match, analysis: Analysis, rows: dict[str, dict], spans: InMemorySpanExporter
+) -> None:
+    spans.clear()
+    store = Store([_claim(rows, showcase)])
+    async with match_tools(showcase, analysis, rows) as url:
+        await _work(store, Scripted(TYPED_FIGURE, TYPED_FIGURE), url)
+    (card,) = [s for s in spans.get_finished_spans() if s.name == "draft card"]
+    assert card.attributes is not None
+    assert card.attributes["footnote.outcome"] == "rejected" and card.attributes["footnote.attempts"] == 2
+    assert card.attributes["footnote.note"] == store.fallbacks[0][1]
+
+
 async def test_the_tools_answer_only_for_a_scoped_run(
     showcase: Match, analysis: Analysis, rows: dict[str, dict]
 ) -> None:

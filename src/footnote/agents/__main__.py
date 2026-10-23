@@ -12,7 +12,9 @@ Settings come from the environment (set by infra/agents.bicep in Azure):
     WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB
     POSTGRES_HOST, POSTGRES_DATABASE, POSTGRES_USER
     AZURE_CLIENT_ID                           the service's managed identity
-    AGENT_DEADLINE_SECONDS, AGENT_DAILY_RUNS, AGENT_CONCURRENCY, AGENT_REASONING_EFFORT   optional
+    AGENT_DEADLINE_SECONDS, AGENT_DAILY_RUNS, AGENT_CONCURRENCY, AGENT_REASONING_EFFORT   optional;
+                                              unset, they take the defaults in worker.Settings
+    FOOTNOTE_MATCH_ID                         the match served, the showcase unless set
     MCP_PORT                                  the match tools' local port, 8100 unless set
     DESK_PORT                                 the producer's desk, 8080 unless set
     TRANSLATOR_ENDPOINT                       Azure AI Translator; cards stay in English without it
@@ -53,13 +55,15 @@ log = logging.getLogger("footnote.agents")
 
 
 def settings() -> Settings:
+    """The worker's settings: each one the environment doesn't set keeps its default in Settings, the
+    one place the defaults live (CI checks a recording against them, evals/run.py)."""
     env = os.environ
     return Settings(
         model=cloud.require("FOUNDRY_MODEL"),
-        deadline_seconds=float(env.get("AGENT_DEADLINE_SECONDS", "45")),
-        daily_runs=int(env.get("AGENT_DAILY_RUNS", "150")),
-        concurrency=int(env.get("AGENT_CONCURRENCY", "3")),
-        reasoning_effort=env.get("AGENT_REASONING_EFFORT", "low"),
+        deadline_seconds=float(env.get("AGENT_DEADLINE_SECONDS", Settings.deadline_seconds)),
+        daily_runs=int(env.get("AGENT_DAILY_RUNS", Settings.daily_runs)),
+        concurrency=int(env.get("AGENT_CONCURRENCY", Settings.concurrency)),
+        reasoning_effort=env.get("AGENT_REASONING_EFFORT", Settings.reasoning_effort),
     )
 
 

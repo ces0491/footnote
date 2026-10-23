@@ -2,12 +2,13 @@
 
 The version of a card viewers see is translated with Azure AI Translator, the names given to it as
 dictionary entries, and checked by code (footnote.insights.translation); the run's viewers are then
-pushed the card again with its translations, which the overlay contract carries by language
-(docs/overlay.md).
+pushed a live card again with its translations, which the overlay contract carries by language
+(docs/overlay.md). A card from before the replay's start point is never pushed: its translations
+reach a page with the run's snapshot.
 Only the current version of a card in a running replay is translated, the live cards first and then
-the history a catch-up lists: an agent's draft usually replaces the template's within seconds, and a
-page shows a rewording in a viewer's language only once its translation is in, keeping the earlier
-translation meanwhile (frontend/src/lib/live/language.ts).
+the ones from before the start point: an agent's draft usually replaces the template's within
+seconds, and a page shows a rewording in a viewer's language only once its translation is in,
+keeping the earlier translation meanwhile (frontend/src/lib/live/language.ts).
 
 Every replay is the same match, so the same wording comes round again: translations are kept under
 a hash of the English, the names protected, the half the card means by "the half" (it changes what

@@ -73,6 +73,9 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
     retentionInDays: 30
     // A ceiling on ingestion cost: the first 5 GB a month are free, and the services log little.
     workspaceCapping: { dailyQuotaGb: json('0.2') }
+    // Shared keys are off: the environment's logs arrive through its diagnostic settings, the traces
+    // through Application Insights, and queries sign in with Entra.
+    features: { disableLocalAuth: true }
   }
 }
 
@@ -370,8 +373,8 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
   properties: { charset: 'UTF8', collation: 'en_US.utf8' }
 }
 
-// Container Apps on the Consumption profile have no fixed outbound address, so the firewall admits
-// Azure services. Sign-in still needs an Entra token for a role the server knows.
+// This environment has no virtual network or NAT gateway, so its outbound addresses can change, and
+// the firewall admits Azure services. Sign-in still needs an Entra token for a role the server knows.
 resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
   parent: postgres
   name: 'AllowAzureServices'

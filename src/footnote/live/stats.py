@@ -1,8 +1,7 @@
 """Match stats from the feed, counted the way a broadcast stats graphic counts them.
 
 - Passes: attempted and completed, throw-ins excluded. Accuracy is completed over attempted.
-- Possession: each side's share of those passes, the broadcast convention, rather than time on the
-  ball.
+- Possession: each side's share of those passes. Time on the ball isn't counted.
 - Shots: every attempt except the shot behind a goal that VAR rules out. On target means scored or
   saved.
 - Corners taken, fouls committed and offsides. Cards: a second yellow counts as a yellow and a red.

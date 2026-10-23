@@ -4,9 +4,9 @@ The tracking file (`data/matches/<id>/tracking.npz`, format in docs/data.md) sta
 tracking feed arriving alongside the event feed. The processor looks it up against each event's
 clock, so a run sees positions, distances and speeds only up to the moment its feed has reached.
 
-Speeds are averaged over one second, the way tracking providers report top speeds. Tags mark a
-sprint above `SPRINT_KMH`, reported with its peak once the player slows below the threshold again,
-and a player passing `DISTANCE_KM` covered.
+A speed is the distance a player covered over the trailing second. Tags mark a sprint above
+`SPRINT_KMH`, reported with its peak once the player slows below the threshold again, and a player
+passing `DISTANCE_KM` covered.
 """
 
 from __future__ import annotations

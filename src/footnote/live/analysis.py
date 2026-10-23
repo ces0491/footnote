@@ -122,7 +122,6 @@ class _Passing:
     difficulty: float = 0.0
     rated: int = 0
     hardest: float | None = None
-    hardest_event_id: str | None = None
     hardest_minute: int | None = None
 
     def add(self, m: dict, rating: float | None) -> None:
@@ -134,7 +133,7 @@ class _Passing:
         self.rated += 1
         self.difficulty += rating
         if self.hardest is None or rating > self.hardest:
-            self.hardest, self.hardest_event_id, self.hardest_minute = rating, m["event_id"], int(m["minute"])
+            self.hardest, self.hardest_minute = rating, int(m["minute"])
 
 
 @dataclass
