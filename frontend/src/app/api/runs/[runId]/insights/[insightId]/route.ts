@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { deskActionRequest, type Draft, type InsightDetail, runIdPattern } from "@/lib/live/contract";
 import { placeholders } from "@/lib/live/draft";
+import { jsonBody } from "@/lib/server/body";
 import { db } from "@/lib/server/db";
 import { desk } from "@/lib/server/desk";
 
@@ -63,7 +64,9 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/runs/[r
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return Response.json({ error: "send the request as application/json", problems: [] }, { status: 415 });
   }
-  const parsed = deskActionRequest.safeParse(await request.json().catch(() => null));
+  const body = await jsonBody(request);
+  if ("response" in body) return body.response;
+  const parsed = deskActionRequest.safeParse(body.value);
   if (!parsed.success) {
     return Response.json({ error: "an action and the viewer taking it are needed", problems: [] }, { status: 422 });
   }

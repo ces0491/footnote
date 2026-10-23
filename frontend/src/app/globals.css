@@ -49,8 +49,8 @@
  * each kit that reads on this ground), cite for the evidence behind a card and for focus, tally for
  * what is live or on air, var for VAR and rule calls, amend for the data provider's corrections.
  * Text contrast from the page to the lightest panel (--accent): chalk 12.3:1 or more, mist 6.4:1,
- * cite, var, amend and go 6.5:1. Tally has 4.5:1 on every surface up to --secondary but 4.1:1 on
- * --accent, so it isn't set on --accent.
+ * cite, var, amend and go 6.5:1 or more. Tally has 4.5:1 on every surface up to --secondary but
+ * 4.1:1 on --accent, so it isn't set on --accent.
  */
 :root {
   --night: oklch(0.19 0.022 255);

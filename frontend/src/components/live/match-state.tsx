@@ -109,7 +109,9 @@ export function MatchStatePanel({
         <h2 id="state-title" className="text-xl font-bold tracking-tight font-stretch-75%">
           Match state
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Estimated from the events by a model that runs a few seconds behind play.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Estimated from the events and the players&apos; positions by a model that runs a few seconds behind play.
+        </p>
       </div>
       <div className="space-y-5 p-5">
         {state ? (
@@ -136,7 +138,7 @@ export function MatchStatePanel({
           <div
             className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-secondary"
             role="img"
-            aria-label={`Chance each side is on top: ${home.short_name} ${Math.round(homeShare * 100)}%, ${away.short_name} ${Math.round(awayShare * 100)}%; the rest neither`}
+            aria-label={`Chance each side is on top: ${home.short_name} ${Math.round(homeShare * 100)}%, ${away.short_name} ${Math.round(awayShare * 100)}%; neither side for the rest`}
           >
             <div className="rounded-full" style={{ width: `${homeShare * 100}%`, background: clubColour(home) }} />
             <div className="flex-1" />

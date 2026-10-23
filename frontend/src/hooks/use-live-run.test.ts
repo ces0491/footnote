@@ -58,11 +58,17 @@ let snapshotRequests: ((response: Response) => void)[] = [];
 let stored: (SnapshotMessage | EventMessage)[] = [];
 let storedInsights: InsightMessage[] = [];
 let pushRequests: number[] = [];
+// What the negotiate route answers: a client URL, or a refusal such as its rate limit's.
+let negotiateStatus = 200;
 
 function fetchStub(input: RequestInfo | URL): Promise<Response> {
   const url = new URL(String(input), "http://localhost");
   if (url.pathname === "/api/time") return Promise.resolve(Response.json({ now: Date.now() }));
-  if (url.pathname.endsWith("/negotiate")) return Promise.resolve(Response.json({ url: "wss://example.test/client" }));
+  if (url.pathname.endsWith("/negotiate")) {
+    return Promise.resolve(
+      negotiateStatus === 200 ? Response.json({ url: "wss://example.test/client" }) : Response.json({ error: "refused" }, { status: negotiateStatus }),
+    );
+  }
   if (url.pathname.endsWith("/pushes")) {
     const after = Number(url.searchParams.get("after"));
     pushRequests.push(after);
@@ -125,6 +131,7 @@ beforeEach(() => {
   stored = [];
   storedInsights = [];
   pushRequests = [];
+  negotiateStatus = 200;
   clients.length = 0;
   FakeClient.refuse = false;
   vi.stubGlobal("fetch", vi.fn(fetchStub));
@@ -253,6 +260,16 @@ describe("useLiveRun", () => {
     await waitFor(() => expect(hook.result.current.view?.seq).toBe(20));
   });
 
+  it("follows by polling when it's refused a connection URL", async () => {
+    negotiateStatus = 429; // the negotiate route's limit per address
+    stored = storedUpTo(10);
+    const hook = renderHook(() => useLiveRun(RUN_ID));
+    await answer(0, snapshot());
+    await waitFor(() => expect(hook.result.current.connection).toBe("polling"));
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.view?.seq).toBe(10);
+  });
+
   it("stops a client that connects after the page has let it go", async () => {
     stored = storedUpTo(10);
     const hook = renderHook(() => useLiveRun(RUN_ID));
@@ -308,6 +325,68 @@ describe("useLiveRun", () => {
     expect(hook.result.current.connection).toBe("closed");
     await new Promise((resolve) => setTimeout(resolve, 3_500));
     expect(snapshotRequests).toHaveLength(3); // no catching up, no polling
+  });
+});
+
+// On the free tier, once the day's messages are spent, a connection stays open and carries nothing.
+describe("useLiveRun on a quiet connection", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const pass = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+
+  it("stays on the connection through a quiet spell when the run hasn't moved on", async () => {
+    const hook = await connectedAt(10);
+    await pass(15_000);
+    await answer(2, snapshot()); // the look at the snapshot: nothing past the page's seq 10
+    expect(hook.result.current.connection).toBe("connected");
+    await pass(5_000);
+    expect(snapshotRequests).toHaveLength(3); // no polling
+    expect(clients[0].stopped).toBe(0);
+  });
+
+  it("follows by polling when the run has moved on and the connection carried none of it", async () => {
+    const hook = await connectedAt(10);
+    await pass(15_000);
+    stored = storedUpTo(20);
+    await answer(2, { ...snapshot(), insight_rev: 4 }); // the run is ahead of the page
+    await waitFor(() => expect(hook.result.current.connection).toBe("polling"));
+    expect(clients[0].stopped).toBeGreaterThan(0);
+    await answer(3, snapshot()); // the catch-up it asks for
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(20));
+    await pass(30_000);
+    await waitFor(() => expect(clients).toHaveLength(2)); // and it tries for a connection again
+    expect(hook.result.current.connection).toBe("polling");
+    // Pushes on the new connection end the polling.
+    act(() => clients[1].emit("connected"));
+    act(() => clients[1].receive(eventPush(21)));
+    await waitFor(() => expect(hook.result.current.connection).toBe("connected"));
+  });
+
+  it("waits a full quiet spell after each push", async () => {
+    await connectedAt(10);
+    await pass(10_000);
+    act(() => clients[0].receive(eventPush(11)));
+    await pass(10_000);
+    expect(snapshotRequests).toHaveLength(2); // 10 s since the push: no look yet
+    await pass(5_000);
+    await waitFor(() => expect(snapshotRequests).toHaveLength(3));
+  });
+
+  it("doesn't look once the run has ended", async () => {
+    const hook = await connectedAt(10);
+    act(() => clients[0].receive(runEnd("finished")));
+    await waitFor(() => expect(hook.result.current.ended).toBe("finished"));
+    await pass(20_000);
+    expect(snapshotRequests).toHaveLength(2);
   });
 });
 

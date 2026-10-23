@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { producerModeRequest, runIdPattern } from "@/lib/live/contract";
+import { jsonBody } from "@/lib/server/body";
 import { desk } from "@/lib/server/desk";
 
 // How the run's graphics are approved from now on: { viewer, mode: "auto" | "manual" }. The desk
@@ -11,7 +12,9 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/runs/[r
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return Response.json({ error: "send the request as application/json", problems: [] }, { status: 415 });
   }
-  const parsed = producerModeRequest.safeParse(await request.json().catch(() => null));
+  const body = await jsonBody(request);
+  if ("response" in body) return body.response;
+  const parsed = producerModeRequest.safeParse(body.value);
   if (!parsed.success) return Response.json({ error: "viewer and mode are needed", problems: [] }, { status: 422 });
   return desk(`/runs/${runId}/producer`, parsed.data);
 }

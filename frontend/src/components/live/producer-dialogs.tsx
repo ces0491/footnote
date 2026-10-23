@@ -265,7 +265,7 @@ export function AgentRunsDialog({ runId, insight }: { runId: string; insight: In
         )}
         {detail?.reused_run && (
           <section className="space-y-2">
-            <h3 className="text-sm font-medium">The run in an earlier replay that wrote the draft reused here</h3>
+            <h3 className="text-sm font-medium">Reused from an earlier replay: the run that wrote this draft</h3>
             <ol>
               <RunEntry run={detail.reused_run} />
             </ol>

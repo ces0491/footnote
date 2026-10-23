@@ -12,8 +12,8 @@ import { type RunDescriptor, SPEEDS } from "@/lib/live/contract";
 import { PROFILES, type Profile, profile, rememberStarted } from "@/lib/live/profiles";
 import { viewerId } from "@/lib/live/viewer";
 
-// The judges' jump points from docs/experience.md, each with what happens there and the viewers who
-// show it best. Each replay starts 30 s before its minute.
+// Kick-off and the jump points of the judges' path (README.md, "Try it"), each with what happens
+// there and the viewers who show it best. Each replay starts 30 s before its minute.
 const JUMPS = [
   { minute: 1, label: "Kick-off", moment: "The whole match", who: null },
   { minute: 23, label: "23'", moment: "Kingsferry score", who: "Nadia, then Sam" },

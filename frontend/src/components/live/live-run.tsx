@@ -126,7 +126,7 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
   // The match stays the same object across refetches (useLiveRun keeps it), so the roster does too.
   const shownMatch = live.snapshot?.match;
   const r = useMemo(() => (shownMatch ? roster(shownMatch) : null), [shownMatch]);
-  // A phone shows the panel only: the pitch view isn't drawn or fed there at all.
+  // A phone has no pitch view: it isn't drawn or fed there.
   const wide = useMediaQuery("(min-width: 768px)");
 
   // What this browser keeps: its ID, whether it started this replay, and each profile's settings.
@@ -340,11 +340,12 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
                   calm={false}
                   focus={null}
                   waiting={preview.waiting / run.speed}
-                  caption={`The world feed's preview, ${PREVIEW_DELAY} seconds behind live, with the graphics on air`}
+                  caption={`Preview of the world feed, ${delayText(PREVIEW_DELAY, run.speed)}: our own render of the tracking, with the graphics on air`}
                 />
               )}
-              <p className="text-xs text-muted-foreground">
-                Preview of the world feed, {PREVIEW_DELAY} seconds behind live: our own render of the tracking, with the graphics on air.
+              {/* The pitch's own label says this to a screen reader. */}
+              <p aria-hidden className="text-xs text-muted-foreground">
+                Preview of the world feed, {delayText(PREVIEW_DELAY, run.speed)}: our own render of the tracking, with the graphics on air.
               </p>
             </div>
           }

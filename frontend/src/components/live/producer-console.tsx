@@ -153,11 +153,14 @@ function Sources({ runId, insight, roster }: { runId: string; insight: Insight; 
   );
 }
 
-/** The model's rank as a meter of five, with the figure. */
+/** The card's rank as a meter of five, with the figure. */
 function Rank({ rank }: { rank: number }) {
   const lit = Math.round(rank * 5);
   return (
-    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title="Rank, from the match-state model">
+    <span
+      className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"
+      title="Rank: a base for the kind of moment, raised by the match state and the moment's figures"
+    >
       <span aria-hidden className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <span key={n} className={cn("h-3 w-1.5 rounded-xs", n <= lit ? "bg-foreground" : "bg-secondary")} />
@@ -248,8 +251,8 @@ export function ProducerConsole({
   onChange: (message: InsightMessage) => void;
 }) {
   const [modeError, setModeError] = useState<string | null>(null);
-  // The card being edited. The dialog belongs to the console, not to the card, so it stays open with
-  // the producer's text when the card drops off the shortlist or a stronger one pushes it down.
+  // The card being edited. The dialog lives in the console, so it stays open with the producer's text
+  // when the card drops off the shortlist or a stronger one pushes it down.
   const [editing, setEditing] = useState<string | null>(null);
   // After an action or an edit, keyboard focus goes to the card, or to the shortlist when the card
   // has left it, rather than falling back to the top of the page.
@@ -283,7 +286,7 @@ export function ProducerConsole({
           Producer console
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          The strongest moments still current, ranked with the match-state model. A card shows its template wording until an
+          The strongest moments still current, by rank. A card shows its template wording until an
           agent&apos;s checked draft replaces it; fans see a card once it&apos;s approved and their stream reaches it.
         </p>
       </div>
@@ -299,7 +302,7 @@ export function ProducerConsole({
           <Label htmlFor="auto-approve">Approve automatically</Label>
         </div>
         <p id="auto-approve-note" className="text-xs text-muted-foreground">
-          {mode === "auto" ? "Every checked card airs as it's found." : "Nothing airs until you approve it."}{" "}
+          {mode === "auto" ? "Each card is approved as it's found." : "Nothing airs until you approve it."}{" "}
           {!canProduce && "Only the browser that started this replay can produce it."}
         </p>
         {modeError && <p className="w-full text-xs text-tally">{modeError}</p>}

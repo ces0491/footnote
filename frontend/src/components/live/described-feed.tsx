@@ -81,8 +81,8 @@ export function DescribedFeed({
     latest.current = all;
   }, [all]);
 
-  // What is there when the feed opens counts as said: the list shows it, and a listener wants what
-  // happens next, not a reading of the match so far.
+  // What is there when the feed opens counts as said: the list shows it, and the listener hears what
+  // happens next.
   useEffect(() => {
     said.current = new Set(latest.current.map((l) => l.key));
   }, []);

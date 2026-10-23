@@ -70,7 +70,7 @@ export function StatsPanel({ home, away, stats }: { home: Club; away: Club; stat
             <div className="flex-1 rounded-full" style={{ background: awayColour }} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Share of passes, the broadcast convention. Difficulty is one minus the modelled chance a pass reaches its target; distance
+            Possession is each side&apos;s share of the passes. Difficulty is one minus the modelled chance a pass reaches its target; distance
             comes from the tracking.
           </p>
         </div>

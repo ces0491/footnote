@@ -93,4 +93,14 @@ describe("describe", () => {
       "Correction: the 81' goal is now given as an own goal by Jory Penhallow; it had been credited to Femi Adeyani",
     );
   });
+
+  it("names a correction's other changes in words", () => {
+    const amendment = (changes: Record<string, { before: unknown; after: unknown }>) =>
+      line(feedEvent(9, 2, 2300, { type: "amendment", amends: "goal", changes, corrected_event: { minute: 81, added_minute: null } }), r).text;
+    expect(amendment({ assist_id: { before: null, after: "sal-10" } })).toBe("Correction: the assist on the 81' goal now goes to Teo Varlan");
+    expect(amendment({ assist_id: { before: "sal-10", after: null } })).toBe("Correction: the assist on the 81' goal is withdrawn");
+    expect(amendment({ outcome: { before: "saved", after: "goal" }, speed_kmh: { before: 80, after: 82 } })).toBe(
+      "Correction to the 81' goal: outcome and speed",
+    );
+  });
 });

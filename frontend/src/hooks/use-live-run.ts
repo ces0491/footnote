@@ -14,8 +14,9 @@ import type {
 } from "@/lib/live/contract";
 import { initialRunViewState, runReducer } from "@/lib/live/run-reducer";
 
-// "polling": no push connection (refused, or the negotiate call failed), so the page fetches what it
-// lacks every few seconds and tries the connection again now and then.
+// "polling": no push connection that carries anything (refused, the negotiate call failed, or the
+// connection went quiet while the replay played on), so the page fetches what it lacks every few
+// seconds and tries the connection again now and then.
 export type Connection = "connecting" | "connected" | "reconnecting" | "polling" | "closed";
 
 export interface Latency {
@@ -31,6 +32,11 @@ const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
 const FIRST_LOAD_TRIES = 4;
 const POLL_MS = 3_000;
 const RECONNECT_MS = 30_000;
+// How long an open connection may go without a push before the page looks at the snapshot. On Web
+// PubSub's free tier, once the day's messages are spent, a connection stays open and carries nothing.
+// A quiet spell of play (the break, a stoppage) leaves the snapshot where the page is, and the page
+// stays on the connection.
+const QUIET_MS = 15_000;
 
 class NoSuchRun extends Error {}
 
@@ -144,8 +150,9 @@ async function clientAccessUrl(runId: string): Promise<string> {
  * holds pushes while that is on its way, applies them on top, and asks again after a gap.
  *
  * Once something is on screen it stays there. A fetch that fails is retried with backoff (`trouble`
- * says so meanwhile), and a push connection that can't be opened is replaced by polling until it
- * can. `error` is only for a page with nothing to show.
+ * says so meanwhile), and a push connection that can't be opened, or that goes quiet while the
+ * snapshot moves on, is replaced by polling until a connection carries pushes again. `error` is only
+ * for a page with nothing to show.
  */
 export function useLiveRun(runId: string) {
   const [state, dispatch] = useReducer(runReducer, initialRunViewState);
@@ -204,6 +211,12 @@ export function useLiveRun(runId: string) {
     let client: WebPubSubClient | null = null;
     let poll: ReturnType<typeof setInterval> | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    // Pushes received, so a look at the snapshot can tell whether one arrived while it was out.
+    let heard = 0;
+    // Set when a connection went quiet while the replay played on. Polling carries on until a push
+    // shows that a connection carries messages again.
+    let stale = false;
     // Set once the run has ended: nothing more comes, so the page stops connecting and polling, even
     // for an attempt that was on its way when the end arrived.
     let finished = false;
@@ -216,6 +229,45 @@ export function useLiveRun(runId: string) {
       clearInterval(poll);
       poll = undefined;
     };
+    const stopWatching = () => {
+      clearTimeout(quiet);
+      quiet = undefined;
+    };
+    // Look at the snapshot once the connection has carried nothing for QUIET_MS.
+    const watch = () => {
+      stopWatching();
+      quiet = setTimeout(() => void check(), QUIET_MS);
+    };
+
+    /** Whether the run has moved on past what the page has applied, while its connection was quiet. */
+    async function check(): Promise<void> {
+      const ws = client;
+      if (abort.signal.aborted || finished || !ws) return;
+      const before = heard;
+      let ahead = false;
+      try {
+        const loaded = await fetchSnapshot(runId, abort.signal);
+        ahead = (loaded.view?.seq ?? 0) > (lastSeq.current ?? 0) || loaded.insight_rev > (lastRev.current ?? 0);
+      } catch {
+        // No answer to go on: look again after another quiet spell.
+      }
+      if (abort.signal.aborted || finished || ws !== client) return;
+      if (!ahead || heard !== before) {
+        watch();
+        return;
+      }
+      // The replay plays on and the connection carries none of it: follow by polling, and try for a
+      // connection again in a while, as when one is refused. The client is let go of first, so its
+      // own events don't report the page closed.
+      stale = true;
+      client = null;
+      ws.stop();
+      setConnection("polling");
+      dispatch({ kind: "resync" });
+      startPolling();
+      clearTimeout(retry);
+      retry = setTimeout(() => void connect(), RECONNECT_MS);
+    }
 
     function open(): WebPubSubClient {
       const ws = new WebPubSubClient({ getClientAccessUrl: () => clientAccessUrl(runId) });
@@ -232,13 +284,20 @@ export function useLiveRun(runId: string) {
       // Fires once per new connection (a recovered one keeps its messages), so catch up each time.
       ws.on("connected", () => {
         if (!current()) return;
-        stopPolling();
-        setConnection("connected");
+        // After a connection that went quiet, polling carries on until a push arrives on this one.
+        if (stale) {
+          setConnection("polling");
+        } else {
+          stopPolling();
+          setConnection("connected");
+        }
         dispatch({ kind: "resync" });
+        watch();
       });
       // The SDK reconnects on its own; the page keeps moving by polling until it has.
       ws.on("disconnected", () => {
         if (!current()) return;
+        stopWatching();
         setConnection("reconnecting");
         startPolling();
       });
@@ -247,6 +306,13 @@ export function useLiveRun(runId: string) {
       });
       ws.on("group-message", (e) => {
         if (!current()) return;
+        heard += 1;
+        if (stale) {
+          stale = false;
+          stopPolling();
+          setConnection("connected");
+        }
+        watch();
         // The processor sends compact JSON as text (src/footnote/live/contract.py, wire); a JSON
         // payload is taken as it comes.
         const data = e.message.data;
@@ -276,6 +342,7 @@ export function useLiveRun(runId: string) {
         // Refused (the free tier allows 20 connections in all) or no token: follow by polling, and
         // try for a connection again in a while.
         ws.stop();
+        stopWatching();
         setConnection("polling");
         startPolling();
         retry = setTimeout(() => void connect(), RECONNECT_MS);
@@ -285,6 +352,7 @@ export function useLiveRun(runId: string) {
     stopLive.current = () => {
       finished = true;
       stopPolling();
+      stopWatching();
       clearTimeout(retry);
       client?.stop();
     };

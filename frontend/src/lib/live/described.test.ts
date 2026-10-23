@@ -128,6 +128,17 @@ describe("the lines", () => {
     );
   });
 
+  it("says what else a correction changed", () => {
+    const amendment = (seq: number, changes: Record<string, { before: unknown; after: unknown }>) =>
+      said(seq, { type: "amendment", amends: "goal", changes, corrected_event: { minute: 81 } }).text;
+    expect(amendment(1, { assist_id: { before: null, after: "sal-10" } })).toBe(
+      "Correction from the data provider: the assist on the 81st-minute goal now goes to Varlan.",
+    );
+    expect(amendment(2, { outcome: { before: "saved", after: "goal" } })).toBe(
+      "Correction from the data provider to the 81st-minute goal, changing its outcome.",
+    );
+  });
+
   it("opens with the score and the minute, or the line-ups before kick-off", () => {
     expect(textOf(openingLine(MATCH, KICK_OFF_VIEW, 0).parts)).toBe("Saltmarsh Rovers against Kingsferry Athletic. Kick-off is coming up.");
     const view = { ...KICK_OFF_VIEW, phase: "second_half" as const, score: { home: 1, away: 1 }, clock: { period: 2, t: 790, clock: 3490, minute: 59, added_minute: null } };

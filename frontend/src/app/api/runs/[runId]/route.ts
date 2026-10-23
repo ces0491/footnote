@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { runIdPattern, type RunSnapshot, stopRunRequest } from "@/lib/live/contract";
+import { jsonBody } from "@/lib/server/body";
 import { db } from "@/lib/server/db";
 import { ReplayerError, runInProgress, stopRun } from "@/lib/server/replayer";
 
@@ -51,7 +52,9 @@ export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/runs/
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return Response.json({ error: "send JSON" }, { status: 415 });
   }
-  const parsed = stopRunRequest.safeParse(await request.json().catch(() => null));
+  const body = await jsonBody(request);
+  if ("response" in body) return body.response;
+  const parsed = stopRunRequest.safeParse(body.value);
   if (!parsed.success) return Response.json({ error: "viewer: the ID of the browser that started it" }, { status: 422 });
   try {
     return (await stopRun(runId, parsed.data.viewer))

@@ -89,7 +89,7 @@ export function PitchView({
   calm: boolean;
   focus: string | null;
   waiting: number; // wall seconds until the stream reaches the replay's start
-  caption: string;
+  caption: string; // the drawn pitch's label for screen readers
 }) {
   const frameAt = useTracking(runId, run, layout, position);
   const current = useCallback(() => moment(position().at, run.timeline), [position, run.timeline]);
@@ -136,7 +136,6 @@ export function PitchView({
           <Graphic key={g.insight.insight_id} shown={g} mode={mode} calm={calm} match={match} />
         ))}
       </div>
-      <figcaption className="sr-only">{caption}</figcaption>
     </figure>
   );
 }

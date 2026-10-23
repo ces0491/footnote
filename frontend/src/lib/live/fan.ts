@@ -7,8 +7,8 @@ import { NBSP } from "./describe";
 import type { Shown } from "./playback";
 import type { Metric, Mode } from "./profiles";
 
-// Casual fans get the moments, the rule calls, the spells of play and the corrections; analysts get
-// the figures as well.
+// Casual fans get the moments, the rule calls, the spells of play, the recaps and the corrections;
+// analysts also get the stats and the player tags.
 const CASUAL_KINDS: ReadonlySet<InsightKind> = new Set(["moment", "rule_call", "segment", "recap", "correction"]);
 
 export function forMode(shown: Shown[], mode: Mode): Shown[] {

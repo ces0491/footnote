@@ -44,8 +44,8 @@ function Note({ note, lang }: { note: string; lang: Language | undefined }) {
 
 /**
  * Who's been on top over the last five minutes, counted by the processor as the cards count it
- * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The model's
- * estimate of the moment swings with every break; the share of recent minutes moves as the game does.
+ * (src/footnote/live/analysis.py, recent_on_top), and the state of play now beneath. The share of
+ * recent minutes is steadier than the model's estimate of the moment, which swings with every break.
  */
 function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: Club; own: string | null }) {
   const state = view.match_state;
@@ -74,7 +74,7 @@ function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: C
           <div
             className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-secondary"
             role="img"
-            aria-label={`Who's on top over the last five minutes: ${label(a)}, ${label(b)}; the rest neither`}
+            aria-label={`Who's on top over the last five minutes: ${label(a)}, ${label(b)}; neither side for the rest`}
           >
             <div className="rounded-full" style={{ width: `${share(a) * 100}%`, background: clubColour(a) }} />
             <div className="flex-1" />
@@ -91,8 +91,8 @@ function OnTop({ view, home, away, own }: { view: StateView; home: Club; away: C
 
 /**
  * A fan's side panel: everything the graphics say, as text, and what their settings add. On a phone
- * it is the whole page, a second screen beside the TV. Every card here has reached the fan's
- * playback; nothing later is shown.
+ * it stands in for the pitch view, a second screen beside the TV. Every card here has reached the
+ * fan's playback.
  */
 export function FanPanel({
   runId,

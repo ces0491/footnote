@@ -1,6 +1,6 @@
-// The anonymous ID this browser goes by (CLAUDE.md: viewer profiles live under an ID kept in the
-// browser, with no sign-in). A replay started with it replaces the viewer's previous one, so trying
-// the jump points one after another never crowds out anyone else's replay (replayer/runs.py).
+// The anonymous ID this browser goes by, kept in the browser, with no sign-in. A replay started with
+// it replaces the viewer's previous one, so trying the jump points one after another never crowds
+// out anyone else's replay (replayer/runs.py).
 
 import { viewerIdPattern } from "./contract";
 

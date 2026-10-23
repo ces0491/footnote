@@ -10,7 +10,7 @@
 // interceptions, clearances and blocks.
 
 import type { EventMessage, FeedEvent, MatchMeta, Score, StateView } from "./contract";
-import { credits, type Roster } from "./describe";
+import { assistChange, changedFields, credits, type Roster } from "./describe";
 import type { Language } from "./language";
 import type { Shown } from "./playback";
 import { clockLabel } from "./timeline";
@@ -289,7 +289,9 @@ class Teller {
     // The new credit first and the old one in a sentence of its own, so neither reads as the other.
     const credit = credits(e, (id) => this.name(id));
     if (credit) return `Correction from the data provider: ${when} is now ${credit.after}. It had been ${credit.before}.`;
-    return `Correction from the data provider to ${when}.`;
+    const assist = assistChange(e, (id) => this.name(id));
+    if (assist) return `Correction from the data provider: the assist on ${when} ${assist}.`;
+    return `Correction from the data provider to ${when}, changing its ${changedFields(e)}.`;
   }
 }
 

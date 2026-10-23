@@ -1,5 +1,6 @@
 import { startRunRequest } from "@/lib/live/contract";
-import { allowStart, clientAddress } from "@/lib/server/rate-limit";
+import { jsonBody } from "@/lib/server/body";
+import { clientAddress, starts } from "@/lib/server/rate-limit";
 import { ReplayerError, startRun } from "@/lib/server/replayer";
 
 // Start a replay of the showcase match: { start_minute, speed, viewer? } -> the run descriptor.
@@ -8,12 +9,18 @@ export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return Response.json({ error: "send the request as application/json" }, { status: 415 });
   }
-  const parsed = startRunRequest.safeParse(await request.json().catch(() => null));
+  const body = await jsonBody(request);
+  if ("response" in body) return body.response;
+  const parsed = startRunRequest.safeParse(body.value);
   if (!parsed.success) {
     return Response.json({ error: "start_minute must be 1-90 and speed 1, 2 or 4" }, { status: 422 });
   }
-  if (!allowStart(clientAddress(request.headers))) {
-    return Response.json({ error: "Too many replays started from here; try again in a few minutes" }, { status: 429 });
+  const address = clientAddress(request.headers);
+  if (!starts.allow(address)) {
+    return Response.json(
+      { error: "Too many replays started from here; try again in a few minutes" },
+      { status: 429, headers: { "retry-after": String(starts.retryAfter(address)) } },
+    );
   }
   try {
     return Response.json(await startRun(parsed.data), { status: 201 });

@@ -185,12 +185,26 @@ export function credits(event: FeedEvent, name: (id: unknown) => string): { befo
   return { before: credit("before"), after: credit("after") };
 }
 
+/** A change to an amended goal's assist, in words: "now goes to Teo Varlan", or "is withdrawn". */
+export function assistChange(event: FeedEvent, name: (id: unknown) => string): string | null {
+  const assist = ((event.changes ?? {}) as Record<string, { before: unknown; after: unknown } | undefined>).assist_id;
+  if (!assist) return null;
+  return assist.after ? `now goes to ${name(assist.after)}` : "is withdrawn";
+}
+
+/** The fields an amendment changed, in words: "outcome and speed" for outcome and speed_kmh. */
+export function changedFields(event: FeedEvent): string {
+  const words = [...new Set(Object.keys(event.changes ?? {}).map((key) => key.replace(/_(id|kmh)$/, "").replaceAll("_", " ")))];
+  return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : (words[0] ?? "details");
+}
+
 function correction(event: FeedEvent, r: Roster): string {
-  const changes = (event.changes ?? {}) as Record<string, unknown>;
   const corrected = (event.corrected_event ?? {}) as { minute?: number; added_minute?: number | null };
   const what =
     typeof corrected.minute === "number" ? `the ${minuteLabel(corrected.minute, corrected.added_minute ?? null)} ${String(event.amends)}` : `the ${String(event.amends)}`;
   const credit = credits(event, (id) => name(r, id));
   if (credit) return `Correction: ${what} is now ${credit.after}; it had been ${credit.before}`;
-  return `Correction to ${what}: ${Object.keys(changes).join(", ")}`;
+  const assist = assistChange(event, (id) => name(r, id));
+  if (assist) return `Correction: the assist on ${what} ${assist}`;
+  return `Correction to ${what}: ${changedFields(event)}`;
 }
