@@ -3,9 +3,10 @@
 ## Purpose
 
 A solo entry to the Microsoft Premier League Hackathon that turns synthetic
-football events into explained match intelligence: each moment ranked by a
-match-state model, phrased for the viewer, linked to the events behind it, and
-delivered when that viewer's stream reaches it. Who it serves and why is in
+football events into explained match intelligence: each moment ranked from a
+base for its kind, raised by a match-state model and the moment's figures,
+worded for each mode and language, linked to the events behind it, and
+delivered when each viewer's stream reaches it. Who it serves and why is in
 [docs/audience.md](docs/audience.md).
 
 ## Done
@@ -31,10 +32,11 @@ Pipeline (deployed on Azure)
 
 Explain
 
-- [x] Moments ranked by the state model; the producer sees a shortlist, each
-      item with its reason
+- [x] Moments ranked from a base for each kind, raised by the state model and
+      the moment's figures; the producer sees a shortlist, each item with its reason
 - [x] Agents (Agent Framework, Foundry models) read the numbers through our MCP
-      tools; code checks every figure in their output; each claim links to event IDs
+      tools; code checks every figure in their output; each sentence cites the
+      events it rests on or uses a fact code computed
 - [x] A failed or slow agent falls back to the template, and the fallback is visible
 - [x] An amended event flags every insight that cited it, and its overlay can be withdrawn
 - [x] Half-time and full-time recaps, and a "what did I miss" catch-up
@@ -55,12 +57,17 @@ Render and personalise
 - [x] Calm mode: reduced motion, no flashing, overlays the viewer can hide
 - [x] Agents write in English; Azure AI Translator renders Spanish and French;
       code checks that numbers, minutes and names survive translation
+- [x] Ready-made fan profiles for judges to switch between, with each viewer's
+      settings kept in the browser
 - [ ] Viewer profiles stored server-side under an anonymous ID kept in the
-      browser; ready-made fan profiles for judges to switch between
+      browser
 
 Quality and submission
 
-- [ ] `azd up` deploys from scratch; no secrets in code; Azure budget alert set
+- [x] No secrets in code; Azure budget alert set
+- [ ] `azd up` deploys from scratch, verified on an empty environment. Tried on
+      23 October: Azure refused the model deployment and the Postgres server
+      (README, Deploying to Azure)
 - [x] CI runs lint, type checks, tests and agent-output evaluations
 - [x] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
@@ -77,8 +84,8 @@ Quality and submission
 - Synthetic voice commentary; screen readers handle speech for the described feed
 - Testing with blind or partially sighted users. The README names it as the
   first next step
-- Our own user accounts and sign-in. The profile store accepts an external
-  user ID, which in production would come from the host platform's login
+- Our own user accounts and sign-in. A profile store would take an external
+  user ID from the host platform's login
 - Multi-tenancy, load beyond demo traffic, multi-region, SLAs
 - Integration with a real broadcast graphics engine
 - Copying SCLA or rugby-tournament-predictor code; methods carry over, code is new
@@ -86,9 +93,9 @@ Quality and submission
 ## Bar
 
 Competition entry, judged on a working deployment and a public repo. Production
-practice wherever judges will look: infrastructure as code, CI, tests on the
-models and the overlay contract, managed identity, tracing. No load testing,
-formal security review or on-call docs.
+practice in infrastructure as code, CI, tests on the models and the overlay
+contract, managed identity and tracing. Left out: load testing, a formal
+security review and on-call docs.
 
 ## Decision
 
@@ -104,7 +111,6 @@ category.
 ## Revision history
 
 - 2026-10-19: initial scope
-- 2026-10-20: checkpoint moved from Sunday 25 to Friday 23 October; Ces is away
-  on 24 and 25 October
+- 2026-10-20: checkpoint moved from Sunday 25 to Friday 23 October
 - 2026-10-20: cut order revised: viewer profiles and the described feed's
   controls go before the amended-event demo

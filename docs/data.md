@@ -20,19 +20,23 @@ showcase match from [experience.md](experience.md) is found.
 The answer key holds what a live data provider wouldn't know: the hidden match state at every
 moment, the true probability behind each pass, shot, tackle, duel and carry, offside margins,
 whether an arm was in an unnatural position, the true goalscorer, each club's strength and style,
-and every player's attributes. Models built on the feed are scored against it.
+the attributes of every player in both match-day squads, and each correction the feed will make
+(`corrections`). The match-state model is fitted on its states, and the models built on the feed are
+scored against it.
 
 ## How a match is simulated
 
-**Hidden match state.** At any moment the match is in one of five regimes: one side in
-*control* (settled possession, the other side not pressing high), one side applying sustained
-*pressure* (camped in the opponent's half), one side in *transition* (breaking at speed after a
-regain), *chaos* (neither side controls; the ball changes hands often) or *balanced*. Regimes
+**Hidden match state.** At any moment the match is in one of five regimes, eight once the side
+holding one is counted: one side in *control* (settled possession, the other side not pressing
+high), one side applying sustained *pressure* (camped in the opponent's half), one side in
+*transition* (breaking at speed after a regain), *chaos* (neither side controls; the ball changes
+hands often) or *balanced*. Regimes
 follow a semi-Markov process: each is entered with a planned duration, and the next is drawn with
 weights from both teams' styles and strengths, the score and the clock. A regain can start a
 transition for the side that won the ball; when the break ends, the regime it interrupted resumes.
 The regime is never written to the feed. It changes how both teams play (block height, pressing,
-risk, tempo, long balls, crossing, shot appetite), and the events are the only evidence of it.
+risk, tempo, long balls, crossing, shot appetite), and the events and the tracking are the only
+evidence of it.
 
 **Players.** Each team keeps its formation inside a block positioned by the ball, possession,
 style and regime. Defenders are pulled goal-side of nearby attackers. Strikers hold the shoulder
@@ -64,9 +68,10 @@ position is part of the hidden truth. Cards, advantage and added time follow fro
 **The provider layer.** The simulation's raw events become feed messages with stable event IDs,
 club and player IDs, the match clock and a wall-clock timestamp, and the truth moves to the answer
 key. Like a real provider, the feed is sometimes wrong at first: a goal that took a deflection can
-be credited as an own goal and corrected a few minutes later with an `amendment` message. The
-match clock stops at each whistle, so a correction issued at half-time or after the match carries
-the clock of the whistle before it, and its `ts` says when it was issued.
+be credited as an own goal and corrected a few minutes later with an `amendment` message, and now
+and then a goal recorded without an assist is given one after review, three to ten minutes later.
+The match clock stops at each whistle, so a correction issued at half-time or after the match
+carries the clock of the whistle before it, and its `ts` says when it was issued.
 
 ## The feed
 
@@ -97,8 +102,10 @@ direction per half.
 | `offside` | the flag | `pass_event_id`, `delayed_flag` |
 | `ball_out` | the ball leaving the pitch | `restart` |
 | `var_check` | a check starting and completing | `check`, `incident`, `on_field_decision`, `decision`, `overturned` |
-| `substitution`, `injury`, `possession_change`, `woodwork` | | |
-| `amendment` | a correction to an earlier event | `event_id` and `version` of the corrected event, `changes`, `reason`, `corrected_event` |
+| `substitution` | a change of players | `team_id`, `player_off_id`, `player_on_id`, `half_time`, `reason` |
+| `possession_change` | the ball changing sides | `team_id`, `from_team_id`, `cause`, `x`, `y` |
+| `injury`, `woodwork` | a fouled player down injured, stopping play; the ball hitting the post or bar | the on-ball fields only |
+| `amendment` | a correction to an earlier event | `event_id` and `version` of the corrected event, `amends` (the corrected event's type), `changes`, `reason`, `corrected_event` |
 
 A goal that VAR rules out stays in the feed; the `var_check` that completes with `decision:
 "no_goal"` names it in `goal_event_id` and restates the score. Shots, penalties the referee gives
@@ -126,12 +133,12 @@ for pass difficulty, each side's shape for the match state, and distances and sp
 
 ## The showcase match
 
-[experience.md](experience.md) tells the story of Saltmarsh Rovers v Kingsferry Athletic. The
-match is not scripted: `showcase.py` runs the simulation beat by beat, and at each beat tries
-reseeded continuations from a snapshot until the beat happens. Rare beats are found in stages:
-for the 31st minute, Varlan on the ball near the box, then a pass to Dellow in an unflagged offside
-position, then Dellow scoring. Between beats nothing may be scored, nobody may be sent off, and VAR
-checks happen only at 31' and 74'.
+[experience.md](experience.md) tells the story of Saltmarsh Rovers v Kingsferry Athletic.
+`showcase.py` finds the match by search: it runs the simulation beat by beat, and at each beat tries
+reseeded continuations from a snapshot until the beat happens. Rare beats are found in stages: for
+the 31st minute, Varlan on the ball more than 55 m from his own goal line, then a pass to Dellow in
+an unflagged offside position, then Dellow scoring. Between beats nothing may be scored, nobody may
+be sent off, and VAR checks happen only at 31' and 74'.
 
 | Beat | Required |
 | --- | --- |
@@ -145,16 +152,16 @@ checks happen only at 31' and 74'.
 | 81' | Adeyani scores on a Kingsferry break, the shot deflected off Penhallow |
 | 84' | the goal, first credited as a Penhallow own goal, is amended to Adeyani |
 
-Every event is a draw from the same model as any other match; the search only chooses which draws
-to keep. Two things are set rather than searched: the provider's first call on the 81st-minute
-goal, which is told to credit the deflection as an own goal and amend it at 83:20 on the clock, and
-the named players, who are never substituted. The accepted path is saved in
-`data/showcase_recipe.json` as the step and seed of each reseed. The match it produces is committed
-too (`data/league.json`, `data/matches/fl-2627-showcase-sal-kin/` and its answer key), and those
-files are what the services deploy, so nothing regenerates the showcase in the cloud.
-`tests/test_showcase.py` replays the recipe, checks the story still holds and checks the committed
-files are the replayed match. A change to the generator invalidates the recipe: rerun the search,
-which rewrites the showcase files, and commit both.
+Two things are set by hand: the provider's first call on the 81st-minute goal, which is told to
+credit the deflection as an own goal and amend it at 83:20 on the clock, and the named players, who
+are never substituted. Every other event is a draw from the same model as any other match; the
+search only chooses which draws to keep. The accepted path is saved in `data/showcase_recipe.json`
+as the step and seed of each reseed. The match it produces is committed too (`data/league.json`,
+`data/matches/fl-2627-showcase-sal-kin/` and its answer key). The services deploy the league and
+match files, with the answer key left out of the image, so nothing regenerates the showcase in the
+cloud. `tests/test_showcase.py` replays the recipe, checks the story still holds and checks the
+committed files are the replayed match. A change to the generator invalidates the recipe: rerun the
+search, which rewrites the showcase files, and commit both.
 
 ## Reproducing the data
 
@@ -167,8 +174,9 @@ uv run python -m footnote.generator match SAL KIN --tracking
 uv run python -m footnote.calibration                    # regenerate docs/calibration.md
 ```
 
-Output goes to `data/`. Git keeps the league, the showcase match, its recipe and the name check;
-everything else there is rebuilt from seeds.
+Output goes to `data/`. Git keeps the league and the showcase match with their answer keys, the
+recipe, the name check and the agents' recorded evaluation run (`data/evals/drafts.json`, written by
+`python -m footnote.evals live --record`); everything else there is rebuilt from seeds.
 
 ## Calibration
 
@@ -180,9 +188,9 @@ seeds, with each figure, names its source and lists the gaps that hold under bot
 ## Names
 
 Club names were chosen by hand and player and official names are built from syllables, so a clash
-with a real person's name is unlikely but possible. `scripts/check_names.py` looks up every full name in
-Wikidata for exact matches with real people, and every club and place name for real football clubs,
-and writes `data/name_check.json`. Names that matched a real person are blocked in
+with a real person's name is unlikely but possible. `scripts/check_names.py` looks up every full name
+in Wikidata for exact matches with real people, and every club and place name for real football
+clubs, and writes `data/name_check.json`. Names that matched a real person are blocked in
 `names.py` and never generated; `tests/test_names.py` fails if a name is unchecked or matches.
 Wikidata doesn't list every lower-league player, so a clear result can still miss one. The showcase
 cast were also checked by web search. Two club cautions remain, neither a football club: Saltmarsh

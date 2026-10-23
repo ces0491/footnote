@@ -26,16 +26,18 @@ web app (Next.js) ◀── snapshot, stored pushes, tracking, evidence, client 
 | --- | --- | --- |
 | replayer (`src/footnote/replayer`) | Container App, internal ingress, one replica | Stands in for the data provider: plays the committed showcase feed into Event Hubs, one run per replay |
 | processor (`src/footnote/processor`) | Container App, no ingress, one replica | Folds the feed into each run's match state, with pass difficulty, the estimated match state and figures from the tracking; finds and ranks the run's insights; stores the feed (each live row with the push viewers were sent), the state and the insights in Postgres, and the match's tracking for the pitch view; pushes every event with the state after it, and every insight change, to the run's viewers |
-| agents (`src/footnote/agents`) | Container App, internal ingress, one replica | Serves the match tools over MCP on localhost (`src/footnote/tools`), and drafts the cards insights want with Agent Framework writers on Foundry; code checks each draft; stores and pushes the accepted ones, or says why the template stands. Translates the cards viewers see into Spanish and French with Azure AI Translator, checked by code. Serves the producer's desk to the web app: approves, edits, kills and withdraws cards for the viewer who started the replay. Traces each card it drafts and each batch it translates to Application Insights |
-| web (`frontend/`) | Container App, public ingress | Starts replays, and stops one for the browser that started it; serves snapshots (with insights), the event and insight pushes stored for a run, the tracking up to its live point, match metadata and the events behind an insight from Postgres; passes producer actions to the desk; issues Web PubSub client tokens; renders the fan view and the producer console |
+| agents (`src/footnote/agents`) | Container App, internal ingress, one replica | Serves the match tools over MCP on localhost (`src/footnote/tools`), and drafts the cards insights want with Agent Framework writers on Foundry; code checks each draft; stores and pushes the accepted ones, or says why the wording on screen stands. When the Translator is deployed, translates the cards viewers see into Spanish and French with it, checked by code. Serves the producer's desk to the web app: for the viewer who started the replay, approves, edits, kills, withdraws and redrafts cards, and switches the run between approving cards by hand and automatically. Traces each card it drafts, each batch it translates and each desk request to Application Insights |
+| web (`frontend/`) | Container App, public ingress | Starts replays (eight from one address in five minutes at most), and stops one for the browser that started it; serves snapshots (with insights), the event and insight pushes stored for a run, the tracking up to its live point, match metadata, the events behind an insight and one card's detail for the console (the wording an edit starts from, the moment's facts and the agents' runs on it) from Postgres; passes producer actions to the desk; issues Web PubSub client tokens (60 to one address in five minutes at most); renders the fan view and the producer console |
 
 All four run in one Container Apps environment on the Consumption profile. The model is a Global
-Standard deployment of gpt-5-mini in a Foundry project, created by the same Bicep. Images are built in the
-container registry by `azd deploy` (remote build), so deploying needs no local Docker, except on a
-subscription running on free credits, where the registry's builds are paused and azd builds locally.
-azd deploys the processor before the agents service and the web app (`uses` in `azure.yaml`): the
-processor creates their database roles when it starts, and the agents service can't start without its
-role.
+Standard deployment of gpt-5-mini in a Foundry project, created by the same Bicep while
+`DEPLOY_WRITER_MODEL` is true (the README says when to set it false). Azure AI Translator is created
+only with `TRANSLATOR_ENABLED`; without it the agents service runs no translator and the cards stay
+in English. Images are built in the container registry by `azd deploy` (remote build), so deploying
+needs no local Docker, except on a subscription running on free credits, where the registry's builds
+are paused and azd builds locally. azd deploys the processor before the agents service and the web
+app (`uses` in `azure.yaml`): the processor creates their database roles when it starts, and the
+agents service can't start without its role.
 
 ## A replay
 
@@ -48,7 +50,9 @@ are approved: by the producer when the replay starts from the producer's profile
 otherwise. The replayer passes both to the processor in `run_start`, outside the descriptor every
 viewer can read, and the processor records them with the run: only the viewer who started a replay
 may produce it ([insights.md](insights.md#the-producers-desk)), and only they may stop it, which the
-replayer checks against the ID it keeps with the run.
+replayer checks against the ID it keeps with the run. The web app takes eight starts from one
+address in five minutes and answers more with 429, so viewers behind one shared address share that
+allowance.
 
 **Replay time.** The feed's timestamps follow the wall clock, including a fifteen-minute half-time
 break. A replay keeps that pacing but shortens the break to 30 seconds. Replay seconds count from
@@ -62,44 +66,46 @@ the backfill in without pushing it, then pushes one snapshot; from there it push
 stores the run's state view only once the backfill is in, so a snapshot fetched while the backfill
 is still being written has no view yet, where it would otherwise show the score from minutes before
 the jump. At the end the replayer publishes `run_end` with the reason: finished, stopped (by the
-viewer, or by their next replay), expired (two hours), evicted (a seventh concurrent run replaces
-the oldest) or failed. A finished run's `run_end` comes 60 seconds after its last message: the
-full-time recap is found at the final whistle, and the agents give up a job once its run has ended,
-when the translator and the producer's desk stop too and pages stop listening, so its draft, its
-translations and, in a replay the producer approves by hand, its approval need the run still open to
-reach them.
+viewer, by their next replay, or by the replayer shutting down cleanly), expired (two hours),
+evicted (a seventh concurrent run replaces the oldest) or failed. A finished run's `run_end` comes
+60 seconds after its last message. Once a run has ended, the agents give up its jobs, the translator
+and the producer's desk stop, and pages stop listening. The full-time recap is found at the final
+whistle, so that minute gives its draft, its translations and, when the producer approves by hand,
+its approval time to land.
 
-**What the processor works out.** Beside the counts, each run's state carries what the models in
-`src/footnote/interpret` read from the feed and the tracking ([models.md](models.md)): each pass's
-difficulty, every player's passing line, the match state as of five seconds ago with a timeline of
-it and each side's share of the last five minutes it held a state of its own (counted each second,
-as the insights count it), distance covered and top speeds, and tags for sprints and distance
-milestones. The tracking
-file ships in the processor's image and stands in for a tracking feed: the processor reads it
-against each event's clock, so a run never sees positions from beyond the point its feed has
-reached. The fitted parameters ship with the code, and the answer key stays out of the image.
+**What the processor works out.** Beside the counts, each run's state carries what
+`src/footnote/interpret` reads from the feed and the tracking ([models.md](models.md)). From its
+models: each pass's difficulty, every player's passing line, and the match state as of five seconds
+ago, with a timeline of it and each side's share of the last five minutes it held a state of its own
+(counted each second, as the insights count it). From the tracking, with no model: distance covered,
+top speeds, and tags for sprints and distance milestones. The tracking file ships in the processor's
+image and stands in for a tracking feed: the processor reads it against each event's clock, so a run
+never sees positions from beyond the point its feed has reached. The fitted parameters ship with the
+code, and the answer key stays out of the image.
 
 **Insights.** As each message is folded, the moment finder looks at the run's state and starts an
-insight for a goal, a VAR check, a spell of the match state, a hard pass or a sprint, ranked and
-worded by its template; later messages can flag or restate one (a VAR decision, a correction from
-the provider). The processor stores each change with the feed rows that caused it and pushes it.
-An insight that wants an agent's draft is left pending, and the processor notifies the agents
-service on the `footnote_agents` Postgres channel. [insights.md](insights.md) has the rules.
+insight for each moment worth a card (a goal, a VAR check, a spell of the match state, a hard pass
+and the others in [insights.md](insights.md#moments), which has the rules), ranked and worded by its
+template; later messages can flag or restate one (a VAR decision, a correction from the provider).
+The processor stores each change with the feed rows that caused it and pushes it. An insight that
+wants an agent's draft is left pending, and the processor notifies the agents service on the
+`footnote_agents` Postgres channel.
 
 **Joining.** The browser fetches the run's snapshot from the web app's API (its status, insights,
 match metadata and tracking layout) together with the pushes stored after the last event it has
 (the first time, the snapshot at the end of the backfill and every event since) and the insight
 pushes stored after the last revision it has, which give it each card's earlier states. For a run
-that has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and does the
-same again each time a connection opens, because pushes sent while it had none are lost. Pushes that
-arrive while that is on its way are held and applied on top. Each push carries the score, phase,
-clock and stats after its event, so applying one is a replacement. A gap in `seq` means a push was
-missed: the browser holds what follows and fetches what it lacks.
+that has ended it stops there. For a run in progress it then joins the run's Web PubSub group, and
+does the same again each time a connection opens, because pushes sent while it had none are lost.
+Pushes that arrive while that is on its way are held and applied on top. Each event push carries the
+score, phase, clock and stats after its event, so applying one is a replacement. A gap in `seq`
+means a push was missed: the browser holds what follows and fetches what it lacks.
 
 **Playback.** From the backfill's snapshot and every event since, a page can show the match as of
-any moment of the replay. The producer works live. A fan's stream runs behind live by the delay
-they set, so their page shows the match folded up to the last event their playback has reached, and
-each card as it stood then ([overlay.md](overlay.md#when-an-item-shows)). The pitch view draws the
+any moment of the replay. The producer works live, beside a preview of the world feed 3 seconds
+behind, the shortest delay a fan can set. A fan's stream runs behind live by the delay they set, so
+their page shows the match folded up to the last event their playback has reached, and each card as
+it stood then ([overlay.md](overlay.md#when-an-item-shows)). The pitch view draws the
 tracking at the same moment: it fetches it in five-second chunks around the viewer's playback, and
 the web app cuts each chunk at the run's live point, so nobody is sent positions from beyond it. A
 chunk live is still inside is fetched again every 750 ms, or every 250 ms when playback is under
@@ -109,11 +115,14 @@ pitch view and fetches no tracking.
 
 Once the page shows a run it keeps showing it. A fetch that fails is retried with backoff, and the
 page says the connection is in trouble meanwhile. If the push connection can't be opened (the free
-tier allows 20) the page fetches what it lacks every few seconds instead and tries the connection
-again every half minute; it does the same while the client reconnects. It runs one fetch at a time:
-a poll while one is on its way is answered by fetching again when it lands, so a slow fetch is never
-cancelled for a newer one. Once the run has ended the page stops connecting and polling, including
-an attempt that was on its way when the end arrived.
+tier allows 20) the page fetches what it lacks every 3 seconds instead and tries the connection
+again every half minute; it does the same while the client reconnects. A connected page that has
+had no push for 15 seconds while the replay plays on fetches the snapshot once; if that is ahead of
+the page, the connection has gone quiet (the free tier's messages for the day spent, say), and the
+page follows by polling in the same way. It runs one fetch at a time: a poll while one is on its way
+is answered by fetching again when it lands, so a slow fetch is never cancelled for a newer one.
+Once the run has ended the page stops connecting and polling, including an attempt that was on its
+way when the end arrived.
 
 ## Contracts
 
@@ -126,13 +135,14 @@ the browser's types in `frontend/src/lib/live/contract.ts`.
 - **Web PubSub.** `snapshot`, `event` and `run_end`, compact JSON sent as text, so the bytes billed
   are the bytes the tests measure (the SDK's own JSON encoding adds a space after every comma and
   colon). Events drop provider boilerplate and freeze frames, and carry timing (`published_at`,
-  `enqueued_at`, `processed_at`) for latency measurement. An event push also carries the match state after it, a pass's difficulty, the line
-  of the player on the event and any tags that fell due; the snapshot carries the state timeline,
-  every player's line and the tags so far. Each event push also says when the provider published
-  it, in replay seconds, and whether play is stopped after it. The browser extends the timeline from
-  each push by the rule the processor uses, so the two agree (`tests/fixtures/state_timeline.json` is
-  checked on both sides). Every event push fits one 2 KB billing unit: `tests/test_live.py` and
-  `tests/test_analysis.py` check the largest in the showcase match.
+  `enqueued_at`, `processed_at`) for latency measurement. An event push also carries the match
+  state after it, a pass's difficulty, the line of the player on the event and any tags that fell
+  due; the snapshot carries the state timeline, every player's line and the tags so far. Each event
+  push also says when the provider published it, in replay seconds, and whether play is stopped
+  after it. The browser extends the timeline from each push by the rule the processor uses, so the
+  two agree (`tests/fixtures/state_timeline.json` is checked on both sides). Every event push fits
+  one 2 KB billing unit: `tests/test_live.py` and `tests/test_analysis.py` check the largest in the
+  showcase match.
 - **Web PubSub, insights.** `insight` carries one changed insight, an item of the overlay contract
   ([overlay.md](overlay.md)), and `rev`, the run's insight revision the change made. The processor,
   the agents service and the producer's desk all push them; the browser applies revisions in order
@@ -140,16 +150,22 @@ the browser's types in `frontend/src/lib/live/contract.ts`.
   once translated, its Spanish and French, so the larger ones take two billing units or three: in a
   replay from 81' on 21 October, 17 of 40 insight pushes took two and the full-time recap with both
   translations (4,306 bytes) three, against 256 events in one unit each.
-- **Postgres.** `matches` (metadata and the tracking layout), `tracking_chunks` (the tracking for
-  the pitch view, five seconds a row, `src/footnote/live/pitch.py`), `runs` (descriptor, status,
-  insight revision, who started it and how its graphics are approved), `feed_events` (every message
-  each run processed, and with each live one the push viewers were sent), `run_state` (the latest
-  view), `insights` and `insight_versions` (every version of each card: template, agent or
-  producer), `insight_pushes` (every insight change pushed, by revision), `agent_runs` (every agent
-  run: outcome, tokens, latency, tool calls), `agent_cache` (accepted drafts reused across
-  replays), `card_translations` (each card version's Spanish and French, or what failed the check)
-  and `translation_cache` (translations reused across replays). Migrations live in
-  `src/footnote/db/migrations` and the processor applies them at start-up.
+- **Postgres.** Migrations live in `src/footnote/db/migrations`, and the processor applies them at
+  start-up. The tables:
+  - `matches`: metadata and the tracking layout;
+  - `tracking_chunks`: the tracking for the pitch view, five seconds a row
+    (`src/footnote/live/pitch.py`);
+  - `runs`: descriptor, status, insight revision, who started it and how its graphics are approved;
+  - `feed_events`: every message each run processed, and with each live one the push viewers were
+    sent;
+  - `run_state`: the latest view;
+  - `insights` and `insight_versions`: every version of each card (template, agent or producer),
+    read through `insight_cards`, a view of each card as the overlay contract gives it;
+  - `insight_pushes`: every insight change pushed, by revision;
+  - `agent_runs`: every agent run, with its outcome, tokens, latency and tool calls;
+  - `agent_cache`: accepted drafts reused across replays;
+  - `card_translations`: each card version's Spanish and French, or what failed the check;
+  - `translation_cache`: translations reused across replays.
 
 ## Delivery and failure
 
@@ -174,29 +190,37 @@ state view in one transaction before pushing anything, then checkpoints in Blob 
   store, and the snapshot for a missing insight. A lost `run_end` isn't recovered: the page shows the
   run as still going until it next fetches the snapshot.
 - The replayer holds runs in memory, so a replayer restart ends the runs in progress. A clean
-  shutdown publishes their `run_end`; a crash can't. Once a minute the processor ends, as failed, any
-  run still marked running whose next message is more than five minutes past its schedule, and tells
-  its viewers. The first check waits five minutes after the processor starts, so that a restarted
-  processor has caught up on the hub before it judges any run.
+  shutdown ends them as stopped and publishes their `run_end`, so their viewers are told the replay
+  was stopped; a crash can't. Once a minute the processor ends, as failed, any run still marked
+  running whose next message is more than five minutes past its schedule, and tells its viewers. The
+  first check waits five minutes after the processor starts, so that a restarted processor has
+  caught up on the hub before it judges any run.
 
 Viewers can therefore receive a push twice, for example when a processor restart re-reads a batch
-the old replica had already pushed. Every push carries its `seq`, and the browser drops one it has
-already applied.
+the old replica had already pushed. Each event push carries its `seq` and each insight push its
+`rev`, and the browser drops one it has already applied.
 
 The agents service claims pending insights with `for update skip locked` under a lease, so a
 crashed worker's job is claimed again once the lease runs out, and a job that has been claimed
 three times falls back to its template. Writing a draft locks the insight and checks its facts are
 the ones the job started from: a correction that restated the insight in the meantime has queued a
-fresh job, with its own wait and claims, so the stale draft is dropped. Jobs whose replay has ended are given up. A missed
-notification costs at most five seconds: the service also looks for jobs on a timer.
+fresh job, with its own wait and claims, so the stale draft is dropped. Jobs whose replay has ended
+are given up. A missed notification costs at most five seconds: the service also looks for jobs on
+a timer.
 
-The producer's desk refuses an action from anyone but the viewer who started the replay, on a
-replay that has ended, or that the card's status doesn't allow; an approval while an agent is
-drafting the card; a redraft of a card on air with wording the producer approved, or past the
-redraft limits. It sends back an edit that fails the checks with the problems. Each action it takes
-is one transaction with its revision, like the other writers', and locks the card on its own, so an
-action that waits for another writer's change acts on the card as that change left it. If the desk
-can't be reached the console says so and nothing changes.
+The producer's desk refuses:
+
+- an action from anyone but the viewer who started the replay, on a replay that has ended, or that
+  the card's status doesn't allow;
+- an approval while an agent is drafting the card;
+- a redraft of a card on air with wording the producer approved, or once the card has had five
+  agent runs or the replay thirty;
+- an edit while an agent is drafting the card, or past five edits a card or thirty a replay.
+
+It sends back an edit that fails the checks with the problems. Each action it takes is one
+transaction with its revision, like the other writers', and locks the card on its own, so an action
+that waits for another writer's change acts on the card as that change left it. If the desk can't
+be reached the console says so and nothing changes.
 
 The processor and replayer each run exactly one replica. Scaling the processor out would work with
 the checkpoint store's partition ownership, but each run's state would then move between replicas on
@@ -207,36 +231,37 @@ rebalancing; one replica keeps that out of scope.
 `scripts/smoke_live.py` follows a replay from outside the way a browser does and reports the time
 from the replayer publishing each event to the client receiving it, using the timestamps every push
 carries. Measured from a client in South Africa, so the times include the network path from westus3.
-The first three runs were on 19 October 2026, before the processor ran the models; the next two
-were on 20 October, with them and then with the insights; the last on 21 October, with the overlay
-contract and the producer's desk:
+The first row is the most complete run, with the overlay contract and the producer's desk; the
+others had less of the pipeline running, which shows where the time goes:
 
-| Replay | Events | Median | p95 | Max |
-| --- | --- | --- | --- | --- |
-| from 23' at 4×, through half-time to full time | 1,458 | 227 ms | 303 ms | 1,345 ms |
-| from 81' at 4× | 256 | 236 ms | 299 ms | 354 ms |
-| from 81' at 4×, started as the processor restarted | 258 | 244 ms | 314 ms | 1,308 ms |
-| from 81' at 4×, with the models | 236 | 278 ms | 359 ms | 427 ms |
-| from 81' at 4×, with the models and the insights | 256 | 284 ms | 390 ms | 5,704 ms |
-| from 23' at 4×, through to full time, with the desk | 1,458 | 238 ms | 318 ms | 537 ms |
+| Replay | Running | Measured | Events | Median | p95 | Max |
+| --- | --- | --- | --- | --- | --- | --- |
+| from 23' at 4×, through to full time | the overlay contract and the producer's desk | 21 Oct 2026 | 1,458 | 238 ms | 318 ms | 537 ms |
+| from 81' at 4× | the models and the insights | 20 Oct 2026 | 256 | 284 ms | 390 ms | 5,704 ms |
+| from 81' at 4× | the models | 20 Oct 2026 | 236 | 278 ms | 359 ms | 427 ms |
+| from 23' at 4×, through half-time to full time | the feed alone | 19 Oct 2026 | 1,458 | 227 ms | 303 ms | 1,345 ms |
+| from 81' at 4× | the feed alone | 19 Oct 2026 | 256 | 236 ms | 299 ms | 354 ms |
+| from 81' at 4×, started as the processor restarted | the feed alone | 19 Oct 2026 | 258 | 244 ms | 314 ms | 1,308 ms |
 
 **The template overlay.** The processor pushes a card straight after the event that found it, with
 the template's wording. In the run of 21 October, from the replayer publishing the feed message
 behind each of the 30 cards found to the client receiving the card's push: median 268 ms, p95
-461 ms, maximum 475 ms. An agent's wording follows seconds later, by design (insights.md).
+461 ms, maximum 475 ms. An agent's wording follows once its draft is accepted, 8 to 24 seconds in
+the recorded evaluation run ([evaluations.md](evaluations.md)).
 
-By stage, medians across the first three runs: publish to Event Hubs enqueue about 50 ms, enqueue
-to the processor's push about 55 ms, and push to receipt 115–125 ms, most of it the network. The
-slowest events came early in a replay: in the replay from 23', the 12 events in its first 10 seconds
-had a maximum of 1,345 ms, and the 1,446 after them a maximum of 669 ms. In the run with the models,
-the processor's stage kept its median (53 ms); push to receipt took longer that run (172 ms median).
+By stage, medians across the three runs with the feed alone: publish to Event Hubs enqueue about
+50 ms, enqueue to the processor's push about 55 ms, and push to receipt 115–125 ms, most of it the
+network. The slowest events came early in a replay: in the feed-alone replay from 23', the 12 events
+in its first 10 seconds had a maximum of 1,345 ms, and the 1,446 after them a maximum of 669 ms. In
+the run with the models, the processor's stage kept its median (53 ms); push to receipt took longer
+that run (172 ms median).
 
-The client in that run joined after the first 20 events had gone out; the client in the last run
-joined at the end of the backfill and received every event. Its first 23 events, in the first 10
-seconds, waited while the processor took in the 1,563-message backfill: p95 4,871 ms, max 5,704 ms.
-No store write in that run took over a second, which leaves folding the backfill through the
-models, on the processor's quarter of a vCPU, as the likely cost. The 233 events after them had a
-p95 of 368 ms and a maximum of 429 ms.
+The client in that run joined after the first 20 events had gone out; the client in the run with
+the models and the insights joined at the end of the backfill and received every event. Its first
+23 events, in the first 10 seconds, waited while the processor took in the 1,563-message backfill:
+p95 4,871 ms, max 5,704 ms. No store write in that run took over a second, which leaves folding the
+backfill through the models, on the processor's quarter of a vCPU, as the likely cost. The 233 events
+after them had a p95 of 368 ms and a maximum of 429 ms.
 
 ## Tracing
 
@@ -252,24 +277,27 @@ workspace-based, so the traces are kept in the Log Analytics workspace, under it
 - **Each batch translated is a trace**, `translate cards`: how many cards were waiting, how many
   went to the Translator rather than coming from the cache, and how many translations failed the
   check.
+- **Each request to the producer's desk is a trace**, as is each of the Azure SDK's own calls, such
+  as a push to Web PubSub.
 - Every span is kept. The distro's default samples five spans a second, which drops model and tool
   calls from a card's trace when a replay's first cards come together.
 - Prompts and replies stay out of the spans. The service sends traces only: its logs stay in the
   container logs, and it sends no metrics, the exporter's own statistics included.
 
-A replay from 81' to full time at 4× on 21 October, under the default sampler, made five card traces
-(four drafts reused, one drafted) and 18 translation batches: 93 spans, 102 KB, and 4 KB of span
-events. Keeping every span sends more, against a daily cap of 0.2 GB. In the workspace,
-`AppDependencies | where Name == "draft card"` lists the jobs, and a trace's `OperationId` finds the
-rest of it.
+A replay from 81' to full time at 4× on 21 October made five card traces (four drafts reused, one
+drafted) and 18 translation batches: 93 spans in 102 KB, and 4 KB of span events. That was measured
+under the distro's default sampler, so with every span kept a replay sends more, against the
+workspace's daily cap of 0.2 GB. There, `AppDependencies | where Name == "draft card"` lists the
+jobs, and a trace's `OperationId` finds the rest of it.
 
 ## Identity and access
 
 No service uses a key or password. Local authentication is off on Event Hubs, Web PubSub, the
-storage account and Application Insights, and Postgres accepts Microsoft Entra tokens only; the
-connection string the agents service has for Application Insights names the resource and its
-endpoint, and sending takes the service's token. Each container app runs as its own user-assigned
-managed identity with these roles:
+storage account, the Log Analytics workspace, Application Insights, the Foundry account and the
+Translator; the container registry's admin user is off; and Postgres accepts Microsoft Entra tokens
+only. The connection string the agents service has for Application Insights names the resource and
+its endpoint, and sending takes the service's token. Each container app runs as its own
+user-assigned managed identity with these roles:
 
 | Identity | Role | On |
 | --- | --- | --- |
@@ -281,7 +309,7 @@ managed identity with these roles:
 | web | Web PubSub Service Owner | the Web PubSub resource, to issue client tokens |
 | web | `select` on `matches`, `runs` (all but who started each), `feed_events`, `run_state`, `insights`, `insight_versions`, `insight_cards`, `insight_pushes`, `agent_runs`, `tracking_chunks` | granted by the processor at start-up |
 | agents | Foundry User | the Foundry project, to call the model |
-| agents | Cognitive Services User | the Translator, to translate the cards |
+| agents | Cognitive Services User | the Translator, when it is deployed, to translate the cards |
 | agents | Web PubSub Service Owner | the Web PubSub resource, to push the versions it writes |
 | agents | Monitoring Metrics Publisher | Application Insights, to send its traces |
 | agents | `select` on the match tables; `insert` on `insight_versions`, `insight_pushes`, `card_translations` and `translation_cache`; `insert` and `update` on `agent_runs` and `agent_cache`; `update` of `insights`' agent and status columns, its version, `redraft`, `queued_at` and `updated_at`, of `runs.insight_rev` and of `runs.producer` | granted by the processor at start-up |
@@ -302,11 +330,13 @@ Administrator), since the Bicep assigns every one of these roles.
 The match tools listen on 127.0.0.1 inside the agents container, so nothing outside it can reach
 them. The producer's desk listens on the container's internal ingress, which only apps in the
 Container Apps environment reach; the web app passes on the viewer's anonymous ID, and the desk acts
-only for the viewer who started the run. The run and insight a call is about travel in request headers the service sets from the job;
-the model chooses the tool and its arguments, never the scope.
+only for the viewer who started the run. The run and insight a match-tool call is about travel in
+request headers the service sets from the job; the model chooses the tool and its arguments, never
+the scope.
 
-Postgres admits Azure services through its firewall because Consumption-profile Container Apps have
-no fixed outbound address; sign-in still needs a token for a role the server knows.
+Postgres admits Azure services through its firewall because the Container Apps environment has no
+virtual network or NAT gateway, so its outbound addresses can change; sign-in still needs a token for
+a role the server knows.
 
 ## Cost
 
@@ -322,10 +352,10 @@ dollars, for 20 October to 10 November (22 days):
 | Log Analytics, with the Application Insights traces | pay as you go, capped at 0.2 GB/day | first 5 GB/month free, then $2.30/GB | $0–4 |
 | Storage | Standard LRS, hot: the processor's checkpoints | $0.05 per 10,000 writes or lists | $5–6 |
 | Web PubSub | Free | $0 | $0 |
-| Container Apps, the agents service from 20 October | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
-| Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–14 |
-| Azure AI Translator | Free (F0): 2 million characters a month | $0 | $0 |
-| **Total** | | | **$47–70** |
+| Container Apps, the agents service | 0.5 vCPU, 1 GiB, always on | as above | $8–9 |
+| Foundry, gpt-5-mini | Global Standard | $0.25 per million input tokens, $2.00 per million output (prices of 20 October) | $1–16 |
+| Azure AI Translator, when enabled | Free (F0): 2 million characters a month | $0 | $0 |
+| **Total** | | | **$47–72** |
 
 Storage is billed by operation, and nearly all of them are the processor's partition ownership:
 every 5–6 seconds it lists the ownership blobs and renews its claim on both partitions, three
@@ -334,39 +364,41 @@ checkpoint write per publishing step, 1,364 for a whole match.
 
 The overlay contract, the producer's desk and the fan view add no resource. Translation uses the
 Translator's free tier of 2 million characters a month: the showcase's 36 template cards come to
-5,335 characters of English and 13,502 as sent for each language, since the Translator bills the
-markup that marks the names too ([Translator FAQ](https://learn.microsoft.com/en-us/azure/ai-services/translator/translator-faq)).
+about 5,400 characters of English and 13,800 as sent for each language, since the Translator bills
+the markup that marks the names too ([Translator FAQ](https://learn.microsoft.com/en-us/azure/ai-services/translator/translator-faq)).
 Agent drafts add a few hundred characters each, every version is billed once for each of the two
-languages, the history a catch-up lists is translated as well, and replays after the first reuse the
-translations they have met. The tier also limits the rate, to about 33,300 characters a minute; the
-worker sends ten cards a request and backs off when refused, and none of the 18 batches in the replay
-from 81' above was refused. A subscription can have only one free Translator: `azd env set
-TRANSLATOR_SKU S1` makes it the Standard tier, billed by the character, where one exists already.
-Application Insights has no charge of its own: its traces are ingestion into the workspace, 105 KB
-for that replay, under the same free 5 GB and daily cap. In Postgres the pushes
-kept for delayed viewers take about 1.1 KB an event, around 2 MB for a replay from kick-off; the
-insight pushes kept beside them, about fifty a replay, the largest 2,310 bytes; and the tracking
-7 MB once. The server's 32 GB holds them all. A viewer's pitch view fetches 960 bytes of
-tracking per second of match, about 6 MB for a whole match at any speed.
+languages, and the cards a replay's backfill found are translated as well, all of them, though the
+catch-up lists only some. Replays after the first reuse the translations they have met. The tier
+also limits the rate, to about 33,300 characters a minute; the worker sends ten cards a request and
+backs off when refused, and none of the 18 batches in the replay from 81' above was refused. A
+subscription can have only one free Translator: `azd env set TRANSLATOR_SKU S1` makes it the
+Standard tier, billed by the character, where one exists already.
+Application Insights has no charge of its own: its traces are ingestion into the workspace, about
+100 KB for that replay under the default sampler, within the same free 5 GB and daily cap. In
+Postgres the pushes kept for delayed viewers come to about 1.4 KB of JSON an event, about 2.5 MB for
+a replay from kick-off (measured by folding the showcase offline); the insight pushes kept beside
+them number about a hundred a replay from kick-off, the largest about 4.3 KB; and the tracking is
+kept once, 960 bytes a second of match, which is also what a viewer's pitch view fetches at any
+speed: about 6 MB for a whole match. The server's 32 GB holds them all.
 
-The model costs nothing until it is called. A card cost $0.004 on average in the recorded
-evaluation run, and $0.009 at most, for the full-time recap, which reads the whole story
+The model costs nothing until it is called. A card cost about half a US cent on average in the
+recorded evaluation run, and under a cent at most, for a recap, which reads the whole story
 ([evaluations.md](evaluations.md)). A full match has 13 cards to draft (the restated goal twice),
 so a replay from kick-off costs about $0.06 the first time and close to nothing after, because later
 replays reuse the accepted drafts, catch-ups included. A change to what the agents are told or shown
-changes the versions in the cache key, so the next replays draft afresh. The ceiling is the daily cap
-on agent runs (`AGENT_DAILY_RUNS`, 150): about $0.65 a day at that average, about $14 over the 21
+changes the versions in the cache key, so the next replays draft again. The ceiling is the daily cap
+on agent runs (`AGENT_DAILY_RUNS`, 150): about $0.70 a day at that average, about $16 over the 22
 days if every day reached it. An evaluation run drafts 17 cards outside the cap, about $0.08 at list
 prices, plus the judge's calls; it is run by hand after such a change.
 
-Web PubSub's Free tier allows 20 concurrent connections and 20,000 outbound messages a day, counted
-in 2 KB units. A viewer watching a whole match at any speed receives about 2,000: one per event, the
-insight changes (about a hundred now that translations arrive as pushes of their own, the larger in
-two or three units), the snapshot and the end. The free tier covers about ten full-match viewers a
-day. Standard costs $1.61 a day; moving to it
-for judging (27 October to 10 November) would add $24. A tier change between Free and Standard
-takes the service offline for 30–60 minutes while its address changes, so it has to happen before
-submission.
+Web PubSub runs on its Free tier for judging: 20 concurrent connections and 20,000 outbound messages
+a day, counted in 2 KB units. A viewer watching a whole match at any speed receives about 2,000: one
+per event, about a hundred insight changes (the larger in two or three units), the snapshot and the
+end, so a day's messages cover about ten full-match viewers. Past either limit the pages keep up by
+polling every 3 seconds: a page whose connection is refused does so, and so does a connected page
+whose pushes have stopped while the replay plays on. Standard ($1.61 a day) would raise both limits
+but bills the messages past its daily allowance with no ceiling, so judging stays on Free, where a
+spent quota slows the pages to polling and costs nothing.
 
 An Azure budget of US$100 covers 1 October to 31 December and emails at 50%, 80% and 100% of
 actual spend and when the forecast passes 100%. It doesn't stop spending, so the design keeps fixed

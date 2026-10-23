@@ -12,9 +12,10 @@ build/
 *.egg-info/
 
 # Generated match data: rebuilt from seeds with `python -m footnote.generator`.
-# Committed: the league, the showcase match (the files the services deploy), its recipe, the name
-# check and the agents' recorded evaluation run, which CI replays. Everything else under data/ is
-# rebuilt on demand.
+# Committed: the league and the showcase match with their answer keys (the services deploy the league
+# and match files; the answer keys stay out of the images), the showcase's recipe, the name check and
+# the agents' recorded evaluation run, which CI replays. Everything else under data/ is rebuilt on
+# demand.
 /data/*
 !/data/showcase_recipe.json
 !/data/name_check.json
@@ -28,7 +29,7 @@ build/
 !/data/answer_key/league.json
 !/data/answer_key/fl-2627-showcase-sal-kin.json
 
-# Node (frontend, from Day 2)
+# Node (the web app in frontend/)
 node_modules/
 .next/
 
@@ -37,6 +38,12 @@ node_modules/
 .env.*
 !.env.example
 .azure/
+*.pem
+*.key
+*.pfx
+
+# Instructions for coding agents, kept on this machine only
+CLAUDE.md
 
 # Editors and OS
 .vscode/

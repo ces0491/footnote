@@ -1,19 +1,23 @@
 # What each person sees
 
-One showcase match, five people watching it, the screens they use, what the
-overlay data has to carry to serve them all, and the two-minute video that comes
-out of it. The people and their needs come from [audience.md](audience.md);
-numbers in principle references (P1–P8) point to its design principles.
+This document follows the showcase match through five viewers: the screens they
+use, what the overlay data has to carry for them, and the two-minute video. The
+people and their needs come from [audience.md](audience.md); numbers in
+principle references (P1–P8) point to its design principles.
 
-Figures in the sketches show format only. The showcase match's real figures come
-from the generator.
+Figures and card wording in the sketches show format only. The showcase match's
+own figures come from the generator, and its cards' wording from the templates
+and the agents ([evaluations.md](evaluations.md) has the agents' recorded
+cards).
 
 ## The showcase match
 
 **Saltmarsh Rovers v Kingsferry Athletic.** Saltmarsh keep the ball and press
-high. Kingsferry sit deep and break quickly. The match isn't scripted: a search
-reruns the generator from saved points with new seeds until each moment below
-happens, as [data.md](data.md#the-showcase-match) explains.
+high. Kingsferry sit deep and break quickly. A search reruns the generator from
+saved points with new seeds until each moment below happens. Two things are set
+by hand: the provider's first call on the 81st-minute goal, a Penhallow own goal
+amended at 84', and the named cast, who are never substituted
+([data.md](data.md#the-showcase-match)).
 
 | Cast | Club | Role |
 | --- | --- | --- |
@@ -52,7 +56,9 @@ happens, as [data.md](data.md#the-showcase-match) explains.
 
 The fan app is one web app. On a desktop it shows the match (our own 2D pitch
 render standing in for the video) with overlays, plus a side panel. On a phone
-it shows the panel only, as a second screen next to the TV.
+it leaves out the pitch view: the scoreboard, the described feed when it's on,
+the panel, the match state and the key moments stack in one column, as a second
+screen next to the TV.
 
 ### Producer console
 
@@ -73,10 +79,15 @@ State  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒ 
 ```
 
 Each card shows its reason and its evidence, and opening the evidence lists the
-events. A card starts as the template version and swaps to the agent's version
-when it arrives, marked either way. Nothing airs without Approve (P3), and Approve
-waits for an agent's draft that is on its way, so what airs is the wording Nadia
-saw. A lower third approved after its moment goes on air from the approval.
+events; **Agent runs** shows the agents' work on it. A card starts as the
+template version and swaps to the agent's version when it arrives, marked either
+way. In a replay started as Nadia, nothing airs until she approves it (P3), and
+Approve waits for an agent's draft that is on its way, so what airs is the
+wording Nadia saw. A lower third approved after its moment goes on air from the
+approval. Beside each card, **Edit** and **Kill** act before it airs, and
+**Withdraw** takes it off air, after which **Approve again** puts it back;
+**Redraft** asks the agents for fresh wording. The **Approve automatically**
+switch lets cards through as they're found, from then on.
 
 ### Fan view, casual
 
@@ -138,18 +149,25 @@ DESCRIBED FEED     Detail: Standard ▾   Pace: Normal ▾   [Pause]
 ```
 
 Lines come from templates over the event data, so they say only what the events
-contain, and each graphic is read out once, as it airs, in the viewer's language
-and marked as such for the screen reader. The detail levels are key moments only
-(goals, shots, VAR, cards, substitutions, corrections, the clock), standard (adds
-the build-up: changes of possession in open play, passes and runs that take the
-ball forward, crosses, fouls and set pieces other than throw-ins) and full (every
-pass and run, throw-ins, tackles, interceptions, clearances and blocks). The
-device's screen reader speaks the feed through a live region at the pace the
-listener picks. Up to three lines waiting are said together, so a pass and the
-shot it sets up are heard as one; when more back up in a fast replay, it says
-the key moments among them, each with the line that led up to it, and the latest
-line, and after a pause every key moment that waited and the latest line, rather
-than the whole backlog (P8).
+contain. Each graphic is read out once, as it airs, in the viewer's language and
+marked as such for the screen reader. The device's screen reader speaks the feed
+through a live region at the pace the listener picks. The detail levels:
+
+- **Key moments:** goals and shots, VAR, cards and penalties, substitutions,
+  corrections and the clock (kick-off, added time, half-time, full time).
+- **Standard** adds the build-up: changes of possession in open play, passes
+  and runs that take the ball forward, crosses, through balls, fouls, offsides,
+  injuries and set pieces other than throw-ins.
+- **Full** adds every pass and run, throw-ins, tackles, interceptions,
+  clearances, blocks and the keeper's claims.
+
+When lines back up (P8):
+
+- up to three waiting lines are said together, so a pass and the shot it sets
+  up are heard as one;
+- with more than three, in a fast replay, it says the key moments among them,
+  each with the line that led up to it, then the latest line;
+- after a pause it says every key moment that waited, then the latest line.
 
 ### Catch-up
 
@@ -168,52 +186,56 @@ Before you joined   23'      Femi Adeyani scores
 
 The recap agent writes it from the match's moments when the replay reaches its starting point. It
 tells what happened, goals included, and leaves the score line to the scoreboard beside it. A fan
-reading in Spanish or French gets it, and the moments under it, in their language.
+reading in Spanish or French gets it, and the moments under it, in their language once translated.
 
 ### Settings
 
-Mode, club, player, metric, language, stream delay, calm mode and described-feed
-detail and pace. They're stored under the viewer's profile and restored on the
-next visit.
+Mode, club, player in focus, pinned metric, language, stream delay, calm mode,
+the pitch view and its graphics, and the described feed with its detail and
+pace. They're kept in the browser and restored on the next visit.
 
-## One match, five people
+## Minute by minute
 
-**23', Kingsferry score.** The state model ranks "against the run of play" first
-because a goal came from Kingsferry's first transition after a long Saltmarsh
-control spell. Nadia gets the card at once with the template wording, the agent
-version replaces it a few seconds later, and Nadia approves it for air. Sam's
-stream is 40 s behind, so the overlay and the "why it matters" card wait until
-the goal appears on Sam's screen, or until Nadia approves the card if that comes
-later, and carry the wording she approved. Priya
-sees the same moment with the key pass's difficulty. Tom hears the build-up as
-it happens on the event feed and the goal line straight after.
+**23', Kingsferry score.** The goal ranks first on Nadia's shortlist, raised by
+the match-state model because Saltmarsh were on top for most of the ten minutes
+before it. Nadia gets the card at once with the template wording, the agent
+version replaces it once drafted (8 to 24 seconds in the recorded evaluation
+run) or at once when an earlier replay's draft is reused, and Nadia approves it
+for air. Sam's stream is 40 s behind, so the overlay and the "why it matters"
+card wait until the goal appears on Sam's screen, or until Nadia approves the
+card if that comes later, and carry the wording she approved. Priya sees the
+same moment with the key pass's difficulty. Tom hears the build-up as it happens
+on the event feed and the goal line straight after.
 
 **31', offside.** Every viewer gets the VAR status as soon as the check starts,
 timed to their own playback. When the decision lands, Sam's card shows the
-freeze-frame and the one-line rule. Tom hears "No goal. Dellow was offside when
-Varlan passed." Priya's view logs it against Varlan's pass, the hardest Varlan
-has attempted so far.
+freeze-frame and the one-line rule. Tom hears the decision ("VAR decision: no
+goal") and the card read out. Priya's view shows the pass that set it up,
+Varlan's hardest completed pass so far.
 
 **38'–45', pressure.** The state model marks a sustained pressure spell. Nadia's
-shortlist offers it as a segment graphic. Priya's timeline shades it with the
-spell's numbers. Sam sees "Saltmarsh are camped in Kingsferry's half" during the
-next stoppage, not mid-attack.
+shortlist offers it as a segment graphic. Priya's timeline shades the spell, and
+the segment card gives its figures. Sam sees the card ("Saltmarsh pinning
+Kingsferry back") at the next stoppage.
 
 **Half-time.** Recaps in each mode. Tom's feed reads the score, the two key
 moments and who has had the ball.
 
-**52', Varlan equalises.** Shot speed tag on the overlay. Priya's player line
-updates. Sam's "who's on top" bar moves with the shift in control.
+**52', Varlan equalises.** The goal card gives the shot's distance and speed
+for analysts. Priya's player line updates. Sam's "who's on top" bar moves with
+the shift in control.
 
 **60', Lucía joins.** Lucía opens the app in Spanish, reads "what you missed"
-in Spanish, goes back to the match, and from then on gets Spanish versions of
-every card. Numbers, minutes and names in them are checked
-against the English source.
+in Spanish, goes back to the match, and from then on gets each card in Spanish
+once its translation passes the check against the English source (figures,
+minutes, names and score lines); a card that fails stays in English, marked as
+such.
 
-**63'–68', chaos.** The state model detects the match losing its shape: rapid
-changes of possession, few completed sequences. Nadia gets a rhythm card:
-"Neither side has strung more than four passes together since the hour." Priya
-sees the chaos segment on the timeline.
+**63'–68', chaos.** The state model finds neither side in control: rapid
+changes of possession, few completed sequences. Nadia gets a rhythm card on how
+often the ball changed hands in the last three minutes and the longest run of
+passes either side strung together. Priya sees the chaos segment on the
+timeline.
 
 **74', handball check.** Same pattern as the offside: status first, decision and
 rule explanation in the stoppage.
@@ -235,14 +257,16 @@ From the walkthrough, each item in the overlay feed needs:
 
 - **Identity and lineage:** item ID, match ID, the event IDs it cites, and the ID
   of any item it corrects or replaces
-- **Timing:** match clock (period, minute, second), feed timestamp, display-at in
-  match time (so each client can hold it against its own playback), duration
+- **Timing:** match clock (period, minute, second), feed timestamp, the match
+  time it may show from (`shown_at`, so each client can hold it against its own
+  playback), duration
 - **Ranking:** rank score and the reason it was ranked
 - **Kind:** moment, stat, player tag, rule call, segment, recap, correction
 - **Content:** template ID and field values for graphics systems; text per mode
   and language; a plain-text equivalent for screen readers
 - **Provenance:** template or agent, the agent run ID, and which checks passed
-- **Status:** drafted, approved, aired, withdrawn, with who changed it and when
+- **Status:** drafted, approved, withdrawn or killed, with who changed it and
+  when
 - **Presentation hints:** placement (lower third, side panel, full card), motion
   level for calm mode
 
@@ -265,13 +289,4 @@ Under two minutes, recorded from the deployed app.
 
 ## The judges' path
 
-1. Open the live URL and pick who to watch as: Nadia the producer, or one of the
-   ready-made fans. Starting as Nadia means approving each graphic by hand; a
-   fan's replay approves them as they're found.
-2. Start the showcase match from a jump point: 23', 31', 60' or 81'. The start
-   page says what happens at each and who to watch it as.
-3. Switch between Nadia and the fans mid-match to see the same moment change: Sam
-   gets it 40 seconds of match time after Nadia's console does, which is 20
-   seconds at 2×, or as Nadia approves it if that comes later.
-4. Open any card's evidence to see the events behind it, and in the console the
-   agents' runs on it.
+The judges' path is in the [README](../README.md#try-it).
