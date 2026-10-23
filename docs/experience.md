@@ -275,17 +275,20 @@ is [overlay.md](overlay.md).
 
 ## The video
 
-Under two minutes, ending by 1:55, recorded from the deployed app.
+1:55 long, its footage filmed from the deployed app.
 
 | Time | Beat | Shows |
 | --- | --- | --- |
 | 0:00–0:10 | What Footnote does, in one line | Pitch with an overlay landing |
 | 0:10–0:35 | 23' goal: ranked shortlist, reason, evidence, the agents' run (MCP tool calls, checks, time and tokens), approve | Nadia's console, Agent runs |
-| 0:35–1:00 | The same goal for Sam (held for the stream delay), Priya (player focus), Lucía (Spanish) | Split screen |
-| 1:00–1:20 | 31' offside, read by a real screen reader from Tom's feed | Described feed with audio |
-| 1:20–1:35 | 84' correction flows to the console and every fan | Correction alert, the corrected card back for approval |
+| 0:35–0:57 | The same goal for Priya (player focus), Lucía (Spanish) and Sam (held for the stream delay) | Each fan's pitch in turn, then the three side by side |
+| 0:57–1:20 | 31' offside: the announcements Tom's described feed gave the screen reader, read by text-to-speech | Described feed with audio and captions |
+| 1:20–1:35 | 84' correction reaches the console, and the corrected graphic goes on air | Corrections, the restated card back for approval |
 | 1:35–1:50 | How it runs: architecture, state model scored against the answer key, measured latency | Diagram and figures |
 | 1:50–1:55 | Close and synthetic-data disclaimer | End card |
+
+The music was synthesised in code for the video, and the voice is a Windows text-to-speech voice
+reading the feed's own words, trimmed to fit.
 
 ## The judges' path
 
