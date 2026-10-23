@@ -71,11 +71,10 @@ BASE_RANK = {
 
 # Topics an agent drafts; the rest keep their template. Agents go where wording adds something: a
 # recap's template can list the goals, but only a writer can tell the story of the half. A
-# correction's notice and a VAR decision keep their templates, which say what happened plainly. In
-# five of seven recordings an agent's notice added nothing, and the others slipped ("It is not Jory
-# Penhallow's own goal", where the old credit reads aloud as the scorer); agents' VAR cards gave a
-# penalty check to the wrong side, wrote a handball VAR had found none of, and "the goal that would
-# have equalise".
+# correction's notice and a VAR decision keep their templates, which say what happened plainly: an
+# agent's version adds nothing a viewer needs, and can put the old credit where it reads aloud as the
+# scorer ("It is not Jory Penhallow's own goal"), give a penalty check to the wrong side, write of a
+# handball VAR found none of, or say "the goal that would have equalise".
 AGENT_TOPICS = frozenset(
     {
         "goal",
@@ -705,7 +704,7 @@ class MomentFinder:
         share_text = f"{round(held * 100)}% of the last {stretch.display}"
         reason = {
             "pressure": f"Sustained pressure: {who}pinning the other side back for {share_text}",
-            "chaos": f"No shape: chaos for {share_text}",
+            "chaos": f"Neither side in control for {share_text}",
             "control": f"Control: {who}in control for {share_text}",
         }[topic]
         team_part = f"-{team_id}" if team_id else ""
@@ -780,13 +779,14 @@ class MomentFinder:
             "recap.away_shots": _count_of(teams[away]["shots"], "shot", f"shots by {self.club(away)}"),
         }
         goals = _goals_standing(state)
+        # Always given, so a recap with none says so through a fact ("no goals"), as every count does.
+        f["recap.goal_count"] = _count_of(len(goals), "goal", "how many goals stand so far")
         if goals:
             f["recap.goals"] = F.text(
                 ", ".join(_goal_text(g.facts, g.topic == "own_goal") for g in goals),
                 "the goals so far as they stand: scorer, the club the goal counts for, and minute",
                 tuple(e for g in goals for e in g.facts["moment.scorer"].events),
             )
-            f["recap.goal_count"] = _count_of(len(goals), "goal", "how many goals stand so far")
         return f | self._credits_changed(goals)
 
     def _credits_changed(self, goals: list[Insight]) -> Facts:
@@ -803,7 +803,10 @@ class MomentFinder:
         for n, (goal, first, own_goal) in enumerate(changed, start=1):
             key, scorer = f"recap.correction.{n}", goal.facts["moment.scorer"]
             f[f"{key}.minute"] = F.minute(
-                goal.at["minute"], goal.at["added_minute"], "minute of the goal credited afresh", scorer.events
+                goal.at["minute"],
+                goal.at["added_minute"],
+                "minute of the goal now credited to another player",
+                scorer.events,
             )
             f[f"{key}.before"] = F.text(self.name(first), "who the goal was originally credited to", scorer.events)
             if own_goal:

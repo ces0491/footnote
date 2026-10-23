@@ -168,7 +168,7 @@ def hard_pass(f: Facts) -> Draft:
 
 
 def shot_speed(f: Facts) -> Draft:
-    # Headed like the hardest pass, so it can't be taken for a sprint's "hits 33.9 km/h".
+    # Headed as a record, so it can't be taken for a sprint's "hits 33.9 km/h".
     return Draft(
         headline="Fastest shot yet: {moment.shooter}",
         casual=[
@@ -186,10 +186,7 @@ def sprint(f: Facts) -> Draft:
     return Draft(
         headline="{moment.player} hits {moment.speed}",
         casual=[_s("{moment.player} sprints at {moment.speed}, the fastest of the match so far.")],
-        # "Smoothed as tracking providers report it" came back as "lissée au fur et à mesure que".
-        analyst=[
-            _s("Top speed in the tracking data at {moment.minute}, with the smoothing that tracking providers use.")
-        ],
+        analyst=[_s("Top speed in the tracking data at {moment.minute}.")],
     )
 
 
@@ -260,11 +257,11 @@ def _goals(f: Facts, so_far: str = "") -> str:
 
 def told(f: Facts) -> list[Sentence]:
     """The sentences that end a recap's casual line, the template's and an agent's alike: one for each
-    goal standing that the data provider credited to another player. Told by the agents, the change
-    kept slipping in the full-time recap's redrafts: the new scorer named twice ("Femi Adeyani restored
-    the lead; the goal was later credited to Femi Adeyani"), or no verb at all ("Femi Adeyani's goal,
-    originally credited to Jory Penhallow."). The old credit gets a clause of its own: after "not", or
-    in brackets, it read aloud as the scorer's."""
+    goal standing that the data provider credited to another player. Code writes them because an
+    agent's version can name the new scorer twice ("Femi Adeyani restored the lead; the goal was later
+    credited to Femi Adeyani") or leave out the verb ("Femi Adeyani's goal, originally credited to Jory
+    Penhallow."). The old credit gets a clause of its own: after "not", or in brackets, it reads aloud
+    as the scorer's."""
     sentences = []
     n = 1
     while f"recap.correction.{n}.after" in f:
@@ -297,7 +294,7 @@ def catch_up(f: Facts) -> Draft:
     if "recap.goals" in f:
         casual = [_s(_goals(f, " so far"))]
     else:
-        casual = [_s("No goals so far.", *_event(f, "recap.to"))]
+        casual = [_s("There have been {recap.goal_count} so far.", *_event(f, "recap.to"))]
     return Draft(headline="What you missed, up to {recap.to}", casual=[*casual, *told(f)], analyst=_recap_figures())
 
 

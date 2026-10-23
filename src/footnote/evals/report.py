@@ -1,4 +1,4 @@
-"""docs/evaluations.md, written from a live evaluation run."""
+"""docs/evaluations.md, written from the recorded live run replayed through today's code."""
 
 from __future__ import annotations
 
@@ -9,44 +9,41 @@ from footnote.evals.groundedness import NAME as GROUNDED
 from footnote.evals.judges import EVALUATORS
 from footnote.evals.run import Result
 
-# gpt-5-mini Global Standard list prices, US dollars per token, as docs/insights.md gives them
-# (Azure Retail Prices API, 20 October 2026).
+# gpt-5-mini Global Standard list prices, US dollars per token, as docs/architecture.md's cost table
+# gives them (Azure Retail Prices API, 20 October 2026).
 INPUT_PRICE = 0.25 / 1_000_000
 OUTPUT_PRICE = 2.00 / 1_000_000
 
 _INTRO = """\
 # Agent evaluations
 
-How well the agents word the showcase match's cards, measured on every card an agent drafts. Each
-case is a job the agents service gets in a replay: every card from kick-off, the 81st-minute goal
-again after its correction, and the catch-up that opens a replay from 23', 31', 60' and 81'. The
-writer runs as it does in the service: the same instructions, the match tools over MCP, and code's
-checks with one revision ([insights.md](insights.md#the-agents)).
+How well the agents word the showcase match's cards. Each case is a job the agents service gets in
+a replay: every card the agents draft in a replay from kick-off, the 81st-minute goal again after
+its correction, and the catch-up that opens a replay from 23', 31', 60' and 81'. The writer runs as
+it does in the service: the same instructions, the match tools over MCP, and code's checks with one
+revision ([insights.md](insights.md#the-agents)).
 
-The checks make sure every figure and name came from code. The evaluators here judge some of what
-the checks can't. Four are code (`src/footnote/evals/judges.py`), and each is a rough test: whether
-the card has the surname of who it is about, whether each of a short list of claims made in words
-(an equaliser, an own goal, a goal ruled out and a few more) has a fact of its kind among the
-writer's facts, whether the casual line is more than the template's reworded, and whether a number
-fact takes up both lines. None of them can tell whose a claim is, so a card that gives the right
-words to the wrong player or moment passes all four. The fifth is a
-model's judgement: Azure AI Evaluation's groundedness evaluator, on the same Foundry deployment,
-reads each card against the facts its writer was given and scores it from 1 to 5, passing at 3
-(`src/footnote/evals/groundedness.py`). It catches a sentence that contradicts the facts, such as
-"the only shot of the match" when the match has had three, but it is lenient: in the runs of 21
-October it scored 4 or 5 a card that gave Varlan's pass the minute of the VAR decision on it, one
-that wrote of a handball VAR had found no offence in, and one that said a counter started with the
-pass that ended it. Reading the cards stays part of a review.
+The checks refuse a draft that types a figure or names someone the facts don't. The evaluators
+judge some of what the checks can't. Four are rough tests in code, described in the table below
+(`src/footnote/evals/judges.py`). None of them can tell whose a claim is, so a card that gives the
+right words to the wrong player or moment passes all four. The fifth is Azure AI Evaluation's
+groundedness evaluator, on the same Foundry deployment (`src/footnote/evals/groundedness.py`). It
+catches a sentence that contradicts the facts, such as "the only shot of the match" when the match
+has had three, but it is lenient. In earlier recordings, from 21 October, whose cards aren't in the
+tables below, it scored 4 or 5 a card that gave Varlan's pass the minute of the VAR decision on it,
+one that wrote of a handball VAR had found no offence in, and one that said a counter started with
+the pass that ended it. Reading the cards stays part of a review.
 
-CI replays the recorded drafts through the current checks and evaluators on every push
-(`tests/test_evals.py`), and fails unless three cards in four pass every evaluation and every draft
-accepted when recorded is still accepted: a change to the checks or the facts that a recorded draft
-no longer passes fails the build. Each part of what the writers are told and shown (the
-instructions, the match tools with the templates' wording they return, the writer's workflow) is
-named by its version and a fingerprint of its code, as is the model's reasoning effort, and the
-recording keeps them, so a change to any of them fails the build too until the evaluations are run
-and recorded again. The judge's verdicts are replayed as recorded; a reply from the judge that can't
-be read is asked for again, up to three times, before it counts as a fail.
+CI (`tests/test_evals.py`) replays the recorded drafts through the current checks and evaluators on
+each push to main and each pull request. It fails unless three cards in four pass every evaluation,
+every draft accepted when recorded is still accepted, and this page is what the replay writes. A
+change to the checks or the facts that a recorded draft no longer passes fails the build. The
+recording keeps the version and a fingerprint of the code of each part of what the writers are told
+and shown (the instructions, the match tools with the templates' wording they return, the writer's
+workflow), and the model's reasoning effort, so a change to any of them fails the build too until
+the evaluations are recorded again. The judge's verdicts are replayed as recorded. When a reply
+from the judge can't be read, the judge is asked again, up to three tries in all, before the card
+counts as a fail.
 """
 
 
@@ -58,8 +55,8 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-def write_report(path: Path, results: list[Result], recording: dict, replayed: bool = False) -> None:
-    """The report on a live run, or on its replay through today's checks and code evaluators."""
+def write_report(path: Path, results: list[Result], recording: dict) -> None:
+    """The report on a recording, from its replay through today's checks and code evaluators."""
     accepted = [r for r in results if r.outcome == "accepted"]
     first = sum(r.attempts == 1 for r in accepted)
     verdicts = [v for r in accepted for v in r.verdicts]
@@ -74,8 +71,6 @@ def write_report(path: Path, results: list[Result], recording: dict, replayed: b
         f"The cards were drafted and judged by `uv run --group evals python -m footnote.evals live --record` on {run}. "
         "This report replays them through the current checks and code evaluators: "
         "`uv run python -m footnote.evals replay --report`."
-        if replayed
-        else f"Generated by `uv run --group evals python -m footnote.evals live --record --report` on {run}."
     )
     lines = [
         _INTRO,
@@ -108,7 +103,7 @@ def write_report(path: Path, results: list[Result], recording: dict, replayed: b
         lines.append(f"| {name} | {sum(x.passed for x in mine)} of {len(mine)} | {doc} |")
     lines += [
         "",
-        "## Every case",
+        "## Cases",
         "",
         "| Case | Outcome | Headline and casual line | Evaluations |",
         "| --- | --- | --- | --- |",

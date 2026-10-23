@@ -3,7 +3,9 @@ through today's writer workflow, checks and evaluators (docs/evaluations.md)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from footnote.evals.judges import (
     names_the_subject,
     one_line_per_figure,
 )
+from footnote.evals.report import write_report
 from footnote.evals.run import JUDGE_TRIES, PASSING_SHARE, Result, judge_groundedness, passing, replay, stale
 from footnote.insights import facts as F
 from footnote.insights.draft import Card, Draft, Sentence, render
@@ -29,7 +32,9 @@ from footnote.insights.facts import Facts
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 
-RECORDING = Path(__file__).resolve().parents[1] / "data" / "evals" / "drafts.json"
+ROOT = Path(__file__).resolve().parents[1]
+RECORDING = ROOT / "data" / "evals" / "drafts.json"
+REPORT = ROOT / "docs" / "evaluations.md"
 
 
 @pytest.fixture(scope="module")
@@ -186,7 +191,21 @@ def test_the_cases_are_every_agent_job_in_a_replay(showcase: Match, analysis: An
     assert len(keys) == len(set(keys))
 
 
-async def test_the_recorded_run_passes_todays_checks_and_evaluations(showcase: Match, analysis: Analysis) -> None:
+@pytest.fixture(scope="module")
+def replayed(showcase: Match, analysis: Analysis) -> tuple[dict, list[Case], list[Result]]:
+    """The recording, the cases and the recorded run replayed once through today's writer workflow,
+    checks and evaluators, on the loop the CLI uses."""
+    recording = json.loads(RECORDING.read_text(encoding="utf-8"))
+    all_cases = cases(showcase, analysis)
+    factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    with asyncio.Runner(loop_factory=factory) as runner:
+        results = runner.run(replay(showcase, analysis, all_cases, recording))
+    return recording, all_cases, results
+
+
+def test_the_recorded_run_passes_todays_checks_and_evaluations(
+    replayed: tuple[dict, list[Case], list[Result]],
+) -> None:
     """The model's recorded output, replayed through today's writer workflow, checks and evaluators.
 
     A change to the checks, the facts or the tools that a recorded draft no longer passes fails here;
@@ -194,14 +213,26 @@ async def test_the_recorded_run_passes_todays_checks_and_evaluations(showcase: M
     fingerprint of the code) until the evaluations are run and recorded again:
     `uv run --group evals python -m footnote.evals live --record --report`.
     """
-    recording = json.loads(RECORDING.read_text(encoding="utf-8"))
+    recording, all_cases, results = replayed
     assert stale(recording) == [], "record the evaluations again"
-    all_cases = cases(showcase, analysis)
     assert {c.key for c in all_cases} == set(recording["cases"]), "record the evaluations again"
-    results = await replay(showcase, analysis, all_cases, recording)
     for result in results:
         live = recording["cases"][result.case.key]["outcome"]
         if live == "accepted":
             assert result.outcome == "accepted", (result.case.key, result.problems)
             assert any(v.evaluator == "grounded" for v in result.verdicts), result.case.key
     assert passing(results) >= PASSING_SHARE, [(r.case.key, [v for v in r.verdicts if not v.passed]) for r in results]
+
+
+def test_the_evaluations_page_is_the_recordings_replay(
+    replayed: tuple[dict, list[Case], list[Result]], tmp_path: Path
+) -> None:
+    """docs/evaluations.md is what `python -m footnote.evals replay --report` writes from the recording,
+    so a change to the checks shows on the page as soon as it lands."""
+    recording, _, results = replayed
+    written = tmp_path / "evaluations.md"
+    write_report(written, results, recording)
+    committed = REPORT.read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert written.read_text(encoding="utf-8").replace("\r\n", "\n") == committed, (
+        "write it again: uv run python -m footnote.evals replay --report"
+    )

@@ -39,12 +39,8 @@ INSTRUCTIONS = (
 
 # Part of the agents' cache key (agents/worker.py): change it whenever a tool's output changes, so
 # replays stop reusing drafts written from the old output (versions.py adds a fingerprint of this
-# file and the templates in case it isn't). 2026-10-21.1: get_story. 2026-10-21.2: the state of play
-# described in clauses, the correction's facts and the templates reworded. 2026-10-22.1: how a move
-# started in football's words ("open play", not "regular play"). 2026-10-22.2: a goal's reason and a
-# correction's flag without a colon inside them. 2026-10-22.3: a recap's facts and template give who
-# a goal was first credited to when the provider changed it.
-TOOLS_VERSION = "2026-10-22.3"
+# file and the templates in case it isn't). What changed in each version is in git.
+TOOLS_VERSION = "2026-10-23.1"
 
 # Read-only, and about a closed world: the match as stored.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
@@ -495,7 +491,7 @@ def build_server(scopes: Scopes, *, allowed_hosts: list[str] | None = None) -> F
         return await scoped(ctx, moment)
 
     @tool(
-        description="The moments of the match so far, in order (goals, VAR decisions, red cards, spells when one side was on top, corrections), each with its facts and events. For recaps."
+        description="The moments of the match so far, in order (goals, penalties, VAR decisions, red cards, spells when one side was on top, corrections), each with its facts and events. For recaps."
     )
     async def get_story(ctx: Context) -> str:
         return await scoped(ctx, story)

@@ -28,7 +28,6 @@ from collections import Counter
 from footnote.insights.facts import EN_DASH
 
 LANGUAGES = ("es", "fr")
-LANGUAGE_NAMES = {"es": "Spanish", "fr": "French"}
 PARTS = ("headline", "casual", "analyst")
 
 _ENTRY = re.compile(r'<mstrans:dictionary translation="[^"]*">(.*?)</mstrans:dictionary>', re.DOTALL)

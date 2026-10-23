@@ -163,7 +163,7 @@ async def run(
     options: dict,
     *,
     concurrency: int = 3,
-    deadline_seconds: float = 45.0,
+    deadline_seconds: float = Settings.deadline_seconds,
 ) -> list[Result]:
     """Every case, `concurrency` at a time, with the chat client `client_for(case)` gives."""
     slots = asyncio.Semaphore(concurrency)

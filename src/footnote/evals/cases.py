@@ -2,7 +2,7 @@
 
 A replay from kick-off queues every card an agent drafts, in the order they are found, and a card a
 correction restates once more with its new facts. A replay from each of the other jump points
-(docs/experience.md, "The judges' path") also opens with a catch-up. Each job is a case, served to the
+(the judges' path, README.md "Try it") also opens with a catch-up. Each job is a case, served to the
 writer through the real match tools from an in-memory store: each case is a run of its own, so the
 two states of one insight (the 81st-minute goal before and after its correction) don't meet.
 """

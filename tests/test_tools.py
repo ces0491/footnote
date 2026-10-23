@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from footnote.insights.draft import Draft, Sentence, check
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
@@ -153,6 +154,23 @@ async def test_a_catch_up_story_ends_where_the_viewer_joins(showcase: Match, ana
     assert [m["minute"] for m in told["moments"] if m["topic"] == "goal"] == ["23'", "52'"]
     moment = json.loads(tools.moment(scope))
     assert moment["topic"] == "catch_up" and moment["template"]["headline"] == "What you missed, up to {recap.to}"
+
+
+async def test_a_count_of_none_the_tools_show_is_refused_when_typed(
+    source: MemorySource, showcase: Match, analysis: Analysis
+) -> None:
+    """Whatever count of none the tools show ("no corners"), a writer who types it is sent to its
+    placeholder (draft.py)."""
+    scope = await _scope(source, showcase, analysis, "goal-e0391")
+    facts = json.loads(tools.match_stats(scope))["facts"]
+    for player_id in ("sal-10", "kin-07"):
+        facts |= json.loads(tools.player(scope, player_id))["facts"]
+    nones = sorted({f["display"] for f in facts.values() if str(f["display"]).startswith("no ")})
+    assert nones  # early in the match, some counts are none
+    for display in nones:
+        typed = Sentence(text=f"There were {display} before the goal.", events=["e0391"])
+        draft = Draft(headline="Before the goal", casual=[typed], analyst=[typed])
+        assert any("is a count typed as words" in p for p in check(draft, {}, {"e0391"})), display
 
 
 async def test_scopes_fold_once_per_moment(source: MemorySource, showcase: Match, analysis: Analysis) -> None:

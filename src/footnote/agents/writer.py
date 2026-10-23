@@ -41,16 +41,14 @@ from footnote.tools.scope import INSIGHT_HEADER, RUN_HEADER
 MAX_ATTEMPTS = 2
 
 # Part of the agents' cache key (worker.py): change it when the drafting around the model changes in
-# a way that could change a draft or the facts it is checked against. 2026-10-20.2: tool logs no
-# longer mix between concurrent jobs (ToolLog). 2026-10-21.1: limits by topic (recaps), and a draft
-# that repeats the template's casual line is sent back. 2026-10-21.2: a recap keeps the template's
-# heading. 2026-10-22.1: a recap's casual line ends with code's sentence on a goal credited afresh.
+# a way that could change a draft or the facts it is checked against. What changed in each version is
+# in git.
 WRITER_VERSION = "2026-10-22.1"
 
 # A recap's heading is its graphic's fixed one ("Half-time: Saltmarsh 0–1 Kingsferry", "What you
-# missed, up to 59'"), so the template's stands whatever the writer puts there: one headed the
-# full-time recap "Insight ft.", from the job it was given. Its casual line ends with code's sentence
-# on each goal credited to another player (templates.told), as the template's does.
+# missed, up to 59'"), so the template's stands whatever the writer puts there, such as the job's own
+# words. Its casual line ends with code's sentence on each goal credited to another player
+# (templates.told), as the template's does.
 RECAP_TOPICS = frozenset({"half_time", "full_time", "catch_up"})
 
 
@@ -208,9 +206,9 @@ class Checker(Executor):
             await ctx.yield_output(Outcome(False, draft, problems, attempt.number))
 
     def _as_recap(self, draft: Draft, problems: list[str]) -> Draft:
-        """The writer's recap with the template's heading, and code's sentences on a goal credited
-        afresh at the end of its casual line, in place of any copy of them the writer made. A sentence
-        of the writer's that tells the change again goes into `problems`."""
+        """The writer's recap with the template's heading, and code's sentences on a goal credited to
+        another player at the end of its casual line, in place of any copy of them the writer made. A
+        sentence of the writer's that tells the change again goes into `problems`."""
         if self.log.template is not None:
             draft = draft.model_copy(update={"headline": self.log.template.headline})
         code = told(self.log.facts)

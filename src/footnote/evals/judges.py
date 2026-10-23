@@ -60,7 +60,7 @@ def _surname(name: str) -> str:
 
 def names_the_subject(seen: Seen, card: Card, draft: Draft) -> Verdict:
     """The headline or the casual line has the surname of who the moment is about; a recap's, of
-    every scorer. It looks for the name, not at what the card says about them."""
+    every scorer. It only looks for the name: what the card says about them goes unjudged."""
     text = f"{card.headline} {card.casual}"
     if seen.topic in RECAPS:
         goals = seen.moment.get("recap.goals")
@@ -175,7 +175,8 @@ def _words(text: str) -> set[str]:
 
 def adds_to_the_template(seen: Seen, card: Card, draft: Draft) -> Verdict:
     """Fewer than four in five of the casual line's words are in the template's casual line, so a
-    line that only rewords the template fails; one that keeps most of it and adds a clause passes."""
+    line made mostly of the template's words fails, however they're rearranged; one that keeps most
+    of the template and adds a clause of its own passes."""
     plain = render(template(seen.topic, seen.moment), seen.moment)
     own = _words(card.casual)
     shared = len(own & _words(plain.casual)) / len(own) if own else 1.0

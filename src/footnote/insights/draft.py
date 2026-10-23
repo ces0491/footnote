@@ -10,18 +10,20 @@ and so do the agents.
 
 - every placeholder names a fact the writer was given, and the writer typed no figure of its own:
   no digits, no numbers or ordinals spelled out ("one", "nil", "first goal"), no shares in words
-  ("half the ball", "per cent"), and no "brace" or "hat-trick". Phrases that use those words without
-  stating a figure, such as "first half", "one of" and "final third", are allowed;
+  ("half the ball", "per cent"), no count of none in words ("no goals", "none of the shots",
+  "goalless"), and no "brace" or "hat-trick". Phrases that use those words without stating a figure,
+  such as "first half", "one of" and "final third", are allowed, and so is a decision in the
+  singular, such as "No goal";
 - each sentence is its own entry;
 - a fact's display carries its noun ("13 shots", "2 shots on target"), so the words after its
   placeholder don't say the noun, or part of it, again ("31 passes completed passes"), and a word
   for one thing doesn't go before it ("74% of a 5 minutes"); a minute after a verb such as "began"
   takes "at", and its display has the minute mark, so none follows it ("from 17''"); a spell's length
   isn't where the minute it ended would go ("from 2' to 5 minutes"); a count of times follows what
-  happened, not a form of "be" ("there were 7 times");
-  "only" doesn't go before a count of none ("only no shots"); and a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead Saltmarsh 1–2
-  Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); a goal's situation, said of
-  its club, doesn't follow "have" ("the goal that would have equalise");
+  happened, not a form of "be" ("there were 7 times"); "only" doesn't go before a count of none
+  ("only no shots"); a score line, which names both clubs, doesn't follow a verb ("Kingsferry lead
+  Saltmarsh 1–2 Kingsferry") or "to" ("turns the game to Saltmarsh 1–2 Kingsferry"); and a goal's
+  situation, said of its club, doesn't follow "have" ("the goal that would have equalise");
 - the ball changing hands counts both sides losing it, so no side "forced" it;
 - "effort" isn't written for a shot or a goal: the Translator gave it as a counter-attack, and as a
   shot VAR annulled;
@@ -69,8 +71,8 @@ names the earlier credit through its fact.
 
 The checks catch figures and names a writer made up, a goal ruled out pinned on one that stands, and
 a penalty check's player written as the one it was for. Any other real name from the match given to
-the wrong player, or a sentence that reads the facts unfairly, passes them: the evaluations of the
-agents' output catch some of that, and reading the cards catches the rest (docs/evaluations.md).
+the wrong player, or a sentence that reads the facts unfairly, passes them. The evaluations of the
+agents' output catch some of that (docs/evaluations.md); the rest is down to whoever reads the cards.
 """
 
 from __future__ import annotations
@@ -144,6 +146,15 @@ _NUMBER_IDIOM = re.compile(
 # A share in words: "half the ball", "a quarter of the passes".
 _FRACTION = re.compile(r"\b(?:half|quarters?)\s+(?:of|the|their|its|his|her|our|an|a|as|all)\b", re.IGNORECASE)
 _PERCENT_WORD = re.compile(r"\bper\s?cent\b", re.IGNORECASE)
+# A count of none in words: "No goals so far", "none of the shots", "a goalless half". A count's fact
+# shows none itself ("no shots"), so "no" typed before a counted noun is a figure the writer typed. The
+# nouns are the ones the count facts carry (moments._count_of, tools/server._counted). A decision in
+# the singular, "No goal" or "No penalty", isn't a count.
+_NONE_COUNTED = re.compile(
+    r"\b(?:no|none of the)\s+(?:completed\s+passes|passes|goals|shots|corners|fouls|offsides|"
+    r"(?:yellow|red)\s+cards)\b|\b(?:goalless|scoreless)\b",
+    re.IGNORECASE,
+)
 _BETTING = re.compile(
     r"\b(bet|bets|betting|odds|bookmakers?|bookies?|wagers?|punters?|accumulators?|stake|stakes)\b",
     re.IGNORECASE,
@@ -319,6 +330,11 @@ def _figure_problems(where: str, own: str) -> list[str]:
         problems.append(f"{where}: a share written in words ('{share.group(0)}'); use a fact's placeholder")
     if _PERCENT_WORD.search(own):
         problems.append(f"{where}: 'per cent' written out; a share's placeholder already shows its % sign")
+    if (none := _NONE_COUNTED.search(own)) is not None:
+        problems.append(
+            f"{where}: '{none.group(0)}' is a count typed as words; use the count's placeholder (a count of none"
+            " shows as 'no shots') or leave the count out"
+        )
     return problems
 
 
@@ -761,8 +777,8 @@ def _penalty_side_problems(card: Card, facts: Facts) -> list[str]:
     return problems
 
 
-# A goal the data provider credited afresh, told with its new credit alone ("later credited to Femi
-# Adeyani"), reads as if it had always been that player's.
+# A goal the data provider credited to another player, told with its new credit alone ("later
+# credited to Femi Adeyani"), reads as if it had always been that player's.
 _CREDIT = re.compile(r"\bcredit", re.IGNORECASE)
 # The earlier credit after a word that denies it, in the same clause: "now credited to Femi Adeyani,
 # not Jory Penhallow" read aloud as if Penhallow were the scorer.
@@ -815,7 +831,7 @@ def _credit_problems(card: Card, facts: Facts) -> list[str]:
     return problems
 
 
-# Words that tell a goal was credited afresh.
+# Words that tell a goal was credited to another player.
 _CREDIT_CHANGE = re.compile(r"\b(?:credit\w*|re-?credited|corrected|correction|amend\w*|originally)\b", re.IGNORECASE)
 
 

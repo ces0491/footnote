@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+from footnote.evals.cases import JUMPS
 from footnote.insights.book import Insight
 from footnote.insights.draft import (
     CARD,
@@ -23,6 +24,8 @@ from footnote.insights.templates import told
 from footnote.live.analysis import Analysis
 from footnote.live.match import Match, load_match
 from footnote.live.state import RunState
+from footnote.live.timeline import Timeline
+from footnote.replayer.schedule import plan
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +64,14 @@ def test_every_template_passes_the_checks(showcase: Match, analysis: Analysis, f
     events = {m["event_id"] for m in showcase.feed}
     insights = dict(_insights(final))
     assert len(insights) > 20
-    insights["catchup"] = _insights(_from(showcase, analysis, 1137))["catchup"]  # a replay from 60'
+    # The catch-up from each jump point the start page offers; from 23', no goal has been scored yet.
+    timeline = Timeline.from_feed(showcase.feed)
+    for jump in JUMPS:
+        backfill_seq = plan(showcase.feed, timeline, timeline.jump_point(jump), 1.0).backfill_seq
+        state = RunState.rebuild(
+            showcase.match_id, showcase.home_id, showcase.away_id, showcase.feed[:backfill_seq], analysis, backfill_seq
+        )
+        insights[f"catchup@{jump}"] = _insights(state)["catchup"]
     for insight in insights.values():
         assert check(insight.template, insight.facts, events, limits_for(insight.topic)) == [], insight.insight_id
         assert set(insight.evidence) <= events
@@ -187,7 +197,7 @@ def test_recaps_give_the_goals_as_they_stand(final: RunState) -> None:
     assert full_time.card().casual.startswith("Saltmarsh 1" + chr(0x2013) + "2 Kingsferry at full time.")
 
 
-def test_a_recap_ends_with_codes_sentence_on_a_goal_credited_afresh(
+def test_a_recap_ends_with_codes_sentence_on_a_goal_credited_to_another_player(
     showcase: Match, analysis: Analysis, final: RunState
 ) -> None:
     full_time = _insights(final)["ft"]
@@ -429,6 +439,30 @@ def test_a_count_shows_its_noun_once() -> None:
     assert check(_draft("{teams.SAL.name} have made {teams.SAL.passes} in their own half."), facts, EVENTS) == []
 
 
+def test_a_count_of_none_comes_from_its_fact() -> None:
+    facts = {
+        **FACTS,
+        "recap.goal_count": Fact(0, "no goals", "how many goals stand so far"),
+        "teams.SAL.on_target": Fact(0, "no shots on target", "Saltmarsh's shots on target"),
+    }
+    for casual, typed in (
+        ("No goals so far.", "No goals"),
+        ("{teams.SAL.name} have had no shots on target.", "no shots"),
+        ("It was a goalless first half.", "goalless"),
+        ("None of the shots troubled the keeper.", "None of the shots"),
+    ):
+        problems = check(_draft(casual), facts, EVENTS)
+        assert any(f"'{typed}' is a count typed as words" in p for p in problems), problems
+    # The same count from its placeholder, a decision in the singular, and "no" before a word that isn't counted.
+    for casual in (
+        "There have been {recap.goal_count} so far.",
+        "{teams.SAL.name} have had {teams.SAL.on_target}.",
+        "VAR decides there is no goal for {player.kin-07.name}.",
+        "{teams.SAL.name} find no way through.",
+    ):
+        assert check(_draft(casual), facts, EVENTS) == [], casual
+
+
 def test_a_goal_ruled_out_is_named_by_its_var_decision() -> None:
     facts = {
         **FACTS,
@@ -588,7 +622,7 @@ def test_slips_from_the_recorded_cards_are_refused() -> None:
 def test_a_recap_leaves_a_change_of_credit_to_codes_sentence() -> None:
     facts = {
         **FACTS,
-        "recap.correction.1.minute": minute(81, None, "minute of the goal credited afresh", ("e0391",)),
+        "recap.correction.1.minute": minute(81, None, "minute of the goal now credited to another player", ("e0391",)),
         "recap.correction.1.before": text("Jory Penhallow", "who the goal was originally credited to", ("e0391",)),
         "recap.correction.1.after": text("Femi Adeyani", "who it is credited to now", ("e0391",)),
         "story.15.before": text("Jory Penhallow", "who it was credited to before", ("e0391",)),

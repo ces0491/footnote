@@ -4,17 +4,18 @@
         Draft every case with the Foundry model (FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL, signed
         in through the Azure CLI), as the agents service does, and have the model judge each card's
         groundedness (needs `uv run --group evals`). --record keeps the model's output in
-        data/evals/drafts.json for replaying; --report writes docs/evaluations.md. --only with
+        data/evals/drafts.json for replaying; --report, with --record, then writes
+        docs/evaluations.md from a replay of the recording, as replay --report does. --only with
         --record updates those cases in a recording made with today's versions, and refuses an
         older one: its other cases were drafted with something else. --effort tries another
         reasoning effort than the service's; CI refuses a recording made with it until the service
         uses it too.
     replay [--report]
         Run the recorded output through today's writer workflow, checks and evaluators, as CI does,
-        and pass as CI does; --report writes docs/evaluations.md from the replay.
+        and pass as CI does; --report writes docs/evaluations.md from the replay, which CI compares
+        with the committed page.
 
-A live run of every case drafts about twenty cards and judges each: a few US cents at gpt-5-mini's
-list prices.
+A live run drafts a card for each case and judges it: a few US cents at gpt-5-mini's list prices.
 """
 
 from __future__ import annotations
@@ -101,7 +102,10 @@ async def live(only: list[str], record: bool, report: bool, deadline: float, eff
         RECORDING.parent.mkdir(parents=True, exist_ok=True)
         RECORDING.write_text(json.dumps(recording, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     if report:
-        write_report(REPORT, results, json.loads(RECORDING.read_text(encoding="utf-8")))
+        # The page is the recording replayed through today's code, as CI checks it: with --only, the
+        # recording holds the other cases too.
+        recording = json.loads(RECORDING.read_text(encoding="utf-8"))
+        write_report(REPORT, await replay(match, analysis, cases(match, analysis), recording), recording)
     show(results)
     if record:
         print(f"recorded in {RECORDING.relative_to(ROOT)}")
@@ -119,7 +123,7 @@ async def replayed(report: bool) -> int:
     results = await replay(match, analysis, cases(match, analysis), recording)
     show(results)
     if report:
-        write_report(REPORT, results, recording, replayed=True)
+        write_report(REPORT, results, recording)
         print(f"report in {REPORT.relative_to(ROOT)}")
     # As CI judges it (tests/test_evals.py): no case the model had accepted is refused today, and
     # the share passing every evaluation clears the bar.
@@ -141,7 +145,9 @@ def main() -> int:
     live_parser = commands.add_parser("live", help="draft every case with the Foundry model")
     live_parser.add_argument("--only", nargs="*", default=[], help="case keys, such as ft/v1 or catchup@60")
     live_parser.add_argument("--record", action="store_true", help="keep the model's output for replaying")
-    live_parser.add_argument("--report", action="store_true", help="write docs/evaluations.md")
+    live_parser.add_argument(
+        "--report", action="store_true", help="with --record, write docs/evaluations.md from the recording"
+    )
     live_parser.add_argument(
         "--deadline", type=float, default=Settings.deadline_seconds, help="seconds per case, the service's by default"
     )
@@ -157,6 +163,8 @@ def main() -> int:
     replay_parser = commands.add_parser("replay", help="evaluate the recorded output with today's code")
     replay_parser.add_argument("--report", action="store_true", help="write docs/evaluations.md from the replay")
     args = parser.parse_args()
+    if args.command == "live" and args.report and not args.record:
+        parser.error("live --report needs --record: the report is written from the recording")
     # A card can hold a character the console's code page lacks (a non-breaking hyphen on Windows).
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(errors="replace")
