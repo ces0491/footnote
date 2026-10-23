@@ -266,6 +266,9 @@ deployed pipeline end to end, as a browser would follow it:
 uv run python scripts/smoke_live.py <web app URL> --minute 81 --speed 4
 ```
 
+[live-check.yml](.github/workflows/live-check.yml) runs the same check on the demo once a day, with
+the web app's URL in the repository variable `DEMO_URL`.
+
 Settings to make with `azd env set` before `azd up`, or before a later
 `azd provision`:
 
@@ -339,7 +342,7 @@ scripts/smoke_live.py     follows a replay on the deployed stack: completeness, 
 tests/                    contract, consistency, physics, story, calibration, model, replay, processing, insight, agent, evaluation and SQL checks
 data/                     generated output; git keeps the league, the showcase match, both answer keys, the recipe, the name check and the agents' recorded evaluation run
 docs/                     audience, experience, data, calibration, models, insights, evaluations, the overlay contract and its schema, architecture
-.github/workflows/        CI: lint, type checks, tests (with a Postgres and the agents' evaluations), the web build and the Bicep, on pushes to main and on pull requests
+.github/workflows/        CI: lint, type checks, tests (with a Postgres and the agents' evaluations), the web build and the Bicep, on pushes to main and on pull requests; the live check, once a day
 ```
 
 ## Licence

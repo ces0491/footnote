@@ -1,0 +1,39 @@
+name: Live check
+
+# Once a day, the deployed demo followed end to end the way a browser follows it
+# (scripts/smoke_live.py): a replay from 81' at 4x, through the 84' correction to full time. The
+# demo's address is the repository variable DEMO_URL. GitHub notifies whoever last changed the
+# schedule when a run fails.
+on:
+  # 06:17 UTC: night in the US and early morning in the UK, since the check's replay counts towards
+  # the six that run at once; away from the top of the hour, when GitHub delays scheduled runs.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-check
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEMO_URL: ${{ vars.DEMO_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: Follow a replay on the demo
+        run: |
+          if [ -z "$DEMO_URL" ]; then
+            echo "::error::Set the repository variable DEMO_URL to the web app's URL"
+            exit 1
+          fi
+          uv run --frozen --no-dev python -u scripts/smoke_live.py "$DEMO_URL" --minute 81 --speed 4
