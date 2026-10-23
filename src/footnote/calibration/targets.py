@@ -46,9 +46,9 @@ TARGETS: tuple[Target, ...] = (
         "Goals per match",
         1045 / 380,
         "goals",
-        "Opta Analyst; 11v11",
+        "Opta Analyst",
         OPTA_TOTALS,
-        "1,045 goals in 380 matches (Opta Analyst); 11v11 states 2.75 per game",
+        f"1,045 goals in 380 matches (Opta Analyst); [11v11]({ELEVEN}) states 2.75 per game",
     ),
     Target(
         "home_win",

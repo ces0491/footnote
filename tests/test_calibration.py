@@ -1,9 +1,17 @@
-"""A guard against drift: a small batch of matches stays in broad bands around the published
-figures. docs/calibration.md has the full comparison."""
+"""How the calibration report places a gap, and a guard against drift: a small batch of matches stays
+in broad bands around the published figures. docs/calibration.md has the full comparison."""
 
 import pytest
 
-from footnote.calibration.report import measure, run
+from footnote.calibration.report import _spread, measure, run
+
+
+def test_a_gap_is_placed_by_where_it_falls_under_each_seed() -> None:
+    assert _spread([-1, 3]) == "within"
+    assert _spread([-22, -27]) == "consistent"
+    assert _spread([+5, +11]) == "some"
+    # Off by more than 10% under both seeds, but one each way: not consistent, and not one seed only.
+    assert _spread([+15, -12]) == "opposite"
 
 
 @pytest.mark.slow

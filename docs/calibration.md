@@ -2,9 +2,10 @@
 
 How closely generated seasons match a real one. The generator was tuned against the published
 figures below. This report measures two full generated seasons, under league seeds 2026 and 2027,
-which shows the gaps that hold under every seed apart from those that come and go with the draws.
+which separates the gaps that hold under both seeds from those that come and go with one
+season's draws.
 
-Generated on 2026-10-20: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
+Generated on 2026-10-23: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
 tracking, in 4 minutes. Generator fingerprint `5e1cde3bdb459aba`. Regenerate with
 `python -m footnote.calibration`.
 
@@ -14,7 +15,7 @@ the published figure is a single real season and is noisy too.
 
 | Metric | Generated, seed 2026 | Generated, seed 2027 | Published | Difference | Source | How the published figure was obtained |
 | --- | --- | --- | --- | --- | --- | --- |
-| Goals per match | 2.73 ± 0.19 | 2.82 ± 0.18 | 2.75 | -1% / +3% | [Opta Analyst; 11v11](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 1,045 goals in 380 matches (Opta Analyst); 11v11 states 2.75 per game |
+| Goals per match | 2.73 ± 0.19 | 2.82 ± 0.18 | 2.75 | -1% / +3% | [Opta Analyst](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 1,045 goals in 380 matches (Opta Analyst); [11v11](https://www.11v11.com/competitions/premier-league/2026/) states 2.75 per game |
 | Home wins | 47.1% ± 5.0 | 46.8% ± 5.0 | 42.6% | +10% / +10% | [football-data.co.uk results](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | counted from full-time results: 162 home wins of 380 |
 | Draws | 21.3% ± 4.1 | 20.0% ± 4.0 | 27.4% | -22% / -27% | [football-data.co.uk results](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | counted from full-time results: 104 draws of 380 |
 | Away wins | 31.6% ± 4.7 | 33.2% ± 4.7 | 30.0% | +5% / +11% | [football-data.co.uk results](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | counted from full-time results: 114 away wins of 380 |
@@ -49,9 +50,9 @@ the published figure is a single real season and is noisy too.
 
 ## Largest differences
 
-19 of the 32 figures are within 10% of the published value under every seed, and 24 within 20%.
+19 of the 32 figures are within 10% of the published value under both seeds, and 24 within 20%.
 
-More than 10% off under every seed, furthest first:
+More than 10% off under both seeds, in the same direction, furthest first:
 
 - Lowest club possession (season): generated 31.7% and 29.9%, published 42.5%.
 - Draws: generated 21.3% and 20.0%, published 27.4%.
@@ -61,13 +62,13 @@ More than 10% off under every seed, furthest first:
 - Shots on target per match: generated 7.16 and 7.31, published 8.37.
 - Penalties per match: generated 0.27 and 0.30, published 0.24.
 
-Possession is each club's share of the passes in its matches, as Opta measures it. The generated clubs spread wider than the real ones: the club with least of the ball has 31.7% and 29.9%, against the real league's lowest, 42.5%; the club with most has 65.3% and 63.8%, against 60.4%.
+Possession here is each club's share of the passes in its matches. The generated clubs spread wider than the real ones: the club with least of the ball has less of it than any real club, and the club with most has more.
 
-Draws are rarer than in the real league: 21.3% and 20.0% of matches, against 27.4%. Most of the difference has gone to home wins: across the seasons they average +4.3 points on the published rate, and away wins +2.4, so home advantage is stronger than in the real league.
+Draws are rarer than in the real league. Most of the difference has gone to home wins: across the seasons they average +4.3 points on the published rate, and away wins +2.4, so home advantage is stronger than in the real league.
 
-More shots miss the target than in the real league: across the seasons, 12.1 a match against 9.3, with 7.2 on target against 8.4 and 5.9 blocked against 7.4.
+More shots miss the target than in the real league: across the seasons, 12.1 a match against 9.3, since fewer are on target or blocked.
 
-More than 10% off under one seed but not consistently: away wins (+5% / +11%), goalless matches (+33% / +0%), offsides per match (+6% / +13%), yellow cards per match (+12% / +9%), own goals per match (+25% / -7%), headed share of goals (-4% / -25%).
+More than 10% off under one seed but not the other: away wins (+5% / +11%), goalless matches (+33% / +0%), offsides per match (+6% / +13%), yellow cards per match (+12% / +9%), own goals per match (+25% / -7%), headed share of goals (-4% / -25%).
 
 ## Physical figures for context
 
@@ -79,7 +80,7 @@ targets.
 | --- | --- | --- | --- |
 | Distance per team per match, 2024/25 | 111.2 km (SD 6.3) | 113.9 km (SD 4.1) | [Allen et al., Br J Sports Med 2025 (Second Spectrum tracking); value read from Figure 2](https://doi.org/10.1136/bjsports-2025-110430) |
 | Sprint distance (>7 m/s) per team per match, 2024/25 | 2.7 km (SD 0.9) | 2.3 km (SD 0.5) | [Allen et al., Br J Sports Med 2025; value read from Figure 2](https://doi.org/10.1136/bjsports-2025-110430) |
-| Distance per 90 minutes, regular players, 2024/25 to Matchweek 29 | 8.1 to 11.1 km (middle 95% of outfield players who played the whole match) | 8.5 to 12.3 km | [premierleague.com (Opta Analyst)](https://www.premierleague.com/en/news/4272290) |
+| Distance per 90 minutes, regular players, 2024/25 to Matchweek 29 | 8.1 to 11.1 km (middle 95% of outfield players' matches of 85 minutes or more) | 8.5 to 12.3 km | [premierleague.com (Opta Analyst)](https://www.premierleague.com/en/news/4272290) |
 
 ## Sources
 
@@ -88,5 +89,5 @@ Results, shots on target, fouls, corners and yellow cards are counted from footb
 season totals, summed, read from the data behind the site's club stats pages; the sums match Opta
 Analyst's published season totals where both exist (1,045 goals, 9,503 shots, 273,956 successful
 passes, 44 red cards, 13,615 throw-ins, 5,901 goal kicks).
-The VAR count was read from a republication of the BBC Sport article, because bbc.co.uk could not
-be fetched. Quotes and sums were checked against the sources on 2026-10-19.
+The VAR count is from ModernGhana's republication of the BBC Sport article; the BBC original
+wasn't read. Quotes and sums were checked against the sources on 2026-10-19.

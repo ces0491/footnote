@@ -112,7 +112,7 @@ def measure(summaries: list[dict], physical: list[dict]) -> Results:
     out["penalty_conversion"] = _share_ci(sum(m["penalty_goals"] for m in s), sum(m["penalties"] for m in s))
     out["headed_share"] = _share_ci(sum(m["headed_goals"] for m in s), goals)
     out["set_piece_share"] = _share_ci(sum(m["set_piece_goals"] for m in s), goals)
-    # Club possession over the season, the way Opta measures it: share of the match's passes.
+    # Club possession over the season: the club's share of the passes in its matches.
     own: dict[str, int] = defaultdict(int)
     total: dict[str, int] = defaultdict(int)
     for m in s:
@@ -151,7 +151,7 @@ def context(physical: list[dict]) -> dict[str, str]:
         "Sprint distance (>7 m/s) per team per match, 2024/25": f"{np.mean(sprint):.1f} km (SD {np.std(sprint):.1f})",
         "Distance per 90 minutes, regular players, 2024/25 to Matchweek 29": (
             f"{np.percentile(per90, 2.5):.1f} to {np.percentile(per90, 97.5):.1f} km "
-            f"(middle 95% of outfield players who played the whole match)"
+            f"(middle 95% of outfield players' matches of 85 minutes or more)"
         ),
     }
 
@@ -161,15 +161,6 @@ def context(physical: list[dict]) -> dict[str, str]:
 
 def _mean(seasons: list[Results], key: str) -> float:
     return float(np.mean([r[key][0] for r in seasons]))
-
-
-def _pct(v: float) -> str:
-    return f"{100 * v:.1f}%"
-
-
-def _each(seasons: list[Results], key: str) -> str:
-    """A share as generated in each season, e.g. '21.3% and 20.0%'."""
-    return " and ".join(_pct(r[key][0]) for r in seasons)
 
 
 def _results_note(seasons: list[Results]) -> str | None:
@@ -188,28 +179,20 @@ def _results_note(seasons: list[Results]) -> str | None:
             f"Across the seasons the difference is split between home wins ({home:+.1f} points on the "
             f"published rate) and away wins ({away:+.1f})."
         )
-    return (
-        f"Draws are rarer than in the real league: {_each(seasons, 'draw')} of matches, against "
-        f"{_pct(PUBLISHED['draw'])}. {where}"
-    )
+    return f"Draws are rarer than in the real league. {where}"
 
 
 def _possession_note(seasons: list[Results]) -> str | None:
     ends = []
     if max(r["possession_low"][0] for r in seasons) < PUBLISHED["possession_low"]:
-        ends.append(
-            f"the club with least of the ball has {_each(seasons, 'possession_low')}, against the real league's "
-            f"lowest, {_pct(PUBLISHED['possession_low'])}"
-        )
+        ends.append("the club with least of the ball has less of it than any real club")
     if min(r["possession_high"][0] for r in seasons) > PUBLISHED["possession_high"]:
-        ends.append(
-            f"the club with most has {_each(seasons, 'possession_high')}, against {_pct(PUBLISHED['possession_high'])}"
-        )
+        ends.append("the club with most has more")
     if not ends:
         return None
     return (
-        "Possession is each club's share of the passes in its matches, as Opta measures it. The generated "
-        "clubs spread wider than the real ones: " + "; ".join(ends) + "."
+        "Possession here is each club's share of the passes in its matches. The generated clubs spread wider "
+        "than the real ones: " + ", and ".join(ends) + "."
     )
 
 
@@ -219,10 +202,18 @@ def _shots_note(seasons: list[Results]) -> str | None:
     published_off = PUBLISHED["shots"] - PUBLISHED["shots_on_target"] - PUBLISHED["shots_blocked"]
     if off <= published_off:
         return None
+    fewer = [
+        kind
+        for kind, mine, real in (
+            ("on target", on, PUBLISHED["shots_on_target"]),
+            ("blocked", blocked, PUBLISHED["shots_blocked"]),
+        )
+        if mine < real
+    ]
+    why = f", since fewer are {' or '.join(fewer)}" if fewer else ""
     return (
         f"More shots miss the target than in the real league: across the seasons, {off:.1f} a match against "
-        f"{published_off:.1f}, with {on:.1f} on target against {PUBLISHED['shots_on_target']:.1f} and "
-        f"{blocked:.1f} blocked against {PUBLISHED['shots_blocked']:.1f}."
+        f"{published_off:.1f}{why}."
     )
 
 
@@ -266,6 +257,17 @@ def _gap(t: Target, v: float) -> int:
     return round(100 * (v - t.value) / t.value) if t.value else 0
 
 
+def _spread(gaps: list[int]) -> str:
+    """Where a figure stands against the 10% line across the seasons: "within" it under every seed,
+    "consistent" (beyond it under every seed, the same way), "opposite" (beyond it under every seed,
+    both ways) or "some" (beyond it under some seeds only)."""
+    if max(abs(g) for g in gaps) <= 10:
+        return "within"
+    if min(abs(g) for g in gaps) <= 10:
+        return "some"
+    return "consistent" if all(g > 0 for g in gaps) or all(g < 0 for g in gaps) else "opposite"
+
+
 _WORDS = {1: "one", 2: "two", 3: "three", 4: "four"}
 
 
@@ -286,18 +288,14 @@ def render(seasons: list[tuple[int, Results]], ctx: dict[str, str], n_matches: i
     ]
     # Gaps in whole percent, as the table shows them, so the lists below agree with the table.
     gaps = {t.key: [_gap(t, r[t.key][0]) for r in results] for t in TARGETS}
-    within_10 = sum(max(abs(g) for g in gaps[t.key]) <= 10 for t in TARGETS)
+    spread = {t.key: _spread(gaps[t.key]) for t in TARGETS}
+    within_10 = sum(spread[t.key] == "within" for t in TARGETS)
     within_20 = sum(max(abs(g) for g in gaps[t.key]) <= 20 for t in TARGETS)
     consistent = sorted(
-        (
-            t
-            for t in TARGETS
-            if min(abs(g) for g in gaps[t.key]) > 10
-            and (all(g > 0 for g in gaps[t.key]) or all(g < 0 for g in gaps[t.key]))
-        ),
-        key=lambda t: -min(abs(g) for g in gaps[t.key]),
+        (t for t in TARGETS if spread[t.key] == "consistent"), key=lambda t: -min(abs(g) for g in gaps[t.key])
     )
-    varying = [t for t in TARGETS if max(abs(g) for g in gaps[t.key]) > 10 and t not in consistent]
+    opposite = [t for t in TARGETS if spread[t.key] == "opposite"]
+    varying = [t for t in TARGETS if spread[t.key] == "some"]
     gap_lines = [
         f"- {t.label}: generated {' and '.join(_fmt(t, r[t.key][0]) for r in results)}, published {_fmt(t, t.value)}."
         for t in consistent
@@ -308,9 +306,15 @@ def render(seasons: list[tuple[int, Results]], ctx: dict[str, str], n_matches: i
         note = note_of(results) if note_of else None
         if note and note not in notes:
             notes.append(note)
-    varying_text = ", ".join(f"{t.label.lower()} ({' / '.join(f'{g:+d}%' for g in gaps[t.key])})" for t in varying)
+
+    def listed(targets: list[Target]) -> str:
+        return ", ".join(f"{t.label.lower()} ({' / '.join(f'{g:+d}%' for g in gaps[t.key])})" for t in targets)
+
+    varying_text, opposite_text = listed(varying), listed(opposite)
     seeds_text = " and ".join(str(s) for s in seeds)
     n_seasons = _WORDS.get(len(seeds), str(len(seeds)))
+    every = "both seeds" if len(seeds) == 2 else "every seed"
+    some = "under one seed but not the other" if len(seeds) == 2 else "under some seeds but not all"
     today = datetime.now(UTC).date().isoformat()
     return "\n".join(
         [
@@ -318,7 +322,8 @@ def render(seasons: list[tuple[int, Results]], ctx: dict[str, str], n_matches: i
             "",
             "How closely generated seasons match a real one. The generator was tuned against the published",
             f"figures below. This report measures {n_seasons} full generated seasons, under league seeds {seeds_text},",
-            "which shows the gaps that hold under every seed apart from those that come and go with the draws.",
+            f"which separates the gaps that hold under {every} from those that come and go with one",
+            "season's draws.",
             "",
             f"Generated on {today}: all {n_matches} fixtures of the 2026/27 season under each seed, with 10 Hz",
             f"tracking, in {seconds / 60:.0f} minutes. Generator fingerprint `{code_fingerprint()}`. Regenerate with",
@@ -335,12 +340,17 @@ def render(seasons: list[tuple[int, Results]], ctx: dict[str, str], n_matches: i
             "",
             "## Largest differences",
             "",
-            f"{within_10} of the {len(TARGETS)} figures are within 10% of the published value under every seed, and "
+            f"{within_10} of the {len(TARGETS)} figures are within 10% of the published value under {every}, and "
             f"{within_20} within 20%.",
             "",
-            *(["More than 10% off under every seed, furthest first:", "", *gap_lines, ""] if gap_lines else []),
+            *(
+                [f"More than 10% off under {every}, in the same direction, furthest first:", "", *gap_lines, ""]
+                if gap_lines
+                else []
+            ),
             *[line for note in notes for line in (note, "")],
-            *([f"More than 10% off under one seed but not consistently: {varying_text}.", ""] if varying_text else []),
+            *([f"More than 10% off under {every}, in opposite directions: {opposite_text}.", ""] if opposite else []),
+            *([f"More than 10% off {some}: {varying_text}.", ""] if varying else []),
             "## Physical figures for context",
             "",
             "These published figures describe a different season, or were read from a chart rather than text,",
@@ -358,8 +368,8 @@ def render(seasons: list[tuple[int, Results]], ctx: dict[str, str], n_matches: i
             "season totals, summed, read from the data behind the site's club stats pages; the sums match Opta",
             "Analyst's published season totals where both exist (1,045 goals, 9,503 shots, 273,956 successful",
             "passes, 44 red cards, 13,615 throw-ins, 5,901 goal kicks).",
-            "The VAR count was read from a republication of the BBC Sport article, because bbc.co.uk could not",
-            "be fetched. Quotes and sums were checked against the sources on 2026-10-19.",
+            "The VAR count is from ModernGhana's republication of the BBC Sport article; the BBC original",
+            "wasn't read. Quotes and sums were checked against the sources on 2026-10-19.",
             "",
         ]
     )

@@ -5,7 +5,7 @@ from __future__ import annotations
 import textwrap
 
 from footnote.interpret.dataset import VALIDATION_MATCHDAYS
-from footnote.interpret.difficulty import DEFENDER_SPEED
+from footnote.interpret.difficulty import DEFENDER_SPEED, REACTION
 from footnote.interpret.physical import DISTANCE_KM, SPRINT_KMH
 from footnote.interpret.state import LABELS, WINDOWS
 from footnote.interpret.train import FIT_EVERY, SPELL_SECONDS, STEADY_COST, UNITS
@@ -56,9 +56,25 @@ def render(scores: dict) -> str:
     def raw(text: str) -> None:
         out.append(text)
 
+    def bullets(*items: str) -> None:
+        out.append(
+            "".join(
+                textwrap.fill(
+                    " ".join(item.split()),
+                    WIDTH,
+                    initial_indent="- ",
+                    subsequent_indent="  ",
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                + "\n"
+                for item in items
+            )
+        )
+
     raw("# Models\n")
     par(
-        "Two models read each match: one rates how hard every pass was, the other estimates the hidden match "
+        "Two models read each match: one rates how hard a pass was, the other estimates the hidden match "
         "state live. This page says what they read, how they were fitted and how well they recover the truth "
         "on matches between clubs whose playing styles they never saw."
     )
@@ -66,14 +82,17 @@ def render(scores: dict) -> str:
         f"Generated on {meta['date']} from all {sum(counts.values())} fixtures of the league under seed "
         f"{meta['league_seed']}, in {round(meta['seconds'] / 60)} minutes. Generator fingerprint "
         f"`{meta['generator']}`. Regenerate with `python -m footnote.interpret`, which also writes the fitted "
-        "parameters the processor loads (`src/footnote/interpret/params/`)."
+        "parameters the processor loads (`src/footnote/interpret/params/`); `--report-only` rewrites this page "
+        "from the saved scores without fitting."
     )
 
     raw("## How they are tested\n")
     par(
         "The generator writes an answer key beside every match ([data.md](data.md)): the true chance of every "
-        "pass reaching its target, and the true state at every second. The services never read it. Training "
-        "fits on it, and every score below is measured against it."
+        "pass reaching its target, and the true state at every second. The services never read it. The "
+        "match-state network is fitted on the true states and scored against them. The pass model is fitted on "
+        "whether each pass was completed; its log loss and Brier score below are measured against those "
+        "outcomes, and its gap against the true chances."
     )
     archetypes = " and ".join(_ARCHETYPE_NAMES[a] for a in meta["held_out_archetypes"])
     clubs = ", ".join(c.upper() for c in meta["held_out_clubs"])
@@ -92,18 +111,24 @@ def render(scores: dict) -> str:
     raw("## Pass difficulty\n")
     par(
         "A pass's difficulty is one minus the modelled chance that it reaches its target. The model is a "
-        "logistic regression over what the feed and the tracking show as the ball is played: where the pass "
-        "starts, its length, height and speed, whether it is a cross, a through ball, a header or a set piece, "
-        "whether the passer is under pressure, and from the tracking how much space the passer and the target "
-        "have, how many opponents stand near the line of the pass, how much time the nearest of them would "
-        f"have in hand to cut it out (closing at {DEFENDER_SPEED:.0f} m/s), and how many defenders are "
-        "goal-side of the target."
+        "logistic regression over what the feed and the tracking show as the ball is played:"
+    )
+    bullets(
+        "the pass: where it starts, its length, height and speed, whether it is a cross, a through ball, a "
+        "header or a set piece, and whether the passer is under pressure;",
+        "its target: where it is, how far forward of the start, and whether the pass enters the box from outside it;",
+        "the players around it, from the tracking: how much space the passer and the target have, how many "
+        "opponents crowd the target and how near a team-mate is to it, how many opponents stand near the line "
+        "of the pass, how much time the best-placed of them would have in hand to cut it out (reacting after "
+        f"{REACTION:g} s and closing at {DEFENDER_SPEED:.0f} m/s; a lofted pass can be cut out only near either "
+        "end), and how many defenders are goal-side of the target.",
     )
     par(
         "The target is the point the pass's length away from the passer, towards where the intended receiver "
-        "stood. The feed's end point would give the outcome away: a pass that was cut out ends where it was "
-        "cut out. Nothing about the passer or the club goes in, so a rating describes the situation, not the "
-        "player."
+        "stood in the tracking; a cross aims at a fixed point in front of goal, since a cross names its "
+        "receiver only when it reaches one. The feed's end point would give the outcome away: a pass that was "
+        "cut out ends where it was cut out. Nothing about the passer or the club goes in, so a rating "
+        "describes only the situation."
     )
     par(f"On the {_thousands(d['test_passes'])} passes in the test matches (lower is better in every column):")
     raw(
@@ -113,8 +138,8 @@ def render(scores: dict) -> str:
                 [name, _num(r["log_loss"]), _num(r["brier"]), "0" if r is o["truth"] else _num(r["mae_truth"])]
                 for name, r in (
                     ("Every pass at the training completion rate", o["constant"]),
-                    ("Feed only: the pass's own fields", o["feed_only"]),
-                    ("Feed and tracking: the live model", o["full"]),
+                    ("The pass and its target, without the players around it", o["feed_only"]),
+                    ("With the players around it: the live model", o["full"]),
                     ("The answer key's true chances", o["truth"]),
                 )
             ],
@@ -135,7 +160,7 @@ def render(scores: dict) -> str:
             ],
         )
     )
-    par("By kind of pass:")
+    par("By kind of pass (the processor doesn't rate throw-ins live; they're scored here all the same):")
     raw(
         _table(
             [
@@ -183,25 +208,28 @@ def render(scores: dict) -> str:
         "past it. From the events: each side's share of the ball, where it has the ball and wins it back, "
         "how fast it moves the ball forward, its passing, crosses, shots, long balls, fouls and pressing, and "
         "how often the ball changes hands. From the tracking: how high each side's block stands, where its "
-        "back and front lines are, how wide it spreads and how fast its players are moving. And how recently "
-        "each side won the ball and how far it has taken it since."
+        "back and front lines are, how wide it spreads and how fast its players are moving. How recently "
+        "each side won the ball and how far it has taken it since. And the match situation: the minute, the "
+        "time since the half began or the last goal (counted up to two minutes), and the goal difference, "
+        "capped at three either way, with a copy of it weighted from nothing at the hour to full at the 90th "
+        "minute."
     )
     if s["smoothing"]:
-        estimate = (
-            f"The live estimate is an exponential average of the network's output, keeping "
-            f"{s['smoothing']:.0%} of the running estimate each second, restarted at each kick-off and after "
-            "each goal."
+        steadied = (
+            f"Its output is steadied by an exponential average, keeping {s['smoothing']:.0%} of the running "
+            "average each second and restarting it at each kick-off and after each goal."
         )
     else:
-        estimate = "The live estimate is the network's output for each second."
+        steadied = "Its output is used as it comes: the validation matches chose no smoothing (below)."
     par(
         f"A small neural network, one hidden layer of {UNITS} tanh units under a softmax, turns the evidence "
         f"into the chance of each state. It is fitted on one second in every {FIT_EVERY} from the training "
-        "matches, each also seen with home and away swapped, so neither side's states are learned from the "
-        f"other's alone. {estimate} The state a viewer is shown changes only once another has led the "
-        f"estimate for {s['hold']} seconds in a row, except that a break, which lasts seconds, is shown and "
-        f"dropped at once. It all runs {s['lag']} seconds behind play: the estimate for a second is ready "
-        "once the events of the next few seconds are in."
+        "matches, and on each of those seconds again with home and away swapped, so each state, home or away, "
+        f"is learned from both sides' play. {steadied} The live estimate is the state a viewer is shown: it "
+        f"changes only once another state has led the network's estimate for {s['hold']} seconds in a row. A "
+        "break, which lasts seconds, is shown and dropped at once, and at each kick-off and after each goal "
+        f"the shown state moves at once to the state in the lead. It all runs {s['lag']} seconds behind play: "
+        f"the estimate for a second is ready once the next {s['lag']} seconds of events are in."
     )
     par(
         f"On every second of the {s['test_matches']} test matches ({_thousands(live['seconds'])} seconds). "
@@ -345,8 +373,8 @@ def render(scores: dict) -> str:
 
     raw("## Tags from the tracking\n")
     par(
-        f"No model is involved. A sprint tag marks a player going above {SPRINT_KMH:.0f} km/h, averaged over "
-        "a second as tracking providers report top speed, with its peak once the player slows below the "
+        f"No model is involved. A sprint tag marks a player going above {SPRINT_KMH:.0f} km/h, with speed "
+        "averaged over the trailing second, and is reported with its peak once the player slows below the "
         f"threshold again. A distance tag marks a player passing {DISTANCE_KM:.0f} km covered."
     )
     return "\n".join(out).rstrip() + "\n"
