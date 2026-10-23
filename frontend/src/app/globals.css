@@ -98,6 +98,14 @@
   ::selection {
     background: color-mix(in oklab, var(--cite) 35%, transparent);
   }
+  /* The browser draws a select's list of options itself. Over a transparent select, Chromium on
+     Windows gives that list a light background under the page's light text, so the options carry
+     the panel's colours. */
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 /* A graphic that airs: the corners a broadcast graphic is cut with. Controls stay rounded. */
