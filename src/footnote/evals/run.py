@@ -199,8 +199,12 @@ async def replay(match: Match, analysis: Analysis, cases: list[Case], recording:
     recorded output. A case that wasn't recorded, or whose model gave no draft, comes back as it was."""
     recorded = recording["cases"]
     playable = [c for c in cases if recorded.get(c.key, {}).get("draft") is not None]
+    # Two cases at a time. A case's first tool call folds the match in a thread, and folds share the
+    # interpreter, so more at once only makes each slower. With four, a CI run on two cores once had
+    # every tool call fail for a run of cases, most likely past the writer's 20 s timeout on the
+    # match tools (agents/writer.py).
     results = await run(
-        match, analysis, playable, lambda c: Replayed(recorded[c.key]), {}, concurrency=4, deadline_seconds=120
+        match, analysis, playable, lambda c: Replayed(recorded[c.key]), {}, concurrency=2, deadline_seconds=120
     )
     by_key = {r.case.key: r for r in results}
     out = []
