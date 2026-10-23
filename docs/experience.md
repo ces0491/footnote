@@ -275,17 +275,17 @@ is [overlay.md](overlay.md).
 
 ## The video
 
-Under two minutes, recorded from the deployed app.
+Under two minutes, ending by 1:55, recorded from the deployed app.
 
 | Time | Beat | Shows |
 | --- | --- | --- |
 | 0:00–0:10 | What Footnote does, in one line | Pitch with an overlay landing |
-| 0:10–0:35 | 23' goal: ranked shortlist, reason, evidence, approve | Nadia's console |
+| 0:10–0:35 | 23' goal: ranked shortlist, reason, evidence, the agents' run (MCP tool calls, checks, time and tokens), approve | Nadia's console, Agent runs |
 | 0:35–1:00 | The same goal for Sam (held for the stream delay), Priya (player focus), Lucía (Spanish) | Split screen |
 | 1:00–1:20 | 31' offside, read by a real screen reader from Tom's feed | Described feed with audio |
 | 1:20–1:35 | 84' correction flows to the console and every fan | Correction alert, the corrected card back for approval |
 | 1:35–1:50 | How it runs: architecture, state model scored against the answer key, measured latency | Diagram and figures |
-| 1:50–1:58 | Close and synthetic-data disclaimer | End card |
+| 1:50–1:55 | Close and synthetic-data disclaimer | End card |
 
 ## The judges' path
 
