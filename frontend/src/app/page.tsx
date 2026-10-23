@@ -50,15 +50,15 @@ async function Fixture() {
   );
 }
 
-// How a card gets made, in order, as the README tells it.
+// How a graphic gets made, in order, as the README tells it.
 const STEPS = [
   {
     title: "Ranked",
-    text: "The processor finds the moments worth a card and words each with a template. A card's rank starts from a base for its kind of moment, raised by the match-state model and the moment's figures.",
+    text: "The processor finds the moments worth a graphic and words each with a template. A graphic's rank starts from a base for its kind of moment, raised by the match-state model and the moment's figures.",
   },
   {
     title: "Redrafted",
-    text: "Writers built with Microsoft Agent Framework on a Foundry model redraft the cards where wording adds something, reading the match only through our MCP match tools.",
+    text: "Writers built with Microsoft Agent Framework on a Foundry model redraft the graphics where wording adds something, reading the match only through our MCP match tools.",
   },
   {
     title: "Checked",
@@ -66,7 +66,7 @@ const STEPS = [
   },
   {
     title: "Delivered",
-    text: "An approved card shows for each viewer when their stream gets to the moment: in English, or in Spanish or French through Azure AI Translator.",
+    text: "An approved graphic shows for each viewer when their stream gets to the moment: in English, or in Spanish or French through Azure AI Translator.",
   },
 ];
 
@@ -74,7 +74,7 @@ const STEPS = [
 const AZURE = [
   ["Event Hubs", "the event feed"],
   ["Container Apps", "the services"],
-  ["Azure Database for PostgreSQL", "each replay's state and cards"],
+  ["Azure Database for PostgreSQL", "each replay's state and graphics"],
   ["Web PubSub", "pushes to the page"],
   ["Application Insights", "a trace of each agent draft"],
 ];
@@ -91,8 +91,8 @@ export default function Home() {
             Explained match intelligence
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-            Footnote picks out the moments worth a card, words each for casual fans and analysts, links it to the evidence behind it and
-            holds it until your stream reaches the moment.
+            Footnote picks out the moments worth a graphic, words each for casual fans and analysts, links it to the evidence behind it
+            and holds it until your stream reaches the moment.
           </p>
           <p className="mt-3 max-w-xl text-muted-foreground">
             Watch the showcase match as Nadia, the producer who approves each graphic before it airs, or as one of four fans.

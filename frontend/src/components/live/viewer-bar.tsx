@@ -209,7 +209,7 @@ export function SettingsSheet({
         <Group title="Language and delay">
           <Choice<Language>
             id="set-language"
-            label="Cards in"
+            label="Graphics in"
             value={settings.language}
             options={Object.entries(LANGUAGES) as [Language, string][]}
             onChange={(v) => set("language", v)}

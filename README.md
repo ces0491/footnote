@@ -21,35 +21,35 @@ were live.
 
 On the start page, pick who to watch as, where to start and the speed, then
 **Start the replay**. A replay begins 30 seconds before the minute picked.
-Starting as Nadia, the producer, leaves each card for her to approve; starting
-as a fan approves cards as they're found, and the console's **Approve
+Starting as Nadia, the producer, leaves each graphic for her to approve; starting
+as a fan approves graphics as they're found, and the console's **Approve
 automatically** switch changes that either way. **Watch as**, above the match,
 switches between the producer and the fans at any point. At 2×, each of these
 takes a few minutes:
 
 1. **23', as Nadia, the producer.** Kingsferry's goal reaches her shortlist with
    its rank and the reason for it. **Evidence** lists the events behind the
-   card. **Agent runs** shows the agents' work on it: each MCP match tool
+   graphic. **Agent runs** shows the agents' work on it: each MCP match tool
    called, the checks a draft failed, the time and tokens. Drafts are kept
-   between replays, so the card usually arrives with an earlier replay's draft,
+   between replays, so the graphic usually arrives with an earlier replay's draft,
    marked "Agent, reused", and Agent runs shows the run that wrote it.
-   **Redraft** asks the agents for a fresh one. **Approve** puts the card on
+   **Redraft** asks the agents for a fresh one. **Approve** puts the graphic on
    air, with **Edit** and **Kill** beside it. Then switch to Sam, a fan whose
-   stream runs 40 seconds behind live (20 seconds at 2×): the card reaches Sam
+   stream runs 40 seconds behind live (20 seconds at 2×): the graphic reaches Sam
    with the goal, worded as Nadia approved it, or when she approves it if that
    comes later.
 2. **31', as Tom, a blind fan.** The described feed tells the match in words for
    a screen reader, at the detail and pace set in **Settings**. Marco Dellow's
    goal is checked by VAR and ruled out for offside; switch to Sam for the
-   decision's card, with a still of the pitch at the pass.
+   decision's graphic, with a still of the pitch at the pass.
 3. **60', as Lucía, joining late.** She reads what she missed in Spanish, then
-   each card in Spanish once Azure AI Translator's version passes code's check;
-   a card whose translation fails stays in English, marked as such. The next
-   card, when neither side has control, comes about four minutes in at 2×, two
+   each graphic in Spanish once Azure AI Translator's version passes code's check;
+   a graphic whose translation fails stays in English, marked as such. The next
+   graphic, when neither side has control, comes about four minutes in at 2×, two
    at 4×.
 4. **81', as Nadia.** The goal is first recorded as Jory Penhallow's own goal.
-   At 84' the data provider credits it to Femi Adeyani: the cards that cited it
-   are flagged, and the restated card comes back to Nadia under **Corrections**
+   At 84' the data provider credits it to Femi Adeyani: the graphics that cited it
+   are flagged, and the restated graphic comes back to Nadia under **Corrections**
    with the correction notice. At full time the recap ends with a sentence from
    code on the change, whether an agent or the template wrote the rest.
 
@@ -59,11 +59,11 @@ change the mode, club, player in focus, pinned metric, language, stream delay,
 calm mode, the pitch view and its graphics, and the described feed.
 
 - A replay belongs to the browser that started it: only that browser approves
-  its cards or stops it, and starting another replaces it. Anyone with its link
+  its graphics or stops it, and starting another replaces it. Anyone with its link
   can watch.
 - Up to six replays run at once; a seventh replaces the oldest.
 - Each address can start eight replays in five minutes.
-- A fresh draft (a card's first, or a Redraft) took 8 to 24 seconds in the
+- A fresh draft (a graphic's first, or a Redraft) took 8 to 24 seconds in the
   recorded evaluation run ([docs/evaluations.md](docs/evaluations.md)), and
   Approve waits for it.
 
@@ -74,14 +74,14 @@ flowchart TB
     replayer["Replayer"] -- "feed" --> eh[("Event Hubs")]
     eh --> processor["Processor<br>models, insights, templates"]
     processor -- "checkpoints" --> blob[("Blob Storage")]
-    processor -- "state, cards, jobs" --> pg[("Azure Database<br>for PostgreSQL")]
+    processor -- "state, graphics, jobs" --> pg[("Azure Database<br>for PostgreSQL")]
     pg -- "jobs" --> agents["Agents service<br>Agent Framework writers,<br>MCP match tools, checks,<br>translation, producer's desk"]
     agents -- "drafts, translations" --> pg
     agents -- "Responses API" --> foundry["Foundry<br>gpt-5-mini"]
-    agents -- "cards in English" --> translator["Azure AI Translator"]
+    agents -- "wording in English" --> translator["Azure AI Translator"]
     agents -- "traces" --> appi["Application Insights"]
-    processor -- "events, cards" --> wps["Web PubSub"]
-    agents -- "cards" --> wps
+    processor -- "events, graphics" --> wps["Web PubSub"]
+    agents -- "graphics" --> wps
     wps --> browser["Browser"]
     browser --> web["Web app<br>Next.js"]
     web -- "client tokens" --> wps
@@ -119,7 +119,7 @@ measured on the deployed stack and the cost:
   few seconds behind play, and reads distance covered, top speeds and sprint
   and distance tags from the tracking; the live page shows them.
 - **The insights and the agents.** The processor finds the moments worth a
-  card, such as goals, VAR decisions, spells of pressure or chaos, hard passes,
+  graphic, such as goals, VAR decisions, spells of pressure or chaos, hard passes,
   sprints and corrections from the provider. It ranks each from a base for its
   kind, raised by the match-state model (a goal against the run of play, a long
   spell) and by the moment's figures, and words each with a template. An agents
@@ -131,34 +131,35 @@ measured on the deployed stack and the cost:
   screen (the template's, or after a Redraft the earlier draft's), and the
   console says why. A recap writer tells the story of the match at half-time
   and full time, and writes the catch-up for a fan joining mid-match. How it
-  works: [docs/insights.md](docs/insights.md).
-- **Evaluations of the agents.** The cards the agents draft in a replay from
+  works: [docs/insights.md](docs/insights.md), where a graphic's wording (its
+  headline and its lines for casual fans and analysts) is called its card.
+- **Evaluations of the agents.** The graphics the agents draft in a replay from
   kick-off, and the catch-ups for the four jump points, are drafted against the
   deployed model and evaluated in code and with Azure AI Evaluation's
   groundedness evaluator; CI replays the recorded run through the current
   checks on each push to main and each pull request:
   [docs/evaluations.md](docs/evaluations.md).
-- **Tracing.** Each card the agents draft is a trace in Application Insights,
+- **Tracing.** Each graphic the agents draft is a trace in Application Insights,
   from the job through every model and tool call to the push, and so is each
   batch of translations:
   [docs/architecture.md](docs/architecture.md#tracing).
 - **The producer console and the fan view.** Watch the replay as Nadia, the
   producer, or as one of the ready-made fans, and switch between them
-  mid-match. The producer approves, edits, kills or withdraws each card, or lets
+  mid-match. The producer approves, edits, kills or withdraws each graphic, or lets
   them through automatically; an edit passes the same checks as an agent's
   draft, and what the producer approves is the wording they saw. A fan's stream
-  runs a set delay behind live, and the page shows the match, the cards and the
+  runs a set delay behind live, and the page shows the match, the graphics and the
   graphics as of that stream, so nothing shows before the fan's stream reaches
   it. Fans choose casual or analyst mode, their club, a player to follow and the
   figure to pin; calm mode turns off motion and flashing, and the pitch view can
   be hidden. On a desktop the match is drawn from the tracking on our own 2D
   pitch, standing in for the video; casual fans get a still of the pitch with
-  each VAR decision, with the offside margin up close. What a card carries, and
+  each VAR decision, with the offside margin up close. What a graphic carries, and
   when it may show, is the overlay contract: [docs/overlay.md](docs/overlay.md).
 - **Spanish and French.** The agents service has Azure AI Translator render each
-  card fans see, with the names kept as they are, and code checks that every
+  graphic fans see, with the names kept as they are, and code checks that every
   figure (minutes included), name and score line came through before a
-  translation is shown; a card whose translation fails stays in English, marked
+  translation is shown; a graphic whose translation fails stays in English, marked
   as such.
 - **The described feed.** Tom, a blind fan, follows the match in words: lines
   from templates over each event (where the ball is, the passes, the build-up,
@@ -175,10 +176,10 @@ Next steps, after the hackathon:
    been tried with them yet.
 2. A women's league:
    - calibrate the generator to a women's league season's published figures;
-   - set the thresholds tuned for the men's game (the fastest-shot card's
+   - set the thresholds tuned for the men's game (the fastest-shot graphic's
      100 km/h floor, the 10 km distance milestone) from that data;
    - fit the models again;
-   - make the Spanish and French cards agree with each player's gender, which
+   - make the Spanish and French graphics agree with each player's gender, which
      the Translator can't tell from a name.
 
 ## Quick start
@@ -269,7 +270,7 @@ Settings to make with `azd env set` before `azd up`, or before a later
 `azd provision`:
 
 - `TRANSLATOR_ENABLED true` adds Azure AI Translator on its free tier for the
-  cards in Spanish and French; without it the cards stay in English.
+  graphics in Spanish and French; without it the graphics stay in English.
 - `TRANSLATOR_SKU S1` picks the Standard tier, billed by the character, for a
   subscription that already has its one free Translator.
 - `WEBPUBSUB_SKU` is `Free_F1` by default: 20 connections and 20,000 messages a
@@ -300,7 +301,7 @@ uv run python -m footnote.replayer               # http://localhost:8000
 # The agents service, with the producer's desk on http://localhost:8080:
 # FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, WEBPUBSUB_ENDPOINT, WEBPUBSUB_HUB,
 # POSTGRES_HOST, POSTGRES_DATABASE, and POSTGRES_USER set to your sign-in name
-# (needs AZURE_PRINCIPAL_NAME above); TRANSLATOR_ENDPOINT translates the cards
+# (needs AZURE_PRINCIPAL_NAME above); TRANSLATOR_ENDPOINT translates the graphics
 # and APPLICATIONINSIGHTS_CONNECTION_STRING traces them, when set. Stop the
 # deployed one first, or the two share the jobs.
 uv run python -m footnote.agents
@@ -324,7 +325,7 @@ src/footnote/interpret/   pass difficulty, the match-state model, distances and 
 src/footnote/live/        shared by the services: the match files, replay time, stats, analysis, state, contracts, the overlay contract, the pitch view's tracking
 src/footnote/replayer/    plays the showcase feed into Event Hubs, one run per replay
 src/footnote/processor/   Event Hubs to match state, insights, Postgres and Web PubSub
-src/footnote/insights/    moments found and ranked, facts, templates, the checks every card passes
+src/footnote/insights/    moments found and ranked, facts, templates, the checks every graphic passes
 src/footnote/tools/       the match tools: an MCP server answering as of one moment of one run
 src/footnote/agents/      the agents service: the Agent Framework writers, their checks, the job loop, the translation worker, the producer's desk
 src/footnote/evals/       the agents' evaluations: every agent job in the showcase, code evaluators, the groundedness judge, the report

@@ -208,9 +208,9 @@ export function FanPanel({
         )}
       </div>
       {listed.length === 0 ? (
-        <p className="border-t px-5 py-6 text-sm text-muted-foreground">Cards appear here as the moments reach your stream.</p>
+        <p className="border-t px-5 py-6 text-sm text-muted-foreground">Graphics appear here as the moments reach your stream.</p>
       ) : (
-        <ol className="border-t" aria-label="Cards">
+        <ol className="border-t" aria-label="Graphics">
           {listed.map(({ insight, lang }) => {
             const club = clubOf(insight, match.home, match.away);
             const own = settings.club !== null && club?.id === settings.club;

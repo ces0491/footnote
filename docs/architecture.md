@@ -84,7 +84,7 @@ never sees positions from beyond the point its feed has reached. The fitted para
 code, and the answer key stays out of the image.
 
 **Insights.** As each message is folded, the moment finder looks at the run's state and starts an
-insight for each moment worth a card (a goal, a VAR check, a spell of the match state, a hard pass
+insight for each moment worth a graphic (a goal, a VAR check, a spell of the match state, a hard pass
 and the others in [insights.md](insights.md#moments), which has the rules), ranked and worded by its
 template; later messages can flag or restate one (a VAR decision, a correction from the provider).
 The processor stores each change with the feed rows that caused it and pushes it. An insight that

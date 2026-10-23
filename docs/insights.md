@@ -1,16 +1,17 @@
 # Insights
 
-How a moment in the match becomes a card a producer can put on air: what is found and how it
+How a moment in the match becomes a graphic a producer can put on air: what is found and how it
 ranks, how figures stay code's own, the checks a card passes, the agents that word them, what
 the producer decides, and what happens when VAR or the data provider changes something a card
-cited. The principles behind it (P1–P8) are in [audience.md](audience.md); the services it runs on
-are in [architecture.md](architecture.md); what viewers get for each card, and when, is the overlay
-contract in [overlay.md](overlay.md).
+cited. A card here is a graphic's wording: a headline and a line each for casual fans and
+analysts. Bookings are always called red or yellow cards. The principles behind it (P1–P8) are in
+[audience.md](audience.md); the services it runs on are in [architecture.md](architecture.md);
+what viewers get for each card, and when, is the overlay contract in [overlay.md](overlay.md).
 
 ## From an event to a card
 
 1. **Found.** The processor folds each feed message into the run's state, and the moment finder
-   (`src/footnote/insights/moments.py`) looks at it there. A moment worth a card (a goal, a VAR
+   (`src/footnote/insights/moments.py`) looks at it there. A moment worth a graphic (a goal, a VAR
    check, a spell of the match state, a hard pass and the others [below](#moments)) becomes an
    insight, with its facts, a rank, the reason for the rank and the events it rests on.
 2. **Worded by its template.** Every insight starts with the code's own wording

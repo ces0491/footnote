@@ -7,7 +7,7 @@ rebuilds a run's state by folding the run's stored messages again.
 
 With an `Analysis` the state also carries what the models work out (live/analysis.py): pass
 difficulty, the match state and its timeline, per-player lines, distances, speeds and tags. And it
-keeps the run's insights (footnote.insights): the moments worth a card, found and ranked as each
+keeps the run's insights (footnote.insights): the moments worth a graphic, found and ranked as each
 message is folded, with what later messages change about them. Without an `Analysis` it carries the
 counts alone.
 

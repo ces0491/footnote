@@ -302,7 +302,7 @@ export function ProducerConsole({
           <Label htmlFor="auto-approve">Approve automatically</Label>
         </div>
         <p id="auto-approve-note" className="text-xs text-muted-foreground">
-          {mode === "auto" ? "Each card is approved as it's found." : "Nothing airs until you approve it."}{" "}
+          {mode === "auto" ? "Each graphic is approved as it's found." : "Nothing airs until you approve it."}{" "}
           {!canProduce && "Only the browser that started this replay can produce it."}
         </p>
         {modeError && <p className="w-full text-xs text-tally">{modeError}</p>}

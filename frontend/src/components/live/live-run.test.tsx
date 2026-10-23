@@ -180,7 +180,7 @@ describe("Lucía joining at 60'", () => {
 
   it("marks each card's language, and the English a card shows until it is translated", () => {
     watch(run.start_replay + 32); // her playback is at the replay's start plus 12
-    const cards = within(screen.getByRole("list", { name: "Cards" }));
+    const cards = within(screen.getByRole("list", { name: "Graphics" }));
     const spanish = cards.getByText("Ninguno de los dos bandos tenía el control");
     expect(spanish.getAttribute("lang")).toBe("es");
     expect(cards.getByText("Ningún equipo se ha asentado.").getAttribute("lang")).toBe("es");

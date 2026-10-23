@@ -1,4 +1,4 @@
-"""Moments: what in a match is worth a card, found as a run's feed is folded, and how each ranks.
+"""Moments: what in a match is worth a graphic, found as a run's feed is folded, and how each ranks.
 
 `MomentFinder.observe` looks at each feed message once the run's state has taken it in and returns
 the insights it starts. It reads the score and counts, the match state and its timeline, each pass's

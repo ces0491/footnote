@@ -1,6 +1,6 @@
 # Overlay contract
 
-What a viewer's client or a graphics system gets for each moment worth a card: one item per
+What a viewer's client or a graphics system gets for each moment worth a graphic: one item per
 insight, as it now stands. The items are rows of the `insight_cards` view, served with a run's
 snapshot. A live item is also pushed through Web PubSub whenever it changes; an item from before the
 replay's start reaches clients through the snapshot only ([architecture.md](architecture.md#contracts)).

@@ -63,7 +63,7 @@ export const PROFILES: Profile[] = [
     id: "nadia",
     name: "Nadia",
     role: "producer",
-    summary: "Runs the graphics: approves, edits or kills each card before it airs.",
+    summary: "Runs the graphics: approves, edits or kills each one before it airs.",
     settings: BASE,
   },
   {
@@ -84,7 +84,7 @@ export const PROFILES: Profile[] = [
     id: "lucia",
     name: "Lucía",
     role: "fan",
-    summary: "In Madrid, joining after work: the cards in Spanish, starting with what she missed.",
+    summary: "In Madrid, joining after work: the graphics in Spanish, starting with what she missed.",
     settings: { ...BASE, language: "es", delay: 20 },
   },
   {

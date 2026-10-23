@@ -119,7 +119,7 @@ export function EditDialog({
       {/* The console moves focus to the card when the dialog closes. */}
       <DialogContent className="max-w-2xl" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Edit the card</DialogTitle>
+          <DialogTitle>Edit the graphic</DialogTitle>
           <DialogDescription>
             Put figures in as placeholders, such as {"{moment.minute}"}: code fills them in, and the edit passes the same
             checks as an agent&apos;s draft. One sentence a line.
@@ -128,9 +128,9 @@ export function EditDialog({
         </DialogHeader>
         {changed && (
           <Alert>
-            <AlertTitle>The card has changed since you opened it</AlertTitle>
+            <AlertTitle>The graphic has changed since you opened it</AlertTitle>
             <AlertDescription>
-              <p>A correction or a new draft came in. Your text stays here, and it is checked against the card as it now stands.</p>
+              <p>A correction or a new draft came in. Your text stays here, and it is checked against the graphic as it now stands.</p>
               <Button
                 variant="outline"
                 size="sm"
