@@ -59,15 +59,10 @@ Render and personalise
       code checks that numbers, minutes and names survive translation
 - [x] Ready-made fan profiles for judges to switch between, with each viewer's
       settings kept in the browser
-- [ ] Viewer profiles stored server-side under an anonymous ID kept in the
-      browser
 
 Quality and submission
 
 - [x] No secrets in code; Azure budget alert set
-- [ ] `azd up` deploys from scratch, verified on an empty environment. Tried on
-      23 October: Azure refused the model deployment and the Postgres server
-      (README, Deploying to Azure)
 - [x] CI runs lint, type checks, tests and agent-output evaluations
 - [x] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
@@ -84,8 +79,9 @@ Quality and submission
 - Synthetic voice commentary; screen readers handle speech for the described feed
 - Testing with blind or partially sighted users. The README names it as the
   first next step
-- Our own user accounts and sign-in. A profile store would take an external
-  user ID from the host platform's login
+- Viewer profiles stored server-side, and our own user accounts and sign-in.
+  Settings stay in the browser; a profile store would take an external user ID
+  from the host platform's login
 - Multi-tenancy, load beyond demo traffic, multi-region, SLAs
 - Integration with a real broadcast graphics engine
 - Copying SCLA or rugby-tournament-predictor code; methods carry over, code is new
@@ -114,3 +110,6 @@ category.
 - 2026-10-20: checkpoint moved from Sunday 25 to Friday 23 October
 - 2026-10-20: cut order revised: viewer profiles and the described feed's
   controls go before the amended-event demo
+- 2026-10-23: dropped server-side viewer profiles, and the check that `azd up`
+  deploys from scratch: on this subscription Azure refused the model deployment
+  and a new Postgres server (README, Deploying to Azure)
