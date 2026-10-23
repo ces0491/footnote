@@ -2,7 +2,7 @@
 
 import { Play } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useState, useSyncExternalStore, useTransition } from "react";
 
 import { PersonaBadge, roleLabel } from "@/components/persona";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -46,30 +46,34 @@ export function StartReplay() {
   const [who, setWho] = useState<Profile["id"]>("sam");
   const [minute, setMinute] = useState("23");
   const [speed, setSpeed] = useState("2");
-  const [starting, setStarting] = useState(false);
+  // "Starting…" for as long as the transition runs: the request, then the navigation to the replay.
+  // The start page stays mounted while hidden (Cache Components), so a flag set here and never
+  // cleared would still read "Starting…" when a viewer comes back for a new replay.
+  const [starting, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const jump = JUMPS.find((j) => String(j.minute) === minute) ?? JUMPS[1];
 
-  async function start() {
-    setStarting(true);
+  function start() {
     setError(null);
-    try {
-      // Picking the producer means approving each graphic by hand; a fan's replay approves them as
-      // they're found. Either can be switched in the producer console.
-      const producer = PROFILES.find((p) => p.id === who)?.role === "producer" ? "manual" : "auto";
-      const response = await fetch("/api/runs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed), viewer: viewerId(), producer }),
-      });
-      const body = (await response.json()) as RunDescriptor | { error: string };
-      if (!response.ok || "error" in body) throw new Error("error" in body ? body.error : `HTTP ${response.status}`);
-      rememberStarted(body.run_id);
-      router.push(`/runs/${body.run_id}?as=${who}`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setStarting(false);
-    }
+    startTransition(async () => {
+      try {
+        // Picking the producer means approving each graphic by hand; a fan's replay approves them as
+        // they're found. Either can be switched in the producer console.
+        const producer = PROFILES.find((p) => p.id === who)?.role === "producer" ? "manual" : "auto";
+        const response = await fetch("/api/runs", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ start_minute: Number(minute), speed: Number(speed), viewer: viewerId(), producer }),
+        });
+        const body = (await response.json()) as RunDescriptor | { error: string };
+        if (!response.ok || "error" in body) throw new Error("error" in body ? body.error : `HTTP ${response.status}`);
+        rememberStarted(body.run_id);
+        // After an await the navigation needs a transition of its own to keep this one pending.
+        startTransition(() => router.push(`/runs/${body.run_id}?as=${who}`));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
   }
 
   return (

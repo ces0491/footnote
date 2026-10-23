@@ -1,14 +1,29 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StartReplay } from "./start-replay";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  push.mockReset();
+  vi.unstubAllGlobals();
+});
+
+/** A fetch that answers once `answer` is called, so a test can look at the page while it waits. */
+function pendingFetch() {
+  let answer: (response: Response) => void = () => {};
+  const fetch = vi.fn(() => new Promise<Response>((resolve) => (answer = resolve)));
+  vi.stubGlobal("fetch", fetch);
+  return { fetch, answer: (status: number, body: object) => answer(Response.json(body, { status })) };
+}
+
+const startButton = () => screen.getByRole("button", { name: /Start|Starting|Loading/ }) as HTMLButtonElement;
 
 describe("StartReplay", () => {
   it("labels each jump point with what happens there and the viewers who show it best", () => {
@@ -49,5 +64,31 @@ describe("StartReplay", () => {
     expect((button() as HTMLButtonElement).disabled).toBe(false);
     act(() => root!.unmount());
     container.remove();
+  });
+
+  it("reads Starting… while the replay starts, and Start the replay again once it has gone to it", async () => {
+    // The start page stays mounted while hidden, so coming back for a new replay finds whatever it
+    // showed last.
+    const { fetch, answer } = pendingFetch();
+    render(<StartReplay />);
+    fireEvent.click(startButton());
+    expect(startButton().textContent).toBe(" Starting…");
+    expect(startButton().disabled).toBe(true);
+    await act(async () => answer(201, { run_id: "0123456789abcdef" }));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(push).toHaveBeenCalledWith("/runs/0123456789abcdef?as=sam");
+    expect(startButton().textContent).toBe(" Start the replay");
+    expect(startButton().disabled).toBe(false);
+  });
+
+  it("says why a replay couldn't start, and lets the viewer try again", async () => {
+    const { answer } = pendingFetch();
+    render(<StartReplay />);
+    fireEvent.click(startButton());
+    await act(async () => answer(429, { error: "Too many replays started from here" }));
+    expect(screen.getByRole("alert").textContent).toContain("Too many replays started from here");
+    expect(push).not.toHaveBeenCalled();
+    expect(startButton().textContent).toBe(" Start the replay");
+    expect(startButton().disabled).toBe(false);
   });
 });
