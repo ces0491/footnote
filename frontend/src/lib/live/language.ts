@@ -11,13 +11,28 @@ import type { Shown } from "./playback";
 export const LANGUAGES = { en: "English", es: "Español", fr: "Français" } as const;
 export type Language = keyof typeof LANGUAGES;
 
+// The copies made in another language, by the insight they were made from (insights are replaced,
+// never changed in place): a page renders every 250 ms, and a component that acts when its insight
+// changes, such as the VAR still that fetches its events, must get the same copy each time.
+const copies = new WeakMap<Insight, Map<string, Insight>>();
+
+function copy(of: Insight, key: string, make: () => Insight): Insight {
+  let made = copies.get(of);
+  if (!made) copies.set(of, (made = new Map()));
+  let out = made.get(key);
+  if (!out) made.set(key, (out = make()));
+  return out;
+}
+
 /** The card in `lang`, or as it is when that's English or there is no checked translation. */
 export function inLanguage(insight: Insight, lang: Language): Insight {
   const t = lang === "en" ? undefined : insight.translations?.[lang];
   if (!t) return insight;
-  // As the processor makes the English one: the headline, then the casual line.
-  const plain = t.casual ? `${t.headline.replace(/\.$/, "")}. ${t.casual}` : t.headline;
-  return { ...insight, card: { ...insight.card, headline: t.headline, casual: t.casual, analyst: t.analyst, plain } };
+  return copy(insight, lang, () => {
+    // As the processor makes the English one: the headline, then the casual line.
+    const plain = t.casual ? `${t.headline.replace(/\.$/, "")}. ${t.casual}` : t.headline;
+    return { ...insight, card: { ...insight.card, headline: t.headline, casual: t.casual, analyst: t.analyst, plain } };
+  });
 }
 
 /**
@@ -34,7 +49,11 @@ export function localized(shown: Shown[], lang: Language): Shown[] {
     if (s.insight.translations?.[lang]) return { ...s, insight: inLanguage(s.insight, lang), lang };
     const before = s.earlier?.findLast((e) => e.seq === s.insight.seq && e.translations?.[lang]);
     if (!before) return { ...s, lang: "en" };
-    return { ...s, insight: { ...s.insight, card: inLanguage(before, lang).card }, lang };
+    const insight = copy(s.insight, `${lang} as of version ${before.version}`, () => ({
+      ...s.insight,
+      card: inLanguage(before, lang).card,
+    }));
+    return { ...s, insight, lang };
   });
 }
 

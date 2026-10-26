@@ -73,6 +73,7 @@ export function DescribedFeed({
   // the live region, and is spoken.
   const [saying, setSaying] = useState<{ parts: Part[]; echo: boolean }>({ parts: [], echo: false });
   const latest = useRef(all);
+  const opened = useRef({ reached, startReplay }); // where playback was when the feed opened
   const sayingAt = useRef(detail); // the detail lines are said at
   const said = useRef<Set<string> | null>(null);
   const resumed = useRef(false);
@@ -82,9 +83,12 @@ export function DescribedFeed({
   }, [all]);
 
   // What is there when the feed opens counts as said: the list shows it, and the listener hears what
-  // happens next.
+  // happens next. A feed that opens with its replay, before playback reaches an event, says the
+  // opening line first, and what went on screen then (the catch-up); the graphics from before the
+  // replay began stay in the list.
   useEffect(() => {
-    said.current = new Set(latest.current.map((l) => l.key));
+    const { reached: before, startReplay: start } = opened.current;
+    said.current = new Set(latest.current.filter((l) => before > 0 || l.replay < start).map((l) => l.key));
   }, []);
 
   // So do the lines a change of detail adds to what is there. Lines waiting to be said that the new

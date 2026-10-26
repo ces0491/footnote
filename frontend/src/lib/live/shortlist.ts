@@ -12,13 +12,27 @@ export function atOrBefore(a: MatchTime, b: MatchTime): boolean {
   return a.period < b.period || (a.period === b.period && a.t <= b.t);
 }
 
-/** The strongest live insights current at `now` (none can air once killed or withdrawn). */
+/** Whether an insight is current at `now`: its moment has come and its time on screen hasn't passed. */
+function current(insight: Insight, now: MatchTime | null): boolean {
+  return !now || (atOrBefore(insight.at, now) && atOrBefore(now, insight.until));
+}
+
+const offAirStatus = (insight: Insight) => insight.status === "killed" || insight.status === "withdrawn";
+
+/** The strongest live insights current at `now`, leaving out those killed or withdrawn (`offAir`). */
 export function shortlist(insights: Insight[], now: MatchTime | null, size = SHORTLIST_SIZE): Insight[] {
   return insights
-    .filter((i) => i.live && i.kind !== "correction" && !i.flag && i.status !== "killed" && i.status !== "withdrawn")
-    .filter((i) => !now || (atOrBefore(i.at, now) && atOrBefore(now, i.until)))
+    .filter((i) => i.live && i.kind !== "correction" && !i.flag && !offAirStatus(i) && current(i, now))
     .sort((a, b) => b.rank - a.rank || b.seq - a.seq)
     .slice(0, size);
+}
+
+/** Insights the producer killed or withdrew that are still current at `now`, newest first: one can be
+ * approved again while its moment lasts. Those VAR or a correction undid are under `corrections`. */
+export function offAir(insights: Insight[], now: MatchTime | null): Insight[] {
+  return insights
+    .filter((i) => i.live && i.kind !== "correction" && !i.flag && offAirStatus(i) && current(i, now))
+    .sort((a, b) => b.seq - a.seq);
 }
 
 /** Corrections, and the insights they or VAR undid, newest first. */

@@ -18,6 +18,18 @@ describe("cards in the fan's language", () => {
     expect(shown.card.evidence).toEqual(["e0391"]);
   });
 
+  it("gives the same copy of a card each time, so a page rendering again doesn't make it look new", () => {
+    // The VAR still fetches its events when its card changes, and the page renders every 250 ms.
+    const card = insightFixture("var-e1456", { card: english, translations: { es: spanish } });
+    expect(inLanguage(card, "es")).toBe(inLanguage(card, "es"));
+    const redraft = insightFixture("var-e1456", { card: { ...english, casual: "No penalty." }, source: "agent", version: 2 });
+    const shown = [{ insight: redraft, from: 1400, earlier: [card] }];
+    expect(localized(shown, "es")[0].insight).toBe(localized(shown, "es")[0].insight);
+    // A new state of the card is a new card, in every language.
+    const translated = { ...redraft, translations: { es: spanish } };
+    expect(inLanguage(translated, "es")).not.toBe(inLanguage(card, "es"));
+  });
+
   it("keeps the English until a translation is there, and says which language each card is in", () => {
     const card = insightFixture("goal-e0391", { card: english, translations: { es: spanish } });
     expect(inLanguage(card, "fr").card).toEqual(english);

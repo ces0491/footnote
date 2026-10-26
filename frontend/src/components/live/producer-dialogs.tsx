@@ -78,7 +78,7 @@ export function EditDialog({
         setCasual(asLines(loaded.draft.casual));
         setAnalyst(asLines(loaded.draft.analyst));
       })
-      .catch((cause) => live && setError(`Couldn't load the card: ${cause instanceof Error ? cause.message : cause}`));
+      .catch((cause) => live && setError(`Couldn't load the graphic: ${cause instanceof Error ? cause.message : cause}`));
     return () => {
       live = false;
     };

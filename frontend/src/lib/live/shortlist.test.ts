@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { insightFixture } from "./test-fixtures";
-import { corrections, evidenceSource, provenanceLabel, shortlist, statusLabel } from "./shortlist";
+import { corrections, evidenceSource, offAir, provenanceLabel, shortlist, statusLabel } from "./shortlist";
 
 describe("shortlist", () => {
   const goal = insightFixture("goal-e0391", { rank: 0.95 });
@@ -15,6 +15,17 @@ describe("shortlist", () => {
     const now = { period: 1, t: 1400 };
     expect(shortlist(all, now).map((i) => i.insight_id)).toEqual(["goal-e0391", "keypass-e0387"]); // the sprint is stale
     expect(shortlist(all, { period: 2, t: 10 })).toEqual([]); // nothing carries over the break
+  });
+
+  it("lists what was killed or withdrawn while it is still current, newest first", () => {
+    const now = { period: 1, t: 1400 };
+    const killed = { ...pass, status: "killed" as const, seq: 388 };
+    const withdrawn = { ...goal, status: "withdrawn" as const, status_by: "producer" as const };
+    const stale = { ...sprint, status: "withdrawn" as const };
+    const undoneAndKilled = { ...ruledOut, status: "killed" as const }; // under corrections instead
+    const off = [killed, withdrawn, stale, undoneAndKilled];
+    expect(offAir(off, now).map((i) => i.insight_id)).toEqual(["goal-e0391", "keypass-e0387"]);
+    expect(shortlist(off, now)).toEqual([]);
   });
 
   it("keeps corrections and what they undid apart", () => {

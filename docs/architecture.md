@@ -116,7 +116,8 @@ pitch view and fetches no tracking.
 Once the page shows a run it keeps showing it. A fetch that fails is retried with backoff, and the
 page says the connection is in trouble meanwhile. If the push connection can't be opened (the free
 tier allows 20) the page fetches what it lacks every 3 seconds instead and tries the connection
-again every half minute; it does the same while the client reconnects. A connected page that has
+again every half minute. It polls the same way while the client reconnects after a drop, the
+client's tries backing off from one second to one every half minute. A connected page that has
 had no push for 15 seconds while the replay plays on fetches the snapshot once; if that is ahead of
 the page, the connection has gone quiet (the free tier's messages for the day spent, say), and the
 page follows by polling in the same way. It runs one fetch at a time: a poll while one is on its way

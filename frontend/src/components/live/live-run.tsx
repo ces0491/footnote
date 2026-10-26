@@ -357,6 +357,7 @@ export function LiveRun({ runId, initialProfile }: { runId: string; initialProfi
               roster={r}
               viewer={viewer}
               canProduce={canProduce && !ended}
+              ended={ended}
               mode={mode}
               onMode={switchMode}
               onChange={(message: InsightMessage) => live.receive(message)}

@@ -12,8 +12,8 @@ const roster: Roster = { player: () => undefined, clubName: () => "" };
 
 afterEach(cleanup);
 
-/** The console's Corrections alert, with `insights` as the run's cards. */
-function corrections(insights: Insight[]) {
+/** The console, with `insights` as the run's cards, produced by its starter while the replay runs. */
+function renderConsole(insights: Insight[], { canProduce = true, ended = false } = {}) {
   render(
     <ProducerConsole
       runId="0123456789abcdef"
@@ -21,14 +21,36 @@ function corrections(insights: Insight[]) {
       clock={null}
       roster={roster}
       viewer="00000000-0000-4000-8000-000000000000"
-      canProduce
+      canProduce={canProduce}
+      ended={ended}
       mode="manual"
       onMode={async () => null}
       onChange={() => {}}
     />,
   );
+}
+
+/** The console's Corrections alert, with `insights` as the run's cards. */
+function corrections(insights: Insight[]) {
+  renderConsole(insights);
   return within(screen.getByRole("alert"));
 }
+
+describe("ProducerConsole off air", () => {
+  it("keeps a graphic the producer withdrew where it can be approved again", () => {
+    renderConsole([insightFixture("goal-e0391", { status: "withdrawn", status_by: "producer" })]);
+    const entry = within(within(screen.getByRole("list", { name: "Off air" })).getByText("Femi Adeyani scores").closest("li")!);
+    expect(entry.getByText("Withdrawn")).toBeTruthy();
+    expect(entry.getByRole("button", { name: "Approve again" })).toBeTruthy();
+    expect(screen.getByText("Nothing on the shortlist yet.")).toBeTruthy();
+  });
+
+  it("says the replay has ended, not that another browser produces it", () => {
+    renderConsole([], { canProduce: false, ended: true });
+    expect(screen.getByText(/The replay has ended\./)).toBeTruthy();
+    expect(screen.queryByText(/Only the browser that started this replay/)).toBeNull();
+  });
+});
 
 describe("ProducerConsole corrections", () => {
   it("shows the wording a correction restated, where it came from and its evidence, beside the reason", () => {

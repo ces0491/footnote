@@ -24,7 +24,10 @@ const { FakeClient, clients } = vi.hoisted(() => {
     started = 0;
     stopped = 0;
     private handlers = new Map<string, Handler[]>();
-    constructor(private readonly credential: { getClientAccessUrl: () => Promise<string> }) {
+    constructor(
+      private readonly credential: { getClientAccessUrl: () => Promise<string> },
+      readonly options: unknown = undefined,
+    ) {
       clients.push(this);
     }
     on(event: string, handler: Handler) {
@@ -212,6 +215,8 @@ describe("useLiveRun", () => {
 
   it("catches up again after a reconnection", async () => {
     const hook = await connectedAt(10);
+    // The SDK reconnects on its own, backing off to 30 s between tries, each with a new client URL.
+    expect(clients[0].options).toEqual({ reconnectRetryOptions: { mode: "Exponential", retryDelayInMs: 1_000, maxRetryDelayInMs: 30_000 } });
     act(() => clients[0].emit("disconnected"));
     expect(hook.result.current.connection).toBe("reconnecting");
     stored = storedUpTo(40, [33]);

@@ -87,9 +87,10 @@ way. In a replay started as Nadia, nothing airs until she approves it (P3), and
 Approve waits for an agent's draft that is on its way, so what airs is the
 wording Nadia saw. A lower third approved after its moment goes on air from the
 approval. Beside each graphic, **Edit** and **Kill** act before it airs, and
-**Withdraw** takes it off air, after which **Approve again** puts it back;
-**Redraft** asks the agents for fresh wording. The **Approve automatically**
-switch lets graphics through as they're found, from then on.
+**Withdraw** takes it off air; one killed or withdrawn waits under **Off air**
+while its moment lasts, where **Approve again** airs it. **Redraft** asks the
+agents for fresh wording. The **Approve automatically** switch lets graphics
+through as they're found, from then on.
 
 ### Fan view, casual
 
@@ -151,10 +152,11 @@ DESCRIBED FEED     Detail: Standard ▾   Pace: Normal ▾   [Pause]
 ```
 
 Lines come from templates over the event data, so they say only what the events
-contain. Each graphic is read out as it airs, and again if the producer edits it,
-in the viewer's language and marked as such for the screen reader. The device's
-screen reader speaks the feed through a live region at the pace the listener
-picks. The detail levels:
+contain. A feed that opens with its replay starts with the score and the minute,
+and the catch-up when there is one. Each graphic is read out as it airs, and
+again if the producer edits it, in the viewer's language and marked as such for
+the screen reader. The device's screen reader speaks the feed through a live
+region at the pace the listener picks. The detail levels:
 
 - **Key moments:** goals and shots, VAR, red and yellow cards, penalties,
   substitutions, corrections and the clock (kick-off, added time, half-time, full

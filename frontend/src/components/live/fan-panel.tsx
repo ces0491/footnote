@@ -161,6 +161,7 @@ export function FanPanel({
             runId={runId}
             insight={catchUp.insight}
             lang={catchUp.lang}
+            reading={settings.language}
             moments={catchUp.moments}
             analyst={analyst}
             onClose={() => {

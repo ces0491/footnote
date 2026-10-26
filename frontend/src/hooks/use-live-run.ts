@@ -32,6 +32,10 @@ const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
 const FIRST_LOAD_TRIES = 4;
 const POLL_MS = 3_000;
 const RECONNECT_MS = 30_000;
+// The SDK's own reconnects after a dropped connection each ask the web app for a client URL (60 to an
+// address in five minutes), so they back off to the page's own retry interval. Its default tries
+// every second for as long as the page is open.
+const SDK_RECONNECT = { mode: "Exponential", retryDelayInMs: 1_000, maxRetryDelayInMs: RECONNECT_MS } as const;
 // How long an open connection may go without a push before the page looks at the snapshot. On Web
 // PubSub's free tier, once the day's messages are spent, a connection stays open and carries nothing.
 // A quiet spell of play (the break, a stoppage) leaves the snapshot where the page is, and the page
@@ -270,7 +274,10 @@ export function useLiveRun(runId: string) {
     }
 
     function open(): WebPubSubClient {
-      const ws = new WebPubSubClient({ getClientAccessUrl: () => clientAccessUrl(runId) });
+      const ws = new WebPubSubClient(
+        { getClientAccessUrl: () => clientAccessUrl(runId) },
+        { reconnectRetryOptions: { ...SDK_RECONNECT } },
+      );
       // The SDK can finish connecting after stop() (stop is ignored while it connects or recovers),
       // so a client this page has let go of, or one for a run that has ended since, is stopped again
       // whenever it shows signs of life.

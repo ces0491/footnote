@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Clock, DeskAction, DeskRefusal, Insight, InsightMessage, ProducerMode } from "@/lib/live/contract";
 import type { Roster } from "@/lib/live/describe";
 import { undone } from "@/lib/live/fan";
-import { corrections, provenanceLabel, SHORTLIST_SIZE, shortlist, statusLabel, translatedLabel } from "@/lib/live/shortlist";
+import { corrections, offAir, provenanceLabel, SHORTLIST_SIZE, shortlist, statusLabel, translatedLabel } from "@/lib/live/shortlist";
 import { cn } from "@/lib/utils";
 
 import { KindIcon } from "./card-kind";
@@ -225,9 +225,10 @@ function Item({
 /**
  * The producer's console (docs/experience.md): the strongest moments still current, each with its
  * reason, evidence, provenance and the controls to approve, edit, kill or withdraw it, and the
- * corrections that need attention. Nothing reaches fans without approval unless the producer lets
- * graphics through automatically. Only the viewer who started the replay produces it; anyone else
- * sees the console as it stands.
+ * corrections that need attention, and the graphics taken off air that can still go back on.
+ * Nothing reaches fans without approval unless the producer lets graphics through automatically.
+ * Only the viewer who started the replay produces it, while it runs; anyone else sees the console as
+ * it stands.
  */
 export function ProducerConsole({
   runId,
@@ -236,6 +237,7 @@ export function ProducerConsole({
   roster,
   viewer,
   canProduce,
+  ended = false,
   mode,
   onMode,
   onChange,
@@ -246,6 +248,7 @@ export function ProducerConsole({
   roster: Roster;
   viewer: string;
   canProduce: boolean;
+  ended?: boolean; // the replay has ended, so nobody produces it
   mode: ProducerMode;
   onMode: (mode: ProducerMode) => Promise<string | null>;
   onChange: (message: InsightMessage) => void;
@@ -259,8 +262,10 @@ export function ProducerConsole({
   const [focusTo, setFocusTo] = useState<{ id: string; n: number } | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const all = Object.values(insights);
-  const top = shortlist(all, clock ? { period: clock.period, t: clock.t } : null);
+  const now = clock ? { period: clock.period, t: clock.t } : null;
+  const top = shortlist(all, now);
   const alerts = corrections(all);
+  const off = offAir(all, now);
 
   useEffect(() => {
     if (focusTo) (document.getElementById(cardId(focusTo.id)) ?? list.current)?.focus();
@@ -303,7 +308,7 @@ export function ProducerConsole({
         </div>
         <p id="auto-approve-note" className="text-xs text-muted-foreground">
           {mode === "auto" ? "Each graphic is approved as it's found." : "Nothing airs until you approve it."}{" "}
-          {!canProduce && "Only the browser that started this replay can produce it."}
+          {ended ? "The replay has ended." : !canProduce && "Only the browser that started this replay can produce it."}
         </p>
         {modeError && <p className="w-full text-xs text-tally">{modeError}</p>}
       </div>
@@ -378,6 +383,28 @@ export function ProducerConsole({
           </ol>
         )}
       </div>
+      {off.length > 0 && (
+        <div className="border-t px-5 py-4">
+          <h3 id="off-air-title" className="font-semibold">
+            Off air
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">Killed or withdrawn while still current: approve one again to air it.</p>
+          <ul aria-labelledby="off-air-title" className="mt-3 space-y-4">
+            {off.map((i) => (
+              <li
+                key={i.insight_id}
+                id={cardId(i.insight_id)}
+                tabIndex={-1}
+                className="space-y-2 rounded-md text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <span className="font-semibold">{i.card.headline}</span>
+                <Labels insight={i} />
+                <Actions runId={runId} insight={i} viewer={viewer} canProduce={canProduce} onChange={acted} onEdit={setEditing} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <EditDialog
         key={editing ?? ""}
         runId={runId}

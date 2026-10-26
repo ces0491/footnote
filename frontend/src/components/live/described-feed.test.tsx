@@ -169,6 +169,21 @@ describe("DescribedFeed", () => {
     expect(document.querySelectorAll("[lang]")).toHaveLength(2);
   });
 
+  it("opens with the score and what went on screen when it opens with its replay", () => {
+    // The catch-up shows from the replay's start; a graphic from before it stays in the list unread.
+    const catchUp = insightFixture("catchup", { card: card("What you missed. Kingsferry lead.") });
+    const before = insightFixture("goal-e0391", { card: card("Femi Adeyani scores.") });
+    render(feed({ cards: [{ insight: before, from: 1000 }, { insight: catchUp, from: 1290 }] }));
+    expect(said()).toBe("Saltmarsh Rovers against Kingsferry Athletic. Kick-off is coming up. On screen: What you missed. Kingsferry lead.");
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toContain("On screen: Femi Adeyani scores.");
+  });
+
+  it("says none of what is there when it opens after playback has started", () => {
+    render(feed({ reached: 4 }));
+    tick(4000);
+    expect(said()).toBe("");
+  });
+
   it("labels the pause button with what it does now, without a pressed state", () => {
     render(feed());
     const pause = screen.getByRole("button", { name: "Pause" });
