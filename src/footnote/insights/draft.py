@@ -751,7 +751,7 @@ def check(draft: Draft, facts: Facts, events: set[str] | frozenset[str], limits:
         elif len(value) > limit:
             problems.append(f"{part}: {len(value)} characters once filled in; keep it to {limit}")
     if not card.evidence and any(fact.events for fact in facts.values()):
-        problems.append("the card links to no event; cite the events behind it, or use a fact that rests on them")
+        problems.append("the graphic links to no event; cite the events behind it, or use a fact that rests on them")
     problems += _credit_problems(card, facts)
     problems += _penalty_side_problems(card, facts)
     return problems
@@ -798,7 +798,7 @@ def _credit_problems(card: Card, facts: Facts) -> list[str]:
         surname = fact.display.split()[-1]
         if _CREDIT.search(text) and surname not in text:
             problems.append(
-                f"the card says who a goal is credited to but not who it was originally credited to; give {{{key}}} too"
+                f"the graphic says who a goal is credited to but not who it was originally credited to; give {{{key}}} too"
             )
         for m in re.finditer(rf"\b{re.escape(surname)}\b", text):
             said = text[: m.start()]
