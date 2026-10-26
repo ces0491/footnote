@@ -42,7 +42,7 @@ SWEEP_INTERVAL = 60.0  # seconds between looks for runs left running by a crashe
 
 
 async def sweep(processor: Processor) -> None:
-    """End abandoned runs, once a minute.
+    """End abandoned runs, and delete old ones, once a minute.
 
     The first look waits until a restarted processor has caught up on the hub: until then, a healthy
     run's stored state is behind and its next message can look overdue.
@@ -53,6 +53,10 @@ async def sweep(processor: Processor) -> None:
             await processor.end_overdue()
         except Exception:
             log.exception("looking for abandoned runs failed")
+        try:
+            await processor.delete_old_runs()
+        except Exception:
+            log.exception("deleting old runs failed")
         await asyncio.sleep(SWEEP_INTERVAL)
 
 

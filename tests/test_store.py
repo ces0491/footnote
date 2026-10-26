@@ -13,6 +13,7 @@ import os
 import re
 import uuid
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import psycopg
 import pytest
@@ -138,6 +139,48 @@ async def _play(
     for i in range(0, len(items), 100):
         await processor.handle(items[i : i + 100])
     return store, push
+
+
+async def test_a_replay_that_ended_over_a_day_ago_is_deleted_and_the_caches_stay(
+    pool: Pool, showcase: Match, analysis: Analysis
+) -> None:
+    """The replay goes with its feed, state, insights, their versions and the stored pushes; one
+    still running and one that ended an hour ago stay, and so do the agents' runs and cache."""
+    store, _ = await _play(pool, showcase, analysis, end=True)
+    running, recent = "0000000000000001", "0000000000000002"
+    tables = ("feed_events", "run_state", "insights", "insight_versions", "insight_pushes")
+    async with pool.connection() as conn:
+        await conn.execute("update runs set ended_at = now() - interval '2 days' where run_id = %s", (RUN_ID,))
+        for run_id, status, ended in ((running, "running", None), (recent, "finished", "1 hour")):
+            await conn.execute(
+                "insert into runs (run_id, match_id, descriptor, status, ended_at)"
+                " values (%s, %s, '{}', %s, now() - %s::interval)",
+                (run_id, showcase.match_id, status, ended),
+            )
+        await conn.execute(
+            "insert into agent_runs (agent_run_id, run_id, insight_id, facts_version, cache_key, model, prompt_version)"
+            " values ('a1', %s, 'goal-e1586', 1, 'k1', 'gpt-5-mini', 'p')",
+            (RUN_ID,),
+        )
+        await conn.execute(
+            "insert into agent_cache (cache_key, agent_run_id, draft, facts, events) values ('k1', 'a1', '{}', '{}', '[]')"
+        )
+
+    async def count(table: str, run_id: str | None = None) -> int:
+        where, params = (" where run_id = %s", (run_id,)) if run_id else ("", ())
+        async with pool.connection() as conn:
+            row = await (await conn.execute(f"select count(*) from {table}{where}", params)).fetchone()
+        assert row is not None
+        return int(row["count"])
+
+    assert all([await count(table, RUN_ID) for table in tables])  # something to delete in each
+    assert await store.delete_ended_runs(timedelta(days=1), 10) == 1
+    async with pool.connection() as conn:
+        left = await (await conn.execute("select run_id from runs order by run_id")).fetchall()
+    assert [row["run_id"] for row in left] == [running, recent]
+    assert [await count(table, RUN_ID) for table in tables] == [0] * len(tables)
+    assert await count("agent_runs") == 1 and await count("agent_cache") == 1
+    assert await store.delete_ended_runs(timedelta(days=1), 10) == 0
 
 
 async def _one(pool: Pool, query: str, *params: object) -> dict:

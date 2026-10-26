@@ -64,7 +64,7 @@ calm mode, the pitch view and its graphics, and the described feed.
 
 - A replay belongs to the browser that started it: only that browser approves
   its graphics or stops it, and starting another replaces it. Anyone with its link
-  can watch.
+  can watch, until a day after it ends, when it is deleted.
 - Up to six replays run at once; a seventh replaces the oldest.
 - Each address can start eight replays in five minutes.
 - A fresh draft (a graphic's first, or a Redraft) took 8 to 24 seconds in the

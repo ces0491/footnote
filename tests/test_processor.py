@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -13,7 +14,7 @@ from footnote.live.contract import KIND_CONTROL, KIND_FEED
 from footnote.live.match import Match, load_match
 from footnote.live.timeline import Timeline
 from footnote.processor import core
-from footnote.processor.core import OVERDUE_MS, FeedRow, Incoming, Processor
+from footnote.processor.core import KEEP_ENDED, OVERDUE_MS, FeedRow, Incoming, Processor
 from footnote.replayer.schedule import plan
 
 RUN_ID = "0123456789abcdef"
@@ -30,6 +31,7 @@ class MemoryStore:
         self.insight_rev: dict[str, int] = {}
         self.started: dict[str, tuple[str | None, str]] = {}  # who started each run, and its producer mode
         self.pushes: dict[str, dict[int, dict]] = {}  # each row's stored push, by run and seq
+        self.ended_at: dict[str, datetime] = {}
         self.fail_saves = 0
 
     async def start_run(self, descriptor: dict, viewer: str | None = None, producer: str = "auto") -> bool:
@@ -43,6 +45,15 @@ class MemoryStore:
     async def end_run(self, run_id: str, reason: str) -> None:
         if self.status.get(run_id) == "running":
             self.status[run_id] = reason
+            self.ended_at[run_id] = datetime.now(UTC)
+
+    async def delete_ended_runs(self, ended_before: timedelta, limit: int) -> int:
+        cutoff = datetime.now(UTC) - ended_before
+        old = sorted((at, run_id) for run_id, at in self.ended_at.items() if at < cutoff)[:limit]
+        for _, run_id in old:
+            for table in (self.runs, self.status, self.feed, self.views, self.insights, self.pushes, self.ended_at):
+                table.pop(run_id, None)
+        return len(old)
 
     async def load_run(self, run_id: str) -> tuple[dict, list[dict]] | None:
         if run_id not in self.runs:
@@ -288,6 +299,19 @@ async def test_a_stuck_push_holds_a_batch_up_for_seconds_only(showcase: Match, m
     seqs = [m["seq"] for m in push.sent if m["type"] == "event"]
     assert 10 not in seqs and 11 in seqs
     assert 10 in store.feed[RUN_ID]
+
+
+async def test_a_replay_is_deleted_a_day_after_it_ends(showcase: Match) -> None:
+    _, items = _run_messages(showcase, 81)
+    store, push = MemoryStore(), MemoryPush()
+    processor = Processor(showcase, store, push)
+    for i in range(0, len(items), 200):
+        await processor.handle(items[i : i + 200])
+    assert store.status[RUN_ID] == "finished"
+    assert await processor.delete_old_runs() == 0  # it has only just ended
+    store.ended_at[RUN_ID] -= KEEP_ENDED + timedelta(minutes=1)
+    assert await processor.delete_old_runs() == 1
+    assert RUN_ID not in store.runs and RUN_ID not in store.feed
 
 
 async def test_a_run_whose_replayer_went_quiet_is_ended_as_failed(showcase: Match) -> None:

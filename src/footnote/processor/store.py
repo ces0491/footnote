@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from psycopg.types.json import Jsonb
 
@@ -86,6 +86,15 @@ class PostgresStore:
                 " left join run_state s on s.run_id = r.run_id where r.status = 'running'"
             )
             return [(row["descriptor"], row["seq"]) for row in await cur.fetchall()]
+
+    async def delete_ended_runs(self, ended_before: timedelta, limit: int) -> int:
+        # The feed, state, insights, their versions and translations, and the stored pushes go with
+        # the run (on delete cascade). The agents' runs and caches and the translation cache stay.
+        return await self._retry(
+            "delete from runs where run_id in (select run_id from runs where status <> 'running'"
+            " and ended_at < now() - %s order by ended_at limit %s)",
+            (ended_before, limit),
+        )
 
     async def save(self, rows: list[FeedRow], run_id: str, view: dict | None, changes: list[Change]) -> list[dict]:
         params = [

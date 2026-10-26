@@ -36,6 +36,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 from itertools import groupby
 from typing import Protocol, cast, get_args
 
@@ -60,6 +61,13 @@ log = logging.getLogger(__name__)
 # How late a run's next message may be before the run counts as abandoned: far beyond any delay on
 # the way through Event Hubs, and beyond the time a restarted processor takes to catch up.
 OVERDUE_MS = 5 * 60_000
+
+# How long a replay is kept once it has ended, so a page opened from its link still shows it. After
+# that the sweep deletes it, a few at a time, with its feed, state, graphics and stored pushes. The
+# agents' drafts and the translations are cached apart from replays, so later replays still reuse
+# them. Without this a script starting replays at the rate limit would fill the server's 32 GB.
+KEEP_ENDED = timedelta(days=1)
+DELETE_BATCH = 20
 
 END_REASONS: frozenset[str] = frozenset(get_args(RunEndReason))
 # What a run_start's descriptor must hold for the processor to follow the run.
@@ -106,6 +114,11 @@ class Store(Protocol):
 
     async def running_runs(self) -> list[tuple[dict, int]]:
         """Each run still marked running: its descriptor and the seq its stored state reflects."""
+        ...
+
+    async def delete_ended_runs(self, ended_before: timedelta, limit: int) -> int:
+        """Delete up to `limit` runs that ended more than `ended_before` ago, oldest first, with what
+        was stored for them; returns how many it deleted."""
         ...
 
 
@@ -299,6 +312,13 @@ class Processor:
                 await self._end(run_id, "failed")
                 ended.append(run_id)
         return ended
+
+    async def delete_old_runs(self) -> int:
+        """Delete replays that ended more than KEEP_ENDED ago, DELETE_BATCH at most, oldest first."""
+        deleted = await self.store.delete_ended_runs(KEEP_ENDED, DELETE_BATCH)
+        if deleted:
+            log.info("deleted %d replays that ended over %.0f h ago", deleted, KEEP_ENDED.total_seconds() / 3600)
+        return deleted
 
     def _due_ms(self, descriptor: dict, seq: int) -> float:
         """When the run should have published the message after `seq`, or its last once all are in."""

@@ -385,7 +385,11 @@ Postgres the pushes kept for delayed viewers come to about 1.4 KB of JSON an eve
 a replay from kick-off (measured by folding the showcase offline); the insight pushes kept beside
 them number about a hundred a replay from kick-off, the largest about 4.3 KB; and the tracking is
 kept once, 960 bytes a second of match, which is also what a viewer's pitch view fetches at any
-speed: about 6 MB for a whole match. The server's 32 GB holds them all.
+speed: about 6 MB for a whole match. A replay is kept for a day after it ends, so a page opened from
+its link still shows it; then the processor's sweep deletes it with its feed, state, graphics and
+stored pushes, twenty at a time. The agents' drafts, their runs and the translations are cached
+apart from replays and stay, so later replays still reuse them. That bounds the 32 GB server's use
+by what a day's replays store.
 
 The model costs nothing until it is called. A card cost about half a US cent on average in the
 recorded evaluation run, and under a cent at most, for a recap, which reads the whole story
