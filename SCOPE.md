@@ -23,10 +23,10 @@ Data
 Pipeline (deployed on Azure)
 
 - [x] Replayer → Event Hubs → processor on Container Apps → Postgres → Web PubSub → browser
-- [x] Live stats: pass distance, accuracy and difficulty rating; ball and shot
-      speed; player speed and distance tags when thresholds are crossed
+- [x] Live stats: pass distance, accuracy and difficulty rating; shot speed;
+      player speed and distance tags when thresholds are crossed
 - [x] Match-state timeline updated live, and the state model scored against the
-      answer key on held-out matches whose team styles it wasn't fitted on
+      answer key on held-out matches involving team styles it wasn't fitted on
 - [x] Template overlay p95 under 1 s from event publish to browser, measured on
       the deployed stack (461 ms on 21 October, [docs/architecture.md](docs/architecture.md#latency))
 
@@ -66,15 +66,15 @@ Quality and submission
 - [x] CI runs lint, type checks, tests and agent-output evaluations
 - [x] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
-- [ ] Video under 2:00 showing the deployed app; public repo; elevator pitch
+- [x] Video under 2:00 showing the deployed app
+- [ ] Public repo; elevator pitch
 - [ ] Live demo stays up and free for judges until 2026-11-10
 - [ ] Submitted by Tuesday 27 October, evening SAST
 
 ## Out of scope
 
 - Real match data, real footage, real clubs, players, crests or league branding
-- Generating events from video: a stretch goal, started only after every Done
-  item is ticked, and kept out of the video unless it works
+- Generating events from video
 - Win probability, and betting or odds features
 - Synthetic voice commentary; screen readers handle speech for the described feed
 - Testing with blind or partially sighted users. The README names it as the
@@ -115,3 +115,6 @@ category.
   and a new Postgres server (README, Deploying to Azure)
 - 2026-10-26: the rule explainers cover VAR decisions; an offside flagged in
   open play gets no graphic
+- 2026-10-26: the live stats' ball speed narrowed to shot speed, the only speed
+  of the ball the page shows; generating events from video dropped as a stretch
+  goal

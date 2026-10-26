@@ -6,8 +6,8 @@ follow the pictures or the sound. This document sets out the evidence on what
 each group needs, and the design principles that follow.
 
 The evidence is uneven. Several surveys were commissioned by companies with an
-interest in the result, some don't state a sample size, and the accessibility
-research rests on small qualitative groups.
+interest in the result, some don't state a sample size, and much of the
+accessibility research rests on small groups.
 
 ## Production teams
 
@@ -17,8 +17,7 @@ Stats Perform (Opta) supplies the league's official event data and, from the
 From 2026/27 the league produces its international coverage in-house as
 Premier League Studios
 ([IBC365, 12 Sep 2025](https://ibc.org/production/news/building-a-true-premier-league-facility/22336)).
-Its world feed has used template-driven graphics systems (Viz Engine and Viz
-Trio) to put data on screen
+Its world feed has used Vizrt's Viz Engine and Viz Trio for data-driven graphics
 ([Vizrt, 28 Nov 2024](https://www.vizrt.com/blog/ae-live-and-vizrt/)).
 
 **Production teams filter a lot of data down to a few stories.** At SVG
@@ -43,8 +42,7 @@ Appeals Panel moved a Brentford goal from a Harry Clarke own goal to Yoane Wissa
 ([premierleague.com, 29 Oct 2024](https://www.premierleague.com/news/4159875)).
 
 **Crews keep control.** Fox Sports' David Sobel on fully automated clips: "Will
-we ever go to fully automated clips, I don't think so", and "we can't let the
-tools beat the crew up"
+we ever go to fully automated clips, I don't think so"
 ([Google Cloud, 27 Aug 2026](https://cloud.google.com/transform/fox-sports-world-cup-ai-agents-future-of-sports-broadcasting)).
 
 **Stats Perform's Niall Hendry sees personalisation as unsolved for
@@ -54,8 +52,8 @@ them up."
 
 ## Fans watching live
 
-**Most fans do something else while they watch, and it's often about the
-match.** In Deloitte's March 2023 survey of 3,004 US fans aged 14 and over, 77%
+**In two US surveys, most fans did something about the match while they
+watched.** In Deloitte's March 2023 survey of 3,004 US fans aged 14 and over, 77%
 did at least one game-related activity while watching at home, and 35% want
 real-time stats and analytics in streams
 ([Deloitte, 26 Jun 2023](https://www.deloitte.com/global/en/insights/industry/sports/immersive-sports-fandom.html)).
@@ -95,8 +93,8 @@ such as Defensive Alerts, move to the main feed
 countries (recruited on Reddit, 96.7% male), identification with the team
 averaged 4.06 out of 5 and with players 3.03
 ([Merten et al., Sport, Business and Management, 2024](https://emerald.com/insight/content/doi/10.1108/SBM-05-2023-0063/full/html)).
-In a YouGov survey of 1,005 Australians across all sports, 55% follow a sport
-mainly for a team and 21% for an athlete
+In a YouGov survey of 1,005 Australians, a team was the main reason 55% of
+sports fans followed a sport, against 21% for an athlete
 ([YouGov, 19 Jun 2025](https://yougov.com/articles/52412-more-than-half-of-australians-follow-sports-for-teams-but-younger-fans-favour-athletes)).
 
 **Fantasy managers watch for their players.** There were 11.43 million verified
@@ -155,8 +153,9 @@ They wanted to know where the ball and players were, the type of pass and the
 build-up to goals, and disliked information "provided after the event"
 ([RNIB, Nov 2022](https://media.rnib.org.uk/documents/RNIB_report_on_accessibility_of_TV_football_broadcasts.pdf)).
 In RNIB focus groups, some found audio description "too frantic and
-overwhelming", VAR checks went undescribed, and one fan's wish was an app with
-"stats on one side which you can touch, and it starts reading them"
+overwhelming", one noted that nothing describes the offside lines during a VAR
+check, and one fan's wish was an app with "stats on one side which you can
+touch, and it starts reading them"
 ([RNIB focus group 1](https://media.rnib.org.uk/documents/RNIB_first_focus_group_on_accessibility_of_football_broadcasts_2022.pdf),
 [focus group 2](https://media.rnib.org.uk/documents/RNIB_second_focus_group_on_accessibility_of_football_broadcasts_2022.pdf)).
 RNIB's guidance: "Text on screen must be read out"
@@ -169,9 +168,9 @@ subtitles to about 210, tested with RNIB
 [SVG Europe, 13 Oct 2026](https://www.svgeurope.org/blog/headlines/sky-sports-boosts-accessibility-offering-with-live-description-and-audio-commentary-for-premier-league-coverage/)).
 A season has 380 matches.
 
-**Shorter, faster captions scored better in one study.** In a Toronto study of
-27 deaf and hard-of-hearing viewers watching hockey and basketball, captioning
-only the colour commentary (about 2 s delay) scored higher than full
+**Shorter captions with less delay scored better in one study.** In a Toronto
+study of 27 deaf and hard-of-hearing viewers watching hockey and basketball,
+captioning only the colour commentary (about 2 s delay) scored higher than full
 play-by-play (about 4 s), whose captions "interfere with watching the gameplay",
 though most of those asked (17 of 26) reported no preference
 ([Nam et al., 19 Apr 2023](https://webs.uab.cat/livesubtitling/wp-content/uploads/sites/209/2023/06/LiveSubtitling_Conference_NAM_somang.pdf)).
@@ -185,7 +184,8 @@ by "bright or flashing lights, loud and unexpected noises", as well as strong
 smells and crowds, and announcements shown as text on stadium screens among the
 things that helped
 ([NatCen for SGSA, Jul 2021](https://sgsa.org.uk/wp-content/uploads/2023/12/Neurodiverse-sports-fans.pdf)).
-On screens, WCAG requires a way to pause or hide moving content
+On screens, WCAG requires a way to pause, stop or hide moving content that
+starts by itself, lasts more than five seconds and runs alongside other content
 ([SC 2.2.2](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html))
 and allows nothing to flash more than three times in any one second unless the
 flashes stay below its thresholds
@@ -196,8 +196,9 @@ streaming services proposes audio description on 2.5% of content rising to 10%
 by year four, with no genre automatically exempt
 ([Wiggin, 2026](https://wiggin.co.uk/insight/two-significant-ofcom-consultation-documents-published-as-part-of-the-implementation-of-the-media-act/)).
 In France, since 28 June 2025, the law has required services giving access to
-audiovisual media to carry access services "synchronized with sound and video"
-and to let users adjust them, with Arcom overseeing it
+audiovisual media to pass on in full the access services that exist,
+"synchronized with sound and video", and to let users adjust them, with Arcom
+overseeing it
 ([Arcom](https://www.arcom.fr/en/we-know/our-missions/ensuring-plurality-and-social-cohesion/accessibility-of-services-giving-access-to-audiovisual-media-services)).
 
 **Mistakes matter more to fans who can't see the screen.** A described event
@@ -213,8 +214,9 @@ work best when "the people who use these services are involved in shaping them"
   when she was third in Britain's rankings, and described two players aged 27
   and 35 as up-and-comers
   ([Consultancy.uk, 5 Jul 2024](https://www.consultancy.uk/news/37705/wimbledon-ai-app-mocked-for-unforced-errors)).
-- ESPN's AI recap of Alex Morgan's final match didn't mention her, despite human
-  review ([Awful Announcing, 9 Sep 2024](https://awfulannouncing.com/espn/alex-morgan-ai-generated-recap-mention.html)).
+- ESPN's AI recap of Alex Morgan's final match didn't mention her, though ESPN
+  had said a human editor would review each AI recap
+  ([Awful Announcing, 9 Sep 2024](https://awfulannouncing.com/espn/alex-morgan-ai-generated-recap-mention.html)).
 - AI-cloned commentator voices on PDC darts were called "robotic and unnatural"
   ([dartsnews.com, 29 Jul 2025](https://dartsnews.com/pdc/ai-commentary-on-pdc-tv-raises-eyebrows-it-lacks-emotion-and-nuance)).
 - Nickelodeon's NFL altcast fell from over 2 million viewers at its 2021 debut

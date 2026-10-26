@@ -68,8 +68,13 @@ class Groundedness:
 
 
 def verdict(recorded: dict | None) -> Verdict | None:
-    """The recorded judgement as a verdict beside the code evaluators' own."""
+    """The recorded judgement as a verdict beside the code evaluators' own. A fail keeps the whole
+    reason, less the evaluator's stock opening: the reason lists what the card got right before the
+    fault it found."""
     if not recorded:
         return None
-    note = "" if recorded["passed"] else f"scored {recorded['score']}: {recorded['reason'][:300]}"
-    return Verdict(NAME, bool(recorded["passed"]), note)
+    if recorded["passed"]:
+        return Verdict(NAME, True, "")
+    reason = str(recorded["reason"]).removeprefix("Let's think step by step:").strip()
+    score = recorded["score"]  # None when the judge's replies couldn't be read
+    return Verdict(NAME, False, reason if score is None else f"scored {score:g} of 5: {reason}")

@@ -76,7 +76,7 @@ def render(scores: dict) -> str:
     par(
         "Two models read each match: one rates how hard a pass was, the other estimates the hidden match "
         "state live. This page says what they read, how they were fitted and how well they recover the truth "
-        "on matches between clubs whose playing styles they never saw."
+        "on matches involving clubs whose playing styles they never saw."
     )
     par(
         f"Generated on {meta['date']} from all {sum(counts.values())} fixtures of the league under seed "

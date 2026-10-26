@@ -107,8 +107,8 @@ behind, the shortest delay a fan can set. A fan's stream runs behind live by the
 their page shows the match folded up to the last event their playback has reached, and each card as
 it stood then ([overlay.md](overlay.md#when-an-item-shows)). The pitch view draws the
 tracking at the same moment: it fetches it in five-second chunks around the viewer's playback, and
-the web app cuts each chunk at the run's live point, so nobody is sent positions from beyond it. A
-chunk live is still inside is fetched again every 750 ms, or every 250 ms when playback is under
+the web app cuts each chunk at the run's live point, so nobody is sent positions from beyond it. The
+chunk that holds the live point is fetched again every 750 ms, or every 250 ms when playback is under
 1.2 seconds of real time behind live, as a 3-second delay is at 4×. Once a run has ended, live stays
 where it ended: a delayed stream plays on to there and asks for nothing beyond it. A phone draws no
 pitch view and fetches no tracking.
@@ -169,8 +169,9 @@ the browser's types in `frontend/src/lib/live/contract.ts`.
 
 ## Delivery and failure
 
-Delivery from Event Hubs is at least once. The processor stores a batch's feed rows and the run's
-state view in one transaction before pushing anything, then checkpoints in Blob Storage.
+Delivery from Event Hubs is at least once. For each run in a batch, the processor stores the feed
+rows and the run's state view in one transaction before pushing anything for that run, and it
+checkpoints in Blob Storage once the whole batch is handled.
 
 - A redelivered message is skipped: each run's state ignores a `seq` it has already applied, and
   feed rows are keyed on run and `seq`.

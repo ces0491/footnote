@@ -2,7 +2,7 @@
 
 Two models read each match: one rates how hard a pass was, the other estimates the hidden match
 state live. This page says what they read, how they were fitted and how well they recover the truth
-on matches between clubs whose playing styles they never saw.
+on matches involving clubs whose playing styles they never saw.
 
 Generated on 2026-10-20 from all 380 fixtures of the league under seed 2026, in 16 minutes.
 Generator fingerprint `5e1cde3bdb459aba`. Regenerate with `python -m footnote.interpret`, which also

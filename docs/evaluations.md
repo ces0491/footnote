@@ -10,12 +10,12 @@ The checks refuse a draft that types a figure or names someone the facts don't. 
 judge some of what the checks can't. Four are rough tests in code, described in the table below
 (`src/footnote/evals/judges.py`). None of them can tell whose a claim is, so a card that gives the
 right words to the wrong player or moment passes all four. The fifth is Azure AI Evaluation's
-groundedness evaluator, on the same Foundry deployment (`src/footnote/evals/groundedness.py`). It
-catches a sentence that contradicts the facts, such as "the only shot of the match" when the match
-has had three, but it is lenient. In earlier recordings, from 21 October, whose cards aren't in the
-tables below, it scored 4 or 5 a card that gave Varlan's pass the minute of the VAR decision on it,
-one that wrote of a handball VAR had found no offence in, and one that said a counter started with
-the pass that ended it. Reading the cards stays part of a review.
+groundedness evaluator, on the same Foundry deployment (`src/footnote/evals/groundedness.py`). In
+the recording below it failed the catch-up from 81', which says Adeyani's 23' goal was "a decision
+that stood after VAR checked an incident at 33'" when that check ruled out a Saltmarsh goal. It is
+lenient, though: in earlier recordings, from 21 October, whose cards aren't in the tables below, it
+gave 4 or 5 to a card that wrote of a handball where VAR had found no offence, and to one that said
+a counter started with the pass that ended it. Reading the cards stays part of a review.
 
 CI (`tests/test_evals.py`) replays the recorded drafts through the current checks and evaluators on
 each push to main and each pull request. It fails unless three cards in four pass every evaluation,
@@ -41,7 +41,7 @@ The cards were drafted and judged by `uv run --group evals python -m footnote.ev
 | Accepted with every evaluation passed | 14 |
 | Evaluations passed | 82 of 85 |
 | Time to a draft | median 15.5 s, slowest 23.8 s |
-| Tokens per card | median 10356 in, 973 out |
+| Tokens per card | median 10,356 in, 973 out |
 | Cost of the drafts at list prices (the judge's calls aside) | US$0.080 |
 
 ## Evaluators
@@ -74,4 +74,4 @@ The cards were drafted and judged by `uv run --group evals python -m footnote.ev
 | `catchup@23` | accepted, 1 attempt, 8.7 s | **What you missed, up to 22'** Saltmarsh had a spell from 2' and spent 74% of the following 5 minutes in control, completing 44 passes as their longest move. They then pinned Kingsferry back in a spell from 6' that lasted 3 minutes with 62% of that stretch in their favour. There have been no goals so far. | all passed |
 | `catchup@31` | accepted, 1 attempt, 9.9 s | **What you missed, up to 30'** 2' and 17' saw Saltmarsh dominate possession, but Femi Adeyani scored for Kingsferry at 23' with a 21 m shot after a pass from Javi Ferrano. | all passed |
 | `catchup@60` | accepted, 2 attempts, 18.2 s | **What you missed, up to 59'** Saltmarsh had most of the play early on, but Femi Adeyani put Kingsferry ahead from Javi Ferrano's pass at 23'. A VAR check later ruled a Saltmarsh shot out for offside, and then Teo Varlan levelled for Saltmarsh at 52'. | all passed |
-| `catchup@81` | accepted, 1 attempt, 10.4 s | **What you missed, up to 80'** A quick start from Saltmarsh gave them long spells of control before Femi Adeyani put Kingsferry ahead at 23', a decision that stood after VAR checked an incident at 33', and Saltmarsh levelled when Teo Varlan scored at 52'. Since the equaliser Saltmarsh have pressed hard, pinning Kingsferry back in several spells late on. | grounded: scored 2.0: Let's think step by step: The response is clearly grounded in the provided context — it references the match time (up to 80'), the two goals (Femi Adeyani 23' and Teo Varlan 52'), the passing shares (Saltmarsh 64% / Kingsferry 36%) and the shot counts (23 vs 2), and it summarises Saltmarsh pressing  |
+| `catchup@81` | accepted, 1 attempt, 10.4 s | **What you missed, up to 80'** A quick start from Saltmarsh gave them long spells of control before Femi Adeyani put Kingsferry ahead at 23', a decision that stood after VAR checked an incident at 33', and Saltmarsh levelled when Teo Varlan scored at 52'. Since the equaliser Saltmarsh have pressed hard, pinning Kingsferry back in several spells late on. | grounded: scored 2 of 5: The response is clearly grounded in the provided context — it references the match time (up to 80'), the two goals (Femi Adeyani 23' and Teo Varlan 52'), the passing shares (Saltmarsh 64% / Kingsferry 36%) and the shot counts (23 vs 2), and it summarises Saltmarsh pressing after the equaliser, which is supported by the pressure/control spells. However it contains a factual inaccuracy around the VAR check: the reply implies the 23' Kingsferry goal was the decision checked and that it "stood" at 33', whereas the context shows a 33' VAR check ruled out a Saltmarsh goal (offside) and the on-field decision was overturned. The response also fails to deliver the three distinct lines requested (headline, casual fan line, analyst line) and instead returns a single paragraph. Because it uses correct contextual details but includes a notable incorrect statement and omits the requested format, the groundedness is limited. |

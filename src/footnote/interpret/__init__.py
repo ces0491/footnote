@@ -9,6 +9,6 @@
   threshold.
 
 The models are fitted on generated matches by `python -m footnote.interpret` and scored against the
-answer key on matches between clubs whose playing styles they never saw (docs/models.md). The
+answer key on matches involving clubs whose playing styles they never saw (docs/models.md). The
 services load the fitted parameters from `params/` and never read the answer key.
 """

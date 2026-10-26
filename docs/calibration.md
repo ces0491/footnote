@@ -5,8 +5,8 @@ figures below. This report measures two full generated seasons, under league see
 which separates the gaps that hold under both seeds from those that come and go with one
 season's draws.
 
-Generated on 2026-10-23: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
-tracking, in 4 minutes. Generator fingerprint `5e1cde3bdb459aba`. Regenerate with
+Generated on 2026-10-26: all 380 fixtures of the 2026/27 season under each seed, with 10 Hz
+tracking, in 5 minutes. Generator fingerprint `5e1cde3bdb459aba`. Regenerate with
 `python -m footnote.calibration`.
 
 Published figures are for the 2025/26 Premier League season unless the row says otherwise.
@@ -34,7 +34,7 @@ the published figure is a single real season and is noisy too.
 | Goal kicks per match | 14.3 ± 0.41 | 14.5 ± 0.40 | 15.5 | -8% / -7% | [Opta Analyst](https://theanalyst.com/articles/premier-league-rules-throw-ins-goal-kicks-ball-in-play) | 5,901 goal kicks |
 | Fouls per match | 21.9 ± 0.65 | 20.9 ± 0.57 | 21.6 | +1% / -3% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed fouls committed (HF, AF): 8,224 |
 | Offsides per match | 3.27 ± 0.23 | 3.49 ± 0.26 | 3.09 | +6% / +13% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 1,175 offsides |
-| Yellow cards per match | 4.20 ± 0.20 | 4.07 ± 0.19 | 3.75 | +12% / +9% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed yellow cards (HY, AY): 1,424; a first yellow that a second turns into a red isn't counted |
+| Yellow cards per match | 4.10 ± 0.20 | 3.98 ± 0.19 | 3.75 | +9% / +6% | [football-data.co.uk match statistics](https://www.football-data.co.uk/mmz4281/2526/E0.csv) | summed yellow cards (HY, AY): 1,424; a first yellow that a second turns into a red isn't counted |
 | Red cards per match | 0.17 ± 0.04 | 0.14 ± 0.04 | 0.12 | +45% / +18% | [Opta Analyst](https://theanalyst.com/articles/premier-league-team-of-the-season-2025-26-opta) | 44 red cards |
 | Penalties per match | 0.27 ± 0.05 | 0.30 ± 0.06 | 0.24 | +11% / +23% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 92 penalties won |
 | Penalty conversion | 89.2% ± 6.0 | 77.0% ± 7.8 | 83.7% | +7% / -8% | [premierleague.com club stats](https://www.premierleague.com/en/stats/top/clubs) | club totals summed: 77 penalty goals from 92 penalties |
@@ -50,7 +50,7 @@ the published figure is a single real season and is noisy too.
 
 ## Largest differences
 
-19 of the 32 figures are within 10% of the published value under both seeds, and 24 within 20%.
+20 of the 32 figures are within 10% of the published value under both seeds, and 24 within 20%.
 
 More than 10% off under both seeds, in the same direction, furthest first:
 
@@ -68,7 +68,7 @@ Draws are rarer than in the real league. Most of the difference has gone to home
 
 More shots miss the target than in the real league: across the seasons, 12.1 a match against 9.3, since fewer are on target or blocked.
 
-More than 10% off under one seed but not the other: away wins (+5% / +11%), goalless matches (+33% / +0%), offsides per match (+6% / +13%), yellow cards per match (+12% / +9%), own goals per match (+25% / -7%), headed share of goals (-4% / -25%).
+More than 10% off under one seed but not the other: away wins (+5% / +11%), goalless matches (+33% / +0%), offsides per match (+6% / +13%), own goals per match (+25% / -7%), headed share of goals (-4% / -25%).
 
 ## Physical figures for context
 
@@ -80,7 +80,7 @@ targets.
 | --- | --- | --- | --- |
 | Distance per team per match, 2024/25 | 111.2 km (SD 6.3) | 113.9 km (SD 4.1) | [Allen et al., Br J Sports Med 2025 (Second Spectrum tracking); value read from Figure 2](https://doi.org/10.1136/bjsports-2025-110430) |
 | Sprint distance (>7 m/s) per team per match, 2024/25 | 2.7 km (SD 0.9) | 2.3 km (SD 0.5) | [Allen et al., Br J Sports Med 2025; value read from Figure 2](https://doi.org/10.1136/bjsports-2025-110430) |
-| Distance per 90 minutes, regular players, 2024/25 to Matchweek 29 | 8.1 to 11.1 km (middle 95% of outfield players' matches of 85 minutes or more) | 8.5 to 12.3 km | [premierleague.com (Opta Analyst)](https://www.premierleague.com/en/news/4272290) |
+| Distance per 90 minutes, regular players, 2024/25 to Matchweek 29 | 8.1 to 11.1 km (lowest and highest of the outfield players with 1,500 minutes or more by matchday 29, both seasons) | 8.5 to 12.3 km | [premierleague.com (Opta Analyst)](https://www.premierleague.com/en/news/4272290) |
 
 ## Sources
 

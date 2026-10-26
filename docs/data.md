@@ -33,7 +33,8 @@ high), one side applying sustained *pressure* (camped in the opponent's half), o
 hands often) or *balanced*. Regimes
 follow a semi-Markov process: each is entered with a planned duration, and the next is drawn with
 weights from both teams' styles and strengths, the score and the clock. A regain can start a
-transition for the side that won the ball; when the break ends, the regime it interrupted resumes.
+transition for the side that won the ball; when the break ends, the regime it interrupted resumes
+if more than 20 seconds of it were left, and otherwise the next is drawn.
 The regime is never written to the feed. It changes how both teams play (block height, pressing,
 risk, tempo, long balls, crossing, shot appetite), and the events and the tracking are the only
 evidence of it.
@@ -63,7 +64,8 @@ stored in the answer key with the event.
 passes, crosses and headers alike. The assistant referee sees it with error; close calls in
 promising attacks are held (the delayed flag) for VAR to decide if a goal follows. VAR reviews
 goals for offside and fouls in the build-up, every penalty, and handball claims, where the arm
-position is part of the hidden truth. Cards, advantage and added time follow from the play.
+position is part of the hidden truth. Red and yellow cards, advantage and added time follow from
+the play.
 
 **The provider layer.** The simulation's raw events become feed messages with stable event IDs,
 club and player IDs, the match clock and a wall-clock timestamp, and the truth moves to the answer
@@ -125,11 +127,13 @@ headed in from a cross, the cross.
 Slots 0–10 are the home side and 11–21 the away side in formation order;
 `slot_players[occupancy[f]]` names the player in each slot at frame `f`, which changes with
 substitutions. `Tracking.load()` decodes it to metres.
-Player paths pass through the simulation's keyframes, so tracking and freeze frames agree, and no
-player moves faster than 10.5 m/s between frames; `tests/test_match.py` checks both. The processor
-reads the showcase's tracking against each event's clock, standing in for a tracking feed: positions
-for pass difficulty, each side's shape for the match state, and distances and speeds
-([models.md](models.md)).
+Player paths pass through the simulation's keyframes, so the tracking frame nearest an event puts
+each player within 1.2 m of the event's freeze frame, and no player moves faster than 10.5 m/s
+between frames; `tests/test_match.py` checks both. The pitch view's still of a VAR offside decision
+is that nearest frame, so its margin can differ from the decision's: at 31' it shows Dellow 8 cm
+beyond the line, where the answer key has 1.1 cm. The processor reads the showcase's tracking
+against each event's clock, standing in for a tracking feed: positions for pass difficulty, each
+side's shape for the match state, and distances and speeds ([models.md](models.md)).
 
 ## The showcase match
 
@@ -152,14 +156,15 @@ be sent off, and VAR checks happen only at 31' and 74'.
 | 81' | Adeyani scores on a Kingsferry break, the shot deflected off Penhallow |
 | 84' | the goal, first credited as a Penhallow own goal, is amended to Adeyani |
 
-Two things are set by hand: the provider's first call on the 81st-minute goal, which is told to
-credit the deflection as an own goal and amend it at 83:20 on the clock, and the named players, who
-are never substituted. Every other event is a draw from the same model as any other match; the
-search only chooses which draws to keep. The accepted path is saved in `data/showcase_recipe.json`
-as the step and seed of each reseed. The match it produces is committed too (`data/league.json`,
-`data/matches/fl-2627-showcase-sal-kin/` and its answer key). The services deploy the league and
-match files, with the answer key left out of the image, so nothing regenerates the showcase in the
-cloud. `tests/test_showcase.py` replays the recipe, checks the story still holds and checks the
+Three things are set by hand: the provider's first call on the 81st-minute goal, which is told to
+credit the deflection as an own goal and amend it at 83:20 on the clock; the provider's random
+errors and corrections, which are switched off, so that amendment is the only one; and the named
+players, who are never substituted. Every other event is a draw from the same model as any other
+match; the search only chooses which draws to keep. The accepted path is saved in
+`data/showcase_recipe.json` as the step and seed of each reseed. The match it produces is committed
+too (`data/league.json`, `data/matches/fl-2627-showcase-sal-kin/` and its answer key). The services
+deploy the league and match files, with the answer key left out of the image, so nothing
+regenerates the showcase in the cloud. `tests/test_showcase.py` replays the recipe, checks the story still holds and checks the
 committed files are the replayed match. A change to the generator invalidates the recipe: rerun the
 search, which rewrites the showcase files, and commit both.
 

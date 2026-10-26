@@ -25,6 +25,9 @@ from footnote.generator.showcase import code_fingerprint
 
 Results = dict[str, tuple[float, float | None]]
 PUBLISHED = {t.key: t.value for t in TARGETS}
+# The published distance range's players: outfield, 1,500 minutes or more after 29 matchweeks.
+REGULARS_MINUTES = 1500
+REGULARS_MATCHDAYS = 29
 
 
 def _job(args: tuple[int, int]) -> tuple[dict, dict]:
@@ -33,7 +36,11 @@ def _job(args: tuple[int, int]) -> tuple[dict, dict]:
     fx = fixtures(league)[index]
     gm = generate_match(league, fx, with_tracking=True)
     summary = summarise(gm)
+    # Yellow cards as football-data.co.uk counts English ones: a first yellow that a second turns into
+    # a red isn't counted, and each second yellow follows one first yellow of the same player.
+    summary["yellow_cards"] -= sum(e["type"] == "card" and e["card"] == "second_yellow" for e in gm.sim.events)
     phys = physical_summary(gm)
+    phys["seed"], phys["matchday"] = seed, fx.matchday
     phys["minutes"] = {pid: _minutes_played(gm, pid) for pid in phys["players"]}
     phys["keepers"] = [pid for pid in phys["players"] if league.player(pid).role == "GK"]
     return summary, phys
@@ -140,18 +147,26 @@ def context(physical: list[dict]) -> dict[str, str]:
     """Generated figures for the context rows."""
     sprint = [d / 1000 for p in physical for d in p["sprint"]]
     team = [d / 1000 for p in physical for d in p["team_distance"]]
-    per90 = []
+    # As the published range: each outfield player's distance per 90 over the first 29 matchdays,
+    # among those with 1,500 minutes or more, lowest and highest.
+    played: dict[tuple[int, str], list[float]] = defaultdict(lambda: [0.0, 0.0])
     for p in physical:
+        if p["matchday"] > REGULARS_MATCHDAYS:
+            continue
         for pid, rec in p["players"].items():
-            minutes = p["minutes"].get(pid, 0.0)
-            if minutes >= 85 and pid not in p["keepers"]:
-                per90.append(rec["distance"] / minutes * 90 / 1000)
+            if pid not in p["keepers"]:
+                totals = played[(p["seed"], pid)]
+                totals[0] += rec["distance"]
+                totals[1] += p["minutes"].get(pid, 0.0)
+    per90 = [metres / minutes * 90 / 1000 for metres, minutes in played.values() if minutes >= REGULARS_MINUTES]
+    regulars = f"outfield players with {REGULARS_MINUTES:,} minutes or more by matchday {REGULARS_MATCHDAYS}"
     return {
         "Distance per team per match, 2024/25": f"{np.mean(team):.1f} km (SD {np.std(team):.1f})",
         "Sprint distance (>7 m/s) per team per match, 2024/25": f"{np.mean(sprint):.1f} km (SD {np.std(sprint):.1f})",
         "Distance per 90 minutes, regular players, 2024/25 to Matchweek 29": (
-            f"{np.percentile(per90, 2.5):.1f} to {np.percentile(per90, 97.5):.1f} km "
-            f"(middle 95% of outfield players' matches of 85 minutes or more)"
+            f"{min(per90):.1f} to {max(per90):.1f} km (lowest and highest of the {regulars}, both seasons)"
+            if per90
+            else f"no {regulars} in these matches"
         ),
     }
 

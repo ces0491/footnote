@@ -3,20 +3,22 @@
 This document follows the showcase match through five viewers: the screens they
 use, what the overlay data has to carry for them, and the two-minute video. The
 people and their needs come from [audience.md](audience.md); numbers in
-principle references (P1–P8) point to its design principles.
+principle references (P1–P8) point to its design principles. The judges' path
+through the deployed app is in the [README](../README.md#try-it).
 
-Figures and card wording in the sketches show format only. The showcase match's
-own figures come from the generator, and its cards' wording from the templates
+Figures and wording in the sketches show format only. The showcase match's own
+figures come from the generator, and its graphics' wording from the templates
 and the agents ([evaluations.md](evaluations.md) has the agents' recorded
-cards).
+drafts).
 
 ## The showcase match
 
 **Saltmarsh Rovers v Kingsferry Athletic.** Saltmarsh keep the ball and press
 high. Kingsferry sit deep and break quickly. A search reruns the generator from
-saved points with new seeds until each moment below happens. Two things are set
-by hand: the provider's first call on the 81st-minute goal, a Penhallow own goal
-amended at 84', and the named cast, who are never substituted
+saved points with new seeds until each moment below happens. Three things are
+set by hand: the provider's first call on the 81st-minute goal, a Penhallow own
+goal amended at 84'; the provider's other errors, switched off so that this is
+its only correction; and the named cast, who are never substituted
 ([data.md](data.md#the-showcase-match)).
 
 | Cast | Club | Role |
@@ -78,16 +80,16 @@ State  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒ 
  On air: —       Queue: 1       Corrections: 0
 ```
 
-Each card shows its reason and its evidence, and opening the evidence lists the
-events; **Agent runs** shows the agents' work on it. A card starts as the
+Each graphic shows its reason and its evidence, and opening the evidence lists
+the events; **Agent runs** shows the agents' work on it. A graphic starts as the
 template version and swaps to the agent's version when it arrives, marked either
 way. In a replay started as Nadia, nothing airs until she approves it (P3), and
 Approve waits for an agent's draft that is on its way, so what airs is the
 wording Nadia saw. A lower third approved after its moment goes on air from the
-approval. Beside each card, **Edit** and **Kill** act before it airs, and
+approval. Beside each graphic, **Edit** and **Kill** act before it airs, and
 **Withdraw** takes it off air, after which **Approve again** puts it back;
 **Redraft** asks the agents for fresh wording. The **Approve automatically**
-switch lets cards through as they're found, from then on.
+switch lets graphics through as they're found, from then on.
 
 ### Fan view, casual
 
@@ -106,7 +108,7 @@ Why it matters Saltmarsh have had most of the ball, but Kingsferry
                only needed one quick break.                 [events ▸]
 ```
 
-Rule calls get a card during the stoppage (P5):
+Rule calls get a graphic during the stoppage (P5):
 
 ```text
 VAR CHECK · Offside
@@ -149,12 +151,14 @@ DESCRIBED FEED     Detail: Standard ▾   Pace: Normal ▾   [Pause]
 ```
 
 Lines come from templates over the event data, so they say only what the events
-contain. Each graphic is read out once, as it airs, in the viewer's language and
-marked as such for the screen reader. The device's screen reader speaks the feed
-through a live region at the pace the listener picks. The detail levels:
+contain. Each graphic is read out as it airs, and again if the producer edits it,
+in the viewer's language and marked as such for the screen reader. The device's
+screen reader speaks the feed through a live region at the pace the listener
+picks. The detail levels:
 
-- **Key moments:** goals and shots, VAR, cards and penalties, substitutions,
-  corrections and the clock (kick-off, added time, half-time, full time).
+- **Key moments:** goals and shots, VAR, red and yellow cards, penalties,
+  substitutions, corrections and the clock (kick-off, added time, half-time, full
+  time).
 - **Standard** adds the build-up: changes of possession in open play, passes
   and runs that take the ball forward, crosses, through balls, fouls, offsides,
   injuries and set pieces other than throw-ins.
@@ -198,56 +202,56 @@ pace. They're kept in the browser and restored on the next visit.
 
 **23', Kingsferry score.** The goal ranks first on Nadia's shortlist, raised by
 the match-state model because Saltmarsh were on top for most of the ten minutes
-before it. Nadia gets the card at once with the template wording, the agent
+before it. Nadia gets the graphic at once with the template wording, the agent
 version replaces it once drafted (8 to 24 seconds in the recorded evaluation
 run) or at once when an earlier replay's draft is reused, and Nadia approves it
-for air. Sam's stream is 40 s behind, so the overlay and the "why it matters"
-card wait until the goal appears on Sam's screen, or until Nadia approves the
-card if that comes later, and carry the wording she approved. Priya sees the
+for air. Sam's stream is 40 s behind, so the goal's graphic, on the pitch and in
+the panel, waits until the goal appears on Sam's screen, or until Nadia approves
+it if that comes later, and carries the wording she approved. Priya sees the
 same moment with the key pass's difficulty. Tom hears the build-up as it happens
 on the event feed and the goal line straight after.
 
 **31', offside.** Every viewer gets the VAR status as soon as the check starts,
-timed to their own playback. When the decision lands, Sam's card shows the
+timed to their own playback. When the decision lands, Sam's graphic shows the
 freeze-frame and the one-line rule. Tom hears the decision ("VAR decision: no
-goal") and the card read out. Priya's view shows the pass that set it up,
+goal") and the graphic read out. Priya's view shows the pass that set it up,
 Varlan's hardest completed pass so far.
 
 **38'–45', pressure.** The state model marks a sustained pressure spell. Nadia's
 shortlist offers it as a segment graphic. Priya's timeline shades the spell, and
-the segment card gives its figures. Sam sees the card ("Saltmarsh pinning
-Kingsferry back") at the next stoppage.
+the graphic gives its figures. Sam sees it ("Saltmarsh pinning Kingsferry back")
+at the next stoppage.
 
-**Half-time.** Recaps in each mode. Tom's feed reads the score, the two key
-moments and who has had the ball.
+**Half-time.** Recaps in each mode. Tom's feed reads the score at the whistle,
+then the recap as it airs.
 
-**52', Varlan equalises.** The goal card gives the shot's distance and speed
-for analysts. Priya's player line updates. Sam's "who's on top" bar moves with
-the shift in control.
+**52', Varlan equalises.** The goal's graphic gives the shot's distance and
+speed for analysts. Priya's player line updates. Sam's "who's on top" bar stays
+with Saltmarsh, who were on top before the goal too.
 
 **60', Lucía joins.** Lucía opens the app in Spanish, reads "what you missed"
-in Spanish, goes back to the match, and from then on gets each card in Spanish
+in Spanish, goes back to the match, and from then on gets each graphic in Spanish
 once its translation passes the check against the English source (figures,
-minutes, names and score lines); a card that fails stays in English, marked as
-such.
+minutes, names and score lines); a graphic that fails stays in English, marked
+as such.
 
 **63'–68', chaos.** The state model finds neither side in control: rapid
-changes of possession, few completed sequences. Nadia gets a rhythm card on how
-often the ball changed hands in the last three minutes and the longest run of
-passes either side strung together. Priya sees the chaos segment on the
+changes of possession, few completed sequences. Nadia gets a rhythm graphic on
+how often the ball changed hands in the last three minutes and the longest run
+of passes either side strung together. Priya sees the chaos segment on the
 timeline.
 
 **74', handball check.** Same pattern as the offside: status first, decision and
 rule explanation in the stoppage.
 
 **81' and 84', the amended goal.** The 81st-minute goal is first recorded as a
-Penhallow own goal, and an "own goal" card airs. At 84' the feed amends the
+Penhallow own goal, and an "own goal" graphic airs. At 84' the feed amends the
 credit to Adeyani. Every insight citing the original event is flagged, and the
-goal's card is restated with the corrected facts. Nadia approved the old wording,
-so the corrected card comes off air and waits for her again, listed under
-corrections beside the correction notice. Nadia approves the corrected card and
-the notice. Fans' cards update when their streams reach 84', and say the provider
-corrected them. Tom's feed reads the correction.
+goal's graphic is restated with the corrected facts. Nadia approved the old
+wording, so the corrected graphic comes off air and waits for her again, listed
+under corrections beside the correction notice. Nadia approves the corrected
+graphic and the notice. Fans' graphics update when their streams reach 84', and
+say the provider corrected them. Tom's feed reads the correction.
 
 **Full time.** Recaps in each mode and language.
 
@@ -283,13 +287,9 @@ is [overlay.md](overlay.md).
 | 0:10–0:35 | 23' goal: ranked shortlist, reason, evidence, the agents' run (MCP tool calls, checks, time and tokens), approve | Nadia's console, Agent runs |
 | 0:35–0:57 | The same goal for Priya (player focus), Lucía (Spanish) and Sam (held for the stream delay) | Each fan's pitch in turn, then the three side by side |
 | 0:57–1:20 | 31' offside: the announcements Tom's described feed gave the screen reader, read by text-to-speech | Described feed with audio and captions |
-| 1:20–1:35 | 84' correction reaches the console, and the corrected graphic goes on air | Corrections, the restated card back for approval |
+| 1:20–1:35 | 84' correction reaches the console, and the corrected graphic goes on air | Corrections, the restated graphic back for approval |
 | 1:35–1:50 | How it runs: architecture, state model scored against the answer key, measured latency | Diagram and figures |
 | 1:50–1:55 | Close and synthetic-data disclaimer | End card |
 
 The music was synthesised in code for the video, and the voice is a Windows text-to-speech voice
 reading the feed's own words, trimmed to fit.
-
-## The judges' path
-
-The judges' path is in the [README](../README.md#try-it).

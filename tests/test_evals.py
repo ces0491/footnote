@@ -150,8 +150,12 @@ def test_the_judge_reaches_the_foundry_accounts_openai_endpoint(monkeypatch: pyt
     project = "https://ai-footnote-abc123.services.ai.azure.com/api/projects/footnote"
     assert openai_endpoint(project) == "https://ai-footnote-abc123.openai.azure.com/"
     assert verdict(None) is None
-    failed = verdict({"score": 2.0, "passed": False, "reason": "says the only shot of the match"})
-    assert failed is not None and not failed.passed and failed.note.startswith("scored 2.0")
+    reason = "Let's think step by step: It names the scorer. However it says the only shot of the match."
+    failed = verdict({"score": 2.0, "passed": False, "reason": reason})
+    assert failed is not None and not failed.passed
+    assert failed.note == "scored 2 of 5: It names the scorer. However it says the only shot of the match."
+    unread = verdict({"score": None, "passed": False, "reason": "the judge failed: no reply"})
+    assert unread is not None and not unread.passed and unread.note == "the judge failed: no reply"
 
 
 class _Judge:

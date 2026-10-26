@@ -158,9 +158,10 @@ rules:
   no word comes twice in a row ("finished a {story.4.play_pattern} counter" read "a counter
   counter"), and no name is joined to itself ("Saltmarsh and later Saltmarsh");
 - a long text fact, such as the provider's reason, goes in one line, not both;
-- a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out, its
-  player or its minute: a recap's goals are the ones that stand, so the decision can't be pinned on
-  one of them;
+- a sentence saying a goal was ruled out uses a fact of the VAR decision that ruled one out, its
+  player or its minute, since a recap's goals are the ones that stand. It can't tell which goal a
+  sentence naming both means: "Adeyani's goal at {story.4.minute} was ruled out by VAR at
+  {story.5.minute}" passes;
 - a VAR check for a penalty is about whether its subject gave one away, so no penalty is "for" or
   "to" that player: "VAR rejected a penalty for Uche Asatoye" gives the 75' check to the wrong side;
 - a card that says who a goal is credited to also says who it was credited to before, when its
@@ -175,11 +176,11 @@ rules:
   can't pass the checks above in disguise (a circled digit, a fraction sign, a zero-width space
   inside "two", a look-alike letter from another alphabet, a name in small capitals).
 
-The checks catch figures and names a writer made up, a goal ruled out pinned on one that stands, and
-a penalty check's player written as the one it was for. They don't catch any other name from the
-match given to the wrong player, or a sentence that describes the facts unfairly. The evaluations of
-the agents' output catch some of that ([evaluations.md](evaluations.md)); the rest is down to
-someone reading the cards.
+The checks catch figures and names a writer made up, a goal said to be ruled out with no fact of the
+decision that ruled it out, and a penalty check's player written as the one it was for. They don't
+catch any other name from the match given to the wrong player, or a sentence that describes the
+facts unfairly. The evaluations of the agents' output catch some of that
+([evaluations.md](evaluations.md)); the rest is down to someone reading the cards.
 
 ## The agents
 
@@ -401,9 +402,10 @@ longer the insight's.
 Each change to an insight bumps the run's insight revision in the same transaction, and its push
 carries the revision it made. The processor, the agents service and the producer's desk all push; a
 browser applies revisions in order and fetches the snapshot after a gap
-(`frontend/src/lib/live/run-reducer.ts`). The snapshot carries every insight with the revision they
-are as of. Every push is stored too (`insight_pushes`), and a page fetches the ones after the last
-revision it has, so one that loads late, or misses pushes, still has each card's earlier states.
+(`frontend/src/lib/live/run-reducer.ts`). The snapshot carries every insight and the insight
+revision it is as of. Every push is stored too (`insight_pushes`), and a page fetches the ones after
+the last revision it has, so one that loads late, or misses pushes, still has each card's earlier
+states.
 Insights the backfill passed are never pushed: a page gets them, their translations included, from
 the snapshot. A page that loaded before a history card's translation arrived shows it after its next
 snapshot fetch, which a gap in the revisions or a reconnect brings.

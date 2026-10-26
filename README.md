@@ -49,8 +49,8 @@ takes a few minutes:
 3. **60', as Lucía, joining late.** She reads what she missed in Spanish, then
    each graphic in Spanish once Azure AI Translator's version passes code's check;
    a graphic whose translation fails stays in English, marked as such. The next
-   graphic, when neither side has control, comes about four minutes in at 2×, two
-   at 4×.
+   graphic, on a spell where neither side has control, comes about four minutes
+   in at 2× (two at 4×).
 4. **81', as Nadia.** The goal is first recorded as Jory Penhallow's own goal.
    At 84' the data provider credits it to Femi Adeyani: the graphics that cited it
    are flagged, and the restated graphic comes back to Nadia under **Corrections**
@@ -117,7 +117,7 @@ measured on the deployed stack and the cost:
   while the replay plays on, follows by polling instead. How it fits together
   and what it costs: [docs/architecture.md](docs/architecture.md).
 - **The models.** A pass-difficulty model and a live match-state model, fitted
-  on generated matches and scored against the answer key on matches between
+  on generated matches and scored against the answer key on matches involving
   clubs whose playing styles they never saw: [docs/models.md](docs/models.md).
   The processor rates every pass except throw-ins, estimates the match state a
   few seconds behind play, and reads distance covered, top speeds and sprint
@@ -137,8 +137,8 @@ measured on the deployed stack and the cost:
   and full time, and writes the catch-up for a fan joining mid-match. How it
   works: [docs/insights.md](docs/insights.md), where a graphic's wording (its
   headline and its lines for casual fans and analysts) is called its card.
-- **Evaluations of the agents.** The graphics the agents draft in a replay from
-  kick-off, and the catch-ups for the four jump points, are drafted against the
+- **Evaluations of the agents.** The graphics the agents write in a replay from
+  kick-off, and the catch-ups for the four jump points, are drafted on the
   deployed model and evaluated in code and with Azure AI Evaluation's
   groundedness evaluator; CI replays the recorded run through the current
   checks on each push to main and each pull request:
@@ -152,10 +152,10 @@ measured on the deployed stack and the cost:
   mid-match. The producer approves, edits, kills or withdraws each graphic, or lets
   them through automatically; an edit passes the same checks as an agent's
   draft, and what the producer approves is the wording they saw. A fan's stream
-  runs a set delay behind live, and the page shows the match, the graphics and the
-  graphics as of that stream, so nothing shows before the fan's stream reaches
-  it. Fans choose casual or analyst mode, their club, a player to follow and the
-  figure to pin; calm mode turns off motion and flashing, and the pitch view can
+  runs a set delay behind live, and the page shows the match and its graphics as
+  of that stream, so nothing shows before the fan's stream reaches it. Fans
+  choose casual or analyst mode, their club, a player to follow and the figure
+  to pin; calm mode turns off motion and flashing, and the pitch view can
   be hidden. On a desktop the match is drawn from the tracking on our own 2D
   pitch, standing in for the video; casual fans get a still of the pitch with
   each VAR decision, with the offside margin up close. What a graphic carries, and
