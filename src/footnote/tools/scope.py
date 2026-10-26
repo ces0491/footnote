@@ -6,6 +6,11 @@ headers of every request to the match tools; the model choosing the tool calls n
 the feed with the processor's code (live/state.py) on a worker thread. It keeps the last few folds
 by run and seq, so the calls of one agent run fold the feed once, and so do the drafts of two
 insights from the same message (a correction and the goal it restates).
+
+The row is read as it stands, which can be after its moment: VAR ruling a goal out flags the goal's
+row without moving its seq. A flag from after the insight's seq is left out, so a writer redrafting
+Dellow's 31st-minute goal at 40' doesn't learn the 33' decision. A restated insight carries its
+correction's seq as its own, and keeps that flag.
 """
 
 from __future__ import annotations
@@ -70,7 +75,11 @@ class Scopes:
         row = await self.source.insight(run_id, insight_id)
         if row is None:
             raise LookupError(f"no insight {insight_id} in run {run_id}")
-        state, feed = await self._fold(run_id, int(row["seq"]))
+        seq = int(row["seq"])
+        flag = row.get("flag")
+        if flag and int(flag["seq"]) > seq:
+            row = {**row, "flag": None}
+        state, feed = await self._fold(run_id, seq)
         return Scope(run_id, row, state, feed)
 
     async def _fold(self, run_id: str, seq: int) -> tuple[RunState, list[dict]]:

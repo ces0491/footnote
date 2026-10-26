@@ -27,8 +27,8 @@ and so do the agents.
 - the ball changing hands counts both sides losing it, so no side "forced" it;
 - "effort" isn't written for a shot or a goal: the Translator gave it as a counter-attack, and as a
   shot VAR annulled;
-- a sentence saying a goal was ruled out uses the facts of the VAR decision that ruled it out (its
-  player or its minute), so it can't pin the decision on a goal that stands;
+- a sentence saying a goal was ruled out uses a fact of the VAR decision that ruled one out (its
+  player or its minute); a sentence that also names a goal that stands still passes;
 - a VAR check for a penalty is about whether its subject gave one away, so no penalty is "for" or
   "to" that player ("VAR rejected a penalty for Uche Asatoye");
 - a card that says who a goal is credited to also says who it was credited to before, when its
@@ -69,8 +69,8 @@ another player (templates.told), so the writer's checker (agents/writer.py) also
 own sentences tell that change again (`retold`): one that speaks of a credit or a correction, or
 names the earlier credit through its fact.
 
-The checks catch figures and names a writer made up, a goal ruled out pinned on one that stands, and
-a penalty check's player written as the one it was for. Any other real name from the match given to
+The checks catch figures and names a writer made up, a goal said to be ruled out with no fact of the
+decision that ruled it out, and a penalty check's player written as the one it was for. Any other real name from the match given to
 the wrong player, or a sentence that reads the facts unfairly, passes them. The evaluations of the
 agents' output catch some of that (docs/evaluations.md); the rest is down to whoever reads the cards.
 """

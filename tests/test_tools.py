@@ -82,6 +82,19 @@ async def test_a_moment_carries_its_facts_and_the_template(
     assert "e0391" in moment["events"]
 
 
+async def test_a_moment_carries_no_flag_from_after_it(
+    source: MemorySource, showcase: Match, analysis: Analysis
+) -> None:
+    """The rows are as stored after full time. VAR ruled Dellow's 31st-minute goal out at 33' without
+    moving its seq, and a writer asked about the goal sees it as it stood at 31'. The restated
+    81st-minute goal keeps the correction it was restated for."""
+    stored = source.rows["goal-e0532"]
+    assert stored["flag"] is not None and stored["flag"]["seq"] > stored["seq"]
+    assert json.loads(tools.moment(await _scope(source, showcase, analysis, "goal-e0532")))["flag"] is None
+    restated = json.loads(tools.moment(await _scope(source, showcase, analysis, "goal-e1586")))
+    assert restated["flag"]["reason"].startswith("The data provider amended the goal")
+
+
 async def test_players_and_events_carry_their_figures(
     source: MemorySource, showcase: Match, analysis: Analysis
 ) -> None:

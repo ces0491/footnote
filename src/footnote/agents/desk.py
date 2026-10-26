@@ -63,12 +63,12 @@ _REFUSED = {
     "withdraw": "Only an approved graphic can be withdrawn.",
 }
 # Agent runs a redraft may add: on one card (its first draft and a correction's count too), and on
-# one replay. They keep one producer from spending the agents' daily runs (AGENT_DAILY_RUNS).
+# one replay. They keep one replay from spending the agents' daily runs (AGENT_DAILY_RUNS).
 REDRAFT_CARD_RUNS = 5
 REDRAFT_REPLAY_RUNS = 30
 # Edits a producer may make: on one card, and on one replay. Each edit's wording goes to the
-# Translator in both languages (translator.py), so they keep one producer from spending the free
-# tier's monthly characters.
+# Translator in both languages (translator.py), so the caps bound what one replay's edits spend of
+# the free tier's monthly characters; a new replay counts afresh.
 EDIT_CARD_VERSIONS = 5
 EDIT_REPLAY_VERSIONS = 30
 
@@ -191,7 +191,7 @@ class Desk:
 
     async def _redraft(self, conn: Connection, key: tuple[str, str], insight: _Insight) -> None:
         if insight.agent_state == "off":
-            raise Refused(409, "No agent writes this kind of card; edit it instead.")
+            raise Refused(409, "No agent writes this kind of graphic; edit it instead.")
         if insight.agent_state in ("pending", "drafting"):
             raise Refused(409, "An agent is drafting it already.")
         if insight.status == "approved" and insight.status_by == "producer":
@@ -202,7 +202,7 @@ class Desk:
         )
         used = await cur.fetchone() or {"card": 0, "replay": 0}
         if used["card"] >= REDRAFT_CARD_RUNS:
-            raise Refused(409, "This card has had all the agent drafts it gets; edit the wording instead.")
+            raise Refused(409, "This graphic has had all the agent drafts it gets; edit the wording instead.")
         if used["replay"] >= REDRAFT_REPLAY_RUNS:
             raise Refused(409, "This replay has used all its agent drafts; edit the wording instead.")
         # A fresh job: it joins the queue now with no claims against it, or it would count as having
@@ -224,7 +224,7 @@ class Desk:
         )
         used = await cur.fetchone() or {"card": 0, "replay": 0}
         if used["card"] >= EDIT_CARD_VERSIONS:
-            raise Refused(409, "This card has had all the edits it gets.")
+            raise Refused(409, "This graphic has had all the edits it gets.")
         if used["replay"] >= EDIT_REPLAY_VERSIONS:
             raise Refused(409, "This replay has used all its edits.")
         facts = facts_from_json(insight.facts)
