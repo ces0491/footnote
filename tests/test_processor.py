@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 
 import pytest
@@ -11,6 +12,7 @@ from footnote.live.analysis import Analysis, timeline_after
 from footnote.live.contract import KIND_CONTROL, KIND_FEED
 from footnote.live.match import Match, load_match
 from footnote.live.timeline import Timeline
+from footnote.processor import core
 from footnote.processor.core import OVERDUE_MS, FeedRow, Incoming, Processor
 from footnote.replayer.schedule import plan
 
@@ -264,6 +266,25 @@ async def test_a_failed_push_does_not_stop_processing(showcase: Match) -> None:
 
     store, push = MemoryStore(), FlakyPush()
     await Processor(showcase, store, push).handle(items[:40])
+    seqs = [m["seq"] for m in push.sent if m["type"] == "event"]
+    assert 10 not in seqs and 11 in seqs
+    assert 10 in store.feed[RUN_ID]
+
+
+async def test_a_stuck_push_holds_a_batch_up_for_seconds_only(showcase: Match, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A push that never finishes, as one did on a TLS handshake with Web PubSub, is given up after
+    PUSH_SECONDS, and the rest of the batch goes on: the event is stored for the page to fetch."""
+    monkeypatch.setattr(core, "PUSH_SECONDS", 0.05)
+    _, items = _run_messages(showcase, 1)
+
+    class StuckPush(MemoryPush):
+        async def send(self, run_id: str, message: dict) -> None:
+            if message.get("seq") == 10:
+                await asyncio.Event().wait()
+            await super().send(run_id, message)
+
+    store, push = MemoryStore(), StuckPush()
+    await asyncio.wait_for(Processor(showcase, store, push).handle(items[:40]), 10)
     seqs = [m["seq"] for m in push.sent if m["type"] == "event"]
     assert 10 not in seqs and 11 in seqs
     assert 10 in store.feed[RUN_ID]

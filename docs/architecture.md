@@ -188,9 +188,13 @@ checkpoints in Blob Storage once the whole batch is handled.
   to redelivery, which would hold up its partition, and every run on it, until the hub's one-day
   retention dropped it. Its run keeps what came before, is ended as failed, and its later messages
   are skipped.
-- A failed push is logged and skipped; the browser's gap check fetches the missing events from the
-  store, and the snapshot for a missing insight. A lost `run_end` isn't recovered: the page shows the
-  run as still going until it next fetches the snapshot.
+- A failed push, or one that takes more than five seconds, is logged and skipped; the browser's gap
+  check fetches the missing events from the store, and the snapshot for a missing insight. The
+  processor and the agents service give up on a push after five seconds: a push once hung for a
+  minute on a TLS handshake with Web PubSub, and in the processor that would hold up every replay on
+  its partition. A lost
+  `run_end` isn't recovered: the page shows the run as still going until it next fetches the
+  snapshot.
 - The replayer holds runs in memory, so a replayer restart ends the runs in progress. A clean
   shutdown ends them as stopped and publishes their `run_end`, so their viewers are told the replay
   was stopped; a crash can't. Once a minute the processor ends, as failed, any run still marked

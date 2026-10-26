@@ -12,7 +12,8 @@ redelivery, which would hold up its partition and every run on it until the hub'
 it. Its run keeps what came before it and is ended as failed, and its later messages are skipped. A
 control message that can't be used is logged and skipped.
 
-A push that fails is logged and skipped. Viewers notice the gap in `seq` and fetch the snapshot.
+A push that fails, or takes longer than PUSH_SECONDS, is logged and skipped. Viewers notice the gap
+in `seq` and fetch the snapshot.
 Each event push is stored with its feed row, and the snapshot with the backfill's last row, so a
 viewer whose stream runs behind live can fetch the pushes it needs to see the match as of its own
 playback.
@@ -29,6 +30,7 @@ so its viewers aren't left waiting for messages that will never come.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -51,6 +53,7 @@ from footnote.live.contract import (
 from footnote.live.match import Match
 from footnote.live.state import KEY_EVENT_TYPES, RunState
 from footnote.live.timeline import Timeline
+from footnote.processor.push import PUSH_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -235,7 +238,9 @@ class Processor:
     async def _send(self, run_id: str, message: dict) -> None:
         message.setdefault("timing", {})["processed_at"] = self.now_ms()
         try:
-            await self.push.send(run_id, message)
+            # Bounded: the batch waits on each push, and a hung one would hold up every run on the
+            # partition until the replays were ended as overdue.
+            await asyncio.wait_for(self.push.send(run_id, message), PUSH_SECONDS)
         except Exception:
             log.exception("push failed for run %s (%s seq %s)", run_id, message["type"], message.get("seq"))
 
