@@ -50,8 +50,8 @@ Render and personalise
       reaches them before their playback does
 - [x] Casual and analyst modes, favourite club, player focus layered on the
       club, one chosen metric
-- [x] Casual mode explains offside, handball and VAR calls when they happen,
-      using player positions at that moment
+- [x] Casual mode explains each VAR decision when it lands, offside and
+      handball included, with a still of the player positions at that moment
 - [x] Described feed: text play-by-play of ball position, passes and build-up
       for screen readers, with detail and pace controls
 - [x] Calm mode: reduced motion, no flashing, overlays the viewer can hide
@@ -113,3 +113,5 @@ category.
 - 2026-10-23: dropped server-side viewer profiles, and the check that `azd up`
   deploys from scratch: on this subscription Azure refused the model deployment
   and a new Postgres server (README, Deploying to Azure)
+- 2026-10-26: the rule explainers cover VAR decisions; an offside flagged in
+  open play gets no graphic
