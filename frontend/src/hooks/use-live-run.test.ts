@@ -160,7 +160,7 @@ describe("useLiveRun", () => {
   it("says so when there is no such run", async () => {
     const hook = renderHook(() => useLiveRun(RUN_ID));
     await respond(0, Response.json({ error: "no such run" }, { status: 404 }));
-    await waitFor(() => expect(hook.result.current.error).toBe("There's no such replay."));
+    await waitFor(() => expect(hook.result.current.error).toBe("There's no such replay. A replay is deleted a day after it ends."));
     expect(clients).toHaveLength(0);
   });
 
@@ -224,6 +224,15 @@ describe("useLiveRun", () => {
     await answer(2, snapshot());
     await waitFor(() => expect(hook.result.current.view?.seq).toBe(40));
     expect(keys(hook)).toEqual([33]);
+  });
+
+  it("leaves the events published while a jump point's backfill is taken in out of the latency figure", async () => {
+    const hook = await connectedAt(10);
+    const started = snapshot().run.started_at;
+    act(() => clients[0].receive(eventPush(11, { timing: { published_at: started + 2_000 } })));
+    act(() => clients[0].receive(eventPush(12, { timing: { published_at: started + 12_000 } })));
+    await waitFor(() => expect(hook.result.current.view?.seq).toBe(12));
+    expect(hook.result.current.latency?.samples).toBe(1);
   });
 
   it("reads pushes sent as JSON text, the way the processor sends them", async () => {

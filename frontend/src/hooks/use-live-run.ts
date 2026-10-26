@@ -26,6 +26,10 @@ export interface Latency {
 }
 
 const LATENCY_WINDOW = 200;
+// After a jump point the processor first takes in the match so far, and the events published
+// meanwhile wait for it. The latency figure counts the events published from this long after the
+// replay's start, as the latency table does (docs/architecture.md).
+const SETTLE_MS = 10_000;
 // Waits before retrying a fetch that failed, in ms; the last one repeats.
 const RETRY_MS = [1_000, 2_000, 4_000, 8_000];
 // Tries at the first load before the page gives up: with nothing to show, an error says more.
@@ -92,7 +96,7 @@ async function fetchSnapshot(runId: string, signal: AbortSignal): Promise<RunSna
       continue;
     }
     if (response.status === 200) return (await response.json()) as RunSnapshot;
-    if (response.status === 404) throw new NoSuchRun("There's no such replay.");
+    if (response.status === 404) throw new NoSuchRun("There's no such replay. A replay is deleted a day after it ends.");
     throw new Error(`HTTP ${response.status}`);
   }
 }
@@ -168,6 +172,7 @@ export function useLiveRun(runId: string) {
   const [offset, setOffset] = useState(0);
   const offsetRef = useRef(0);
   const samples = useRef<number[]>([]);
+  const countFrom = useRef(0); // the publish time, epoch ms, from which events count towards `latency`
   const stopLive = useRef<(() => void) | null>(null);
   const lastSeq = useRef<number | null>(null);
   const lastRev = useRef<number | null>(null);
@@ -197,6 +202,7 @@ export function useLiveRun(runId: string) {
   );
 
   const apply = useCallback(({ loaded, pushes, insightPushes }: Fetched) => {
+    countFrom.current = loaded.run.backfill_seq > 0 ? loaded.run.started_at + SETTLE_MS : 0;
     setSnapshot((prev) => steady(prev, loaded));
     dispatch({
       kind: "resynced",
@@ -324,7 +330,7 @@ export function useLiveRun(runId: string) {
         // payload is taken as it comes.
         const data = e.message.data;
         const message = (typeof data === "string" ? JSON.parse(data) : data) as PushMessage;
-        if (message.type === "event" && message.timing?.published_at) {
+        if (message.type === "event" && message.timing?.published_at && message.timing.published_at >= countFrom.current) {
           const elapsed = Date.now() + offsetRef.current - message.timing.published_at;
           const window = samples.current;
           window.push(elapsed);

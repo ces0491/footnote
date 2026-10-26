@@ -202,13 +202,13 @@ describe("A replay the page can't follow", () => {
       ended: null,
       snapshot: null,
       connection: "polling",
-      error: "There's no such replay.",
+      error: "There's no such replay. A replay is deleted a day after it ends.",
       trouble: null,
       latency: null,
       offset: 0,
     };
     render(<LiveRun runId="0123456789abcdef" initialProfile="sam" />);
-    expect(screen.getByText("There's no such replay.")).toBeTruthy();
+    expect(screen.getByText("There's no such replay. A replay is deleted a day after it ends.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Start a new replay" }).getAttribute("href")).toBe("/");
     // Nothing is being followed, so nothing says it's connecting.
     expect(screen.queryByText(/Refreshing|Connecting|Live/)).toBeNull();

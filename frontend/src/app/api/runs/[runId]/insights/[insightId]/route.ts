@@ -21,18 +21,21 @@ function usesOnly(draft: Draft, facts: Record<string, unknown>): boolean {
 // What the producer console needs for one card: the wording to start an edit from, with its
 // placeholders, the moment's facts an edit may use, and the agents' runs on it, newest first, with
 // the run in an earlier replay that wrote a draft this one reused. Agent runs outlive their replays.
-// An agent's draft can use figures its match tools fetched beyond the moment's own facts; an edit
-// can't, so an edit of such a draft starts from the template's wording.
+// A failed run's error is served as its type only ("TimeoutError"): the message the worker stored can
+// name the Azure services it reached. An agent's draft can use figures its match tools fetched beyond
+// the moment's own facts; an edit can't, so an edit of such a draft starts from the template's wording.
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/runs/[runId]/insights/[insightId]">) {
   const { runId, insightId } = await ctx.params;
   if (!valid(runId, insightId)) return Response.json({ error: "not a run or insight ID" }, { status: 400 });
   const { rows } = await db().query(
     `select i.facts, i.template, v.draft,
             coalesce((select jsonb_agg(to_jsonb(a) - 'run_id' - 'insight_id' - 'cache_key' - 'draft'
+                                         || jsonb_build_object('error', split_part(a.error, ':', 1))
                                        order by a.started_at desc)
                         from agent_runs a where a.run_id = i.run_id and a.insight_id = i.insight_id), '[]'::jsonb)
               as agent_runs,
             (select to_jsonb(a) - 'run_id' - 'insight_id' - 'cache_key' - 'draft'
+                      || jsonb_build_object('error', split_part(a.error, ':', 1))
                from agent_runs a
               where (v.provenance ->> 'cached')::boolean and a.agent_run_id = v.provenance ->> 'agent_run_id'
                 and a.run_id <> i.run_id) as reused_run

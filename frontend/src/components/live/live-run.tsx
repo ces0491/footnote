@@ -90,7 +90,10 @@ function ConnectionBadge({ connection, latency }: { connection: Connection; late
       </span>
       {/* On a phone the latency line would take much of the screen, so it shows from the sm breakpoint up. */}
       {latency && (
-        <span className="hidden text-xs text-muted-foreground sm:inline" title="From the replayer publishing an event to this browser receiving it">
+        <span
+          className="hidden text-xs text-muted-foreground sm:inline"
+          title="From the replayer publishing an event to this browser receiving it. After a jump, from 10 s in: the processor first takes in the match so far."
+        >
           Publish to browser: p50 {Math.round(latency.p50)} ms, p95 {Math.round(latency.p95)} ms ({latency.samples} events)
         </span>
       )}
