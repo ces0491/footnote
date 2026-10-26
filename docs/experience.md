@@ -275,7 +275,7 @@ is [overlay.md](overlay.md).
 
 ## The video
 
-1:55 long, its footage filmed from the deployed app.
+[On YouTube](https://youtu.be/rT6zPgLGF38), 1:55 long, its footage filmed from the deployed app.
 
 | Time | Beat | Shows |
 | --- | --- | --- |
