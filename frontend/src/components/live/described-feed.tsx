@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 // Lines kept on screen; the screen reader hears them as they come (nextSaying, lib/live/described.ts),
 // and the list is for reading back.
 const SHOWN_LINES = 40;
+// A feed that opens within this many replay seconds of its replay's start opens with the replay. A
+// replay starts 30 s before the minute picked (live/timeline.py), and the page shows the feed only
+// once the processor has taken in the match so far, by when playback has run a few seconds on.
+const OPENING_SECONDS = 30;
 
 /** What is said, with a graphic's Spanish or French wording marked so the screen reader says it in
  * that language's voice. The page is in English. */
@@ -73,7 +77,8 @@ export function DescribedFeed({
   // the live region, and is spoken.
   const [saying, setSaying] = useState<{ parts: Part[]; echo: boolean }>({ parts: [], echo: false });
   const latest = useRef(all);
-  const opened = useRef({ reached, startReplay }); // where playback was when the feed opened
+  // Where playback was when the feed opened: the replay second of the last event it had reached.
+  const opened = useRef({ at: reached > 0 ? events[reached - 1].replay : startReplay, startReplay });
   const sayingAt = useRef(detail); // the detail lines are said at
   const said = useRef<Set<string> | null>(null);
   const resumed = useRef(false);
@@ -83,12 +88,13 @@ export function DescribedFeed({
   }, [all]);
 
   // What is there when the feed opens counts as said: the list shows it, and the listener hears what
-  // happens next. A feed that opens with its replay, before playback reaches an event, says the
-  // opening line first, and what went on screen then (the catch-up); the graphics from before the
-  // replay began stay in the list.
+  // happens next. A feed that opens with its replay (OPENING_SECONDS) says the opening line first,
+  // with what playback and the screen have reached since, the catch-up among it, as one
+  // announcement; the graphics from before the replay began stay in the list.
   useEffect(() => {
-    const { reached: before, startReplay: start } = opened.current;
-    said.current = new Set(latest.current.filter((l) => before > 0 || l.replay < start).map((l) => l.key));
+    const { at, startReplay: start } = opened.current;
+    const withReplay = at - start < OPENING_SECONDS;
+    said.current = new Set(latest.current.filter((l) => !withReplay || l.replay < start).map((l) => l.key));
   }, []);
 
   // So do the lines a change of detail adds to what is there. Lines waiting to be said that the new

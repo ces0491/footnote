@@ -50,6 +50,7 @@ const SHOT = "Dellow shoots with the right foot from 19 metres: goal.";
 const GOAL = "Goal for Saltmarsh, scored by Dellow. Saltmarsh 1, Kingsferry 0.";
 
 interface Props {
+  startReplay: number;
   events: EventMessage[];
   reached: number;
   cards: Shown[];
@@ -57,13 +58,17 @@ interface Props {
   pace: Pace;
 }
 
-function feed({ events = EVENTS, reached = 0, cards = [], detail = "standard", pace = "normal" }: Partial<Props> = {}) {
+// The events are at replay seconds 1291 to 1294. Unless a test starts the replay just before them, it
+// started 41 s before the first, so a feed opening on them opens mid-replay.
+const MID_REPLAY = 1250;
+
+function feed({ startReplay = MID_REPLAY, events = EVENTS, reached = 0, cards = [], detail = "standard", pace = "normal" }: Partial<Props> = {}) {
   return (
     <DescribedFeed
       match={MATCH}
       roster={R}
       base={KICK_OFF_VIEW}
-      startReplay={1290}
+      startReplay={startReplay}
       events={events}
       reached={reached}
       cards={cards}
@@ -173,12 +178,20 @@ describe("DescribedFeed", () => {
     // The catch-up shows from the replay's start; a graphic from before it stays in the list unread.
     const catchUp = insightFixture("catchup", { card: card("What you missed. Kingsferry lead.") });
     const before = insightFixture("goal-e0391", { card: card("Femi Adeyani scores.") });
-    render(feed({ cards: [{ insight: before, from: 1000 }, { insight: catchUp, from: 1290 }] }));
+    render(feed({ startReplay: 1290, cards: [{ insight: before, from: 1000 }, { insight: catchUp, from: 1290 }] }));
     expect(said()).toBe("Saltmarsh Rovers against Kingsferry Athletic. Kick-off is coming up. On screen: What you missed. Kingsferry lead.");
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toContain("On screen: Femi Adeyani scores.");
   });
 
-  it("says none of what is there when it opens after playback has started", () => {
+  it("still opens with the score when playback has run a few seconds on before the feed opens", () => {
+    // The page waits on the processor taking in the match so far, and a 4x replay doesn't.
+    render(feed({ startReplay: 1290, reached: 4 }));
+    const heard = said() ?? "";
+    expect(heard.startsWith("Saltmarsh Rovers against Kingsferry Athletic. Kick-off is coming up. ")).toBe(true);
+    expect(heard.endsWith(`${SHOT} ${GOAL}`)).toBe(true);
+  });
+
+  it("says none of what is there when it opens mid-replay", () => {
     render(feed({ reached: 4 }));
     tick(4000);
     expect(said()).toBe("");
