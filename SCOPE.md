@@ -67,7 +67,7 @@ Quality and submission
 - [x] README: judge quick-start, architecture diagram, synthetic-data disclaimer,
       link to docs/audience.md
 - [x] Video under 2:00 showing the deployed app
-- [ ] Public repo; elevator pitch
+- [x] Public repo; elevator pitch
 - [ ] Live demo stays up and free for judges until 2026-11-10
 - [ ] Submitted by Tuesday 27 October, evening SAST
 
